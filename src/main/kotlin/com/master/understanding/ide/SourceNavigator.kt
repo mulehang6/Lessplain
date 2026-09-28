@@ -2,6 +2,7 @@ package com.master.understanding.ide
 
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.fileEditor.FileDocumentManager
+import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
@@ -69,13 +70,22 @@ internal fun matchAnchorText(anchor: SourceAnchor, content: String, symbolAt: (I
 }
 
 internal fun navigateToSource(
-    project: Project, anchor: SourceAnchor, located: LocatedSource = locateSource(project, anchor),
+    project: Project,
+    anchor: SourceAnchor,
+    animation: SourceScrollAnimation,
+    located: LocatedSource = locateSource(project, anchor),
 ): LocatedSource {
     val offset = located.offset ?: return located
     val root = Path.of(project.basePath ?: return located).toAbsolutePath().normalize()
     val file = ApplicationManager.getApplication().runReadAction<VirtualFile?> {
         LocalFileSystem.getInstance().findFileByNioFile(root.resolve(anchor.path).normalize())
     } ?: return located
+    val editor = FileEditorManager.getInstance(project).selectedTextEditor
+    if (editor != null && !editor.isDisposed && FileDocumentManager.getInstance().getFile(editor.document) == file) {
+        animation.moveTo(editor, offset)
+        return located
+    }
+    animation.cancel()
     OpenFileDescriptor(project, file, offset).navigate(true)
     return located
 }

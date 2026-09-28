@@ -32,6 +32,7 @@ class UnderstandingService(private val project: Project) : Disposable {
     private val selectionListeners = CopyOnWriteArrayList<(String, String?) -> Unit>()
     private val editorFiles = mutableMapOf<String, UnderstandingVirtualFile>()
     private val sourceHints = SourceInsightMarker(project, this)
+    private val sourceScrollAnimation = SourceScrollAnimation()
     internal val graphStates = GraphViewStateStore(project)
 
     /** Tool-window navigation survives Compose/Swing content recreation. */
@@ -75,12 +76,16 @@ class UnderstandingService(private val project: Project) : Disposable {
             if (anchor == null) {
                 sourceLocationMessage = "当前节点没有源码证据"
                 SwingUtilities.invokeLater {
-                    if (activeRecordId == record.id && activeNodeId == validNode) sourceHints.clear()
+                    if (activeRecordId == record.id && activeNodeId == validNode) {
+                        sourceScrollAnimation.cancel()
+                        sourceHints.clear()
+                    }
                 }
                 notifyChanged()
             } else {
                 SwingUtilities.invokeLater {
                     if (project.isDisposed || activeRecordId != record.id || activeNodeId != validNode) return@invokeLater
+                    sourceScrollAnimation.cancel()
                     runCatching {
                         val explorer = sourceExplorer(record, validNode)
                         val navigation = SourceInlayNavigation(
@@ -91,7 +96,7 @@ class UnderstandingService(private val project: Project) : Disposable {
                         )
                         val located = sourceHints.show(anchor, node.label, navigation)
                         if (navigateSource && nodeId != null && located?.offset != null) {
-                            navigateToSource(project, anchor, located)
+                            navigateToSource(project, anchor, sourceScrollAnimation, located)
                             sourceHints.refreshOpenEditors()
                         }
                         located
@@ -112,7 +117,12 @@ class UnderstandingService(private val project: Project) : Disposable {
                 }
             }
         } else {
-            SwingUtilities.invokeLater { if (activeNodeId == null) sourceHints.clear() }
+            SwingUtilities.invokeLater {
+                if (activeNodeId == null) {
+                    sourceScrollAnimation.cancel()
+                    sourceHints.clear()
+                }
+            }
         }
     }
 
@@ -210,6 +220,7 @@ class UnderstandingService(private val project: Project) : Disposable {
     }
 
     override fun dispose() {
+        sourceScrollAnimation.dispose()
         sourceHints.dispose()
         listeners.clear()
         selectionListeners.clear()
