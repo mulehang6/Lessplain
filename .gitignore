@@ -1,0 +1,6 @@
+.gradle
+.kotlin/
+.idea
+.intellijPlatform
+build
+prototype/package-lock.json
