@@ -32,6 +32,7 @@
         <editorTabTitleProvider implementation="com.master.understanding.diagram.UnderstandingTabTitleProvider"/>
         <toolWindow id="Understanding" factoryClass="com.master.understanding.MyToolWindowFactory"
                     icon="AllIcons.Toolwindows.ToolWindowPalette"/>
+        <notificationGroup id="code.comprehension.results" displayType="BALLOON"/>
     </extensions>
     <extensions defaultExtensionNs="com.intellij.mcpServer">
         <mcpToolset implementation="com.master.understanding.mcp.UnderstandingToolset"/>

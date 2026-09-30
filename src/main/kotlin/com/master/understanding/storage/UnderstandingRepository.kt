@@ -7,7 +7,6 @@ import com.master.understanding.model.UnderstandingContext
 import com.master.understanding.model.UnderstandingInputException
 import com.master.understanding.model.UnderstandingQuestion
 import com.master.understanding.model.UnderstandingRecord
-import com.master.understanding.model.UNDERSTANDING_SCHEMA_VERSION
 import java.nio.channels.FileChannel
 import java.nio.channels.FileLock
 import java.nio.channels.OverlappingFileLockException
@@ -22,7 +21,7 @@ import org.sqlite.SQLiteDataSource
 /** All writes, including request deduplication, use one SQLite transaction. */
 class UnderstandingRepository(
     projectRoot: Path,
-    private val gson: Gson = Gson(),
+    internal val gson: Gson = Gson(),
 ) : AutoCloseable {
     val projectId: String = sha256(projectRoot.toAbsolutePath().normalize().toString().lowercase())
     val databasePath: Path = projectRoot.resolve(".idea/code-understanding/understanding.db")
@@ -57,7 +56,7 @@ class UnderstandingRepository(
     }
 
     // IntelliJ loads bundled plugin libraries with a plugin classloader, which DriverManager may not discover.
-    private fun connect(): Connection = SQLiteDataSource().apply {
+    internal fun connect(): Connection = SQLiteDataSource().apply {
         url = "jdbc:sqlite:${databasePath.toAbsolutePath()}"
     }.connection.apply {
         createStatement().use { statement ->
@@ -72,8 +71,8 @@ class UnderstandingRepository(
             val version = db.createStatement().use { statement ->
                 statement.executeQuery("PRAGMA user_version").use { it.next(); it.getInt(1) }
             }
-            if (version > UNDERSTANDING_SCHEMA_VERSION) throw IllegalStateException("数据库版本较新：$version")
-            if (version == UNDERSTANDING_SCHEMA_VERSION) return
+            if (version > DATABASE_SCHEMA_VERSION) throw IllegalStateException("数据库版本较新：$version")
+            if (version == DATABASE_SCHEMA_VERSION) return
             if (existing) {
                 val backup = databasePath.resolveSibling("understanding.db.before-v$version-${System.currentTimeMillis()}.bak")
                 db.createStatement().use { statement ->
@@ -92,8 +91,9 @@ class UnderstandingRepository(
                     statement.execute("CREATE TABLE IF NOT EXISTS browse_state (record_id TEXT PRIMARY KEY REFERENCES records(id), data TEXT NOT NULL)")
                     statement.execute("CREATE INDEX IF NOT EXISTS idx_records_created ON records(created_at DESC)")
                     statement.execute("CREATE INDEX IF NOT EXISTS idx_answers_question ON answers(question_id)")
+                    if (version < 2) statement.execute("ALTER TABLE record_versions ADD COLUMN display_title TEXT")
                     verifySchema(db)
-                    statement.execute("PRAGMA user_version=$UNDERSTANDING_SCHEMA_VERSION")
+                    statement.execute("PRAGMA user_version=$DATABASE_SCHEMA_VERSION")
                 }
                 db.commit()
             } catch (failure: Exception) {
@@ -108,7 +108,7 @@ class UnderstandingRepository(
             "contexts" to setOf("token", "project_id", "data"),
             "questions" to setOf("id", "context_token", "owner_record_id", "text", "status", "data"),
             "records" to setOf("id", "parent_id", "current_revision", "created_at"),
-            "record_versions" to setOf("record_id", "revision", "question_text", "answer_text", "data"),
+            "record_versions" to setOf("record_id", "revision", "question_text", "answer_text", "display_title", "data"),
             "answers" to setOf("id", "question_id", "answer_text", "data"),
             "requests" to setOf("request_id", "operation", "payload_hash", "response"),
             "browse_state" to setOf("record_id", "data"),
@@ -123,7 +123,7 @@ class UnderstandingRepository(
         }
     }
 
-    private fun <T> write(block: (Connection) -> T): T {
+    internal fun <T> write(block: (Connection) -> T): T {
         if (readOnly) throw IllegalStateException("另一个 IDE 实例已打开此项目，当前实例只读")
         return connect().use { db ->
             db.autoCommit = false
@@ -203,7 +203,9 @@ class UnderstandingRepository(
                         if (rows.getString(1) != operation || rows.getString(2) != hash) {
                             throw UnderstandingInputException("requestId 已用于不同内容")
                         }
-                        return@write rows.getString(3)
+                        val response = rows.getString(3)
+                        if (response == DELETED_REQUEST_RESPONSE) throw UnderstandingInputException("该请求的记录已删除")
+                        return@write response
                     }
                 }
             }
@@ -229,13 +231,25 @@ class UnderstandingRepository(
                     if (rows.getString(1) != operation || rows.getString(2) != hash) {
                         throw UnderstandingInputException("requestId 已用于不同内容")
                     }
-                    rows.getString(3)
+                    val response = rows.getString(3)
+                    if (response == DELETED_REQUEST_RESPONSE) throw UnderstandingInputException("该请求的记录已删除")
+                    response
                 }
             }
         }
     }
 
     fun insertRecord(db: Connection, record: UnderstandingRecord) {
+        record.questionId?.let { id ->
+            db.prepareStatement("SELECT text, status FROM questions WHERE id=?").use { statement ->
+                statement.setString(1, id)
+                statement.executeQuery().use { rows ->
+                    if (!rows.next() || rows.getString(1) != record.question || rows.getString(2) != "pending") {
+                        throw UnderstandingInputException("待答注释已修改或已回答，请重新读取")
+                    }
+                }
+            }
+        }
         db.prepareStatement("INSERT INTO records(id, parent_id, current_revision, created_at) VALUES(?, ?, ?, ?)").use { statement ->
             statement.setString(1, record.id)
             statement.setString(2, record.parentId)
@@ -243,12 +257,13 @@ class UnderstandingRepository(
             statement.setLong(4, record.createdAt)
             statement.executeUpdate()
         }
-        db.prepareStatement("INSERT INTO record_versions(record_id, revision, question_text, answer_text, data) VALUES(?, ?, ?, ?, ?)").use { statement ->
+        db.prepareStatement("INSERT INTO record_versions(record_id, revision, question_text, answer_text, data, display_title) VALUES(?, ?, ?, ?, ?, ?)").use { statement ->
             statement.setString(1, record.id)
             statement.setInt(2, record.revision)
             statement.setString(3, record.question)
             statement.setString(4, record.answer)
             statement.setString(5, gson.toJson(record))
+            statement.setString(6, record.displayTitle)
             statement.executeUpdate()
         }
         record.questionId?.let { id ->
@@ -297,9 +312,8 @@ class UnderstandingRepository(
         val result = mutableListOf<UnderstandingRecord>()
         db.prepareStatement(
             "SELECT v.data FROM records r JOIN record_versions v ON v.record_id=r.id AND v.revision=r.current_revision " +
-                "WHERE (?='' OR v.question_text LIKE ? OR v.answer_text LIKE ? OR EXISTS " +
-                "(SELECT 1 FROM questions q WHERE q.owner_record_id=r.id AND (q.text LIKE ? OR EXISTS " +
-                "(SELECT 1 FROM answers a WHERE a.question_id=q.id AND a.answer_text LIKE ?)))) " +
+                "WHERE (?='' OR v.question_text LIKE ? OR v.display_title LIKE ? OR EXISTS " +
+                "(SELECT 1 FROM questions q WHERE q.owner_record_id=r.id AND q.text LIKE ?)) " +
                 "ORDER BY r.created_at DESC LIMIT ?",
         ).use { statement ->
             val pattern = "%${query.trim()}%"
@@ -307,8 +321,7 @@ class UnderstandingRepository(
             statement.setString(2, pattern)
             statement.setString(3, pattern)
             statement.setString(4, pattern)
-            statement.setString(5, pattern)
-            statement.setInt(6, limit.coerceIn(1, 500))
+            statement.setInt(5, limit.coerceIn(1, 500))
             statement.executeQuery().use { rows ->
                 while (rows.next()) result += gson.fromJson(rows.getString(1), UnderstandingRecord::class.java)
             }
@@ -328,16 +341,15 @@ class UnderstandingRepository(
                 "WHERE root.parent_id IS NULL AND (?='' OR EXISTS (" +
                 "SELECT 1 FROM descendants d JOIN records r ON r.id=d.id " +
                 "JOIN record_versions child ON child.record_id=r.id AND child.revision=r.current_revision " +
-                "WHERE d.root_id=root.id AND (child.question_text LIKE ? OR child.answer_text LIKE ? " +
-                "OR EXISTS (SELECT 1 FROM questions q WHERE q.owner_record_id=r.id AND " +
-                "(q.text LIKE ? OR EXISTS (SELECT 1 FROM answers a WHERE a.question_id=q.id AND a.answer_text LIKE ?)))))) " +
+                "WHERE d.root_id=root.id AND (child.question_text LIKE ? OR child.display_title LIKE ? " +
+                "OR EXISTS (SELECT 1 FROM questions q WHERE q.owner_record_id=r.id AND q.text LIKE ?)))) " +
                 "ORDER BY root.created_at DESC LIMIT ?",
         ).use { statement ->
             val normalized = query.trim()
             val pattern = "%$normalized%"
             statement.setString(1, normalized)
-            (2..5).forEach { statement.setString(it, pattern) }
-            statement.setInt(6, limit.coerceIn(1, 500))
+            (2..4).forEach { statement.setString(it, pattern) }
+            statement.setInt(5, limit.coerceIn(1, 500))
             statement.executeQuery().use { rows ->
                 while (rows.next()) result += gson.fromJson(rows.getString(1), UnderstandingRecord::class.java)
             }
@@ -477,3 +489,6 @@ internal fun newId(): String = UUID.randomUUID().toString()
 internal fun sha256(value: String): String = MessageDigest.getInstance("SHA-256")
     .digest(value.toByteArray(Charsets.UTF_8))
     .joinToString("") { "%02x".format(it) }
+
+private const val DATABASE_SCHEMA_VERSION = 2
+internal const val DELETED_REQUEST_RESPONSE = "__deleted__"

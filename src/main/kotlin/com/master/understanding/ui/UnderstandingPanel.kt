@@ -1,9 +1,8 @@
 package com.master.understanding.ui
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -12,13 +11,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.awt.SwingPanel
 import androidx.compose.ui.unit.dp
 import com.intellij.openapi.application.ApplicationManager
@@ -30,10 +29,13 @@ import com.master.understanding.diagram.createUnderstandingDiagram
 import com.master.understanding.diagram.bindGraphState
 import com.master.understanding.diagram.graphBrowseState
 import com.master.understanding.diagram.saveGraphViewState
+import com.master.understanding.diagram.rootDiagramCluster
 import com.master.understanding.ide.GraphLayerKey
 import com.master.understanding.ide.UnderstandingService
+import com.master.understanding.ide.PanelPage
 import com.master.understanding.model.BrowseState
 import com.master.understanding.model.UnderstandingRecord
+import com.master.understanding.storage.pendingQuestionsForNode
 import com.intellij.openapi.util.Disposer
 import org.jetbrains.jewel.ui.component.OutlinedButton
 import org.jetbrains.jewel.ui.component.Text
@@ -42,7 +44,6 @@ import org.jetbrains.jewel.ui.component.TextField
 @Composable
 fun UnderstandingPanel(service: UnderstandingService) {
     var revision by remember { mutableStateOf(0) }
-    var history by remember { mutableStateOf(false) }
     var layers by remember(service) { mutableStateOf(service.panelLayers) }
     var rootRecordId by remember(service) { mutableStateOf(service.panelRootRecordId) }
     val setLayers: (List<FollowUpLayer>) -> Unit = { value ->
@@ -53,13 +54,14 @@ fun UnderstandingPanel(service: UnderstandingService) {
         rootRecordId = value
         service.panelRootRecordId = value
     }
-    SideEffect {
-        service.panelLayers = layers
-        service.panelRootRecordId = rootRecordId
-    }
+    val history = service.panelPage == PanelPage.HISTORY
     val search = remember { TextFieldState() }
     DisposableEffect(service) {
-        val subscription = service.onChanged { revision++ }
+        val subscription = service.onChanged {
+            layers = service.panelLayers
+            rootRecordId = service.panelRootRecordId
+            revision++
+        }
         onDispose {
             subscription.close()
         }
@@ -68,22 +70,13 @@ fun UnderstandingPanel(service: UnderstandingService) {
     val records = remember(revision, history, search.text.toString()) {
         service.repository.recentRootRecords(if (history) search.text.toString() else "", if (history) 500 else 6)
     }
-    val questions = remember(revision, history, search.text.toString()) {
-        service.repository.recentQuestions(if (history) search.text.toString() else "", if (history) 500 else 6)
-    }
     val selected = remember(revision, service.activeRecordId) {
         service.activeRecordId?.let { id -> runCatching { service.repository.getRecord(id) }.getOrNull() }
-    }
-    val looseQuestions = remember(questions, revision) {
-        questions.filter { it.ownerRecordId == null && service.repository.recordForQuestion(it.id) == null }
     }
     val currentLayer = layers.lastOrNull()
     val displayedRecord = currentLayer?.let { service.repository.getRecord(it.recordId) } ?: selected
     val selectRoot: (UnderstandingRecord) -> Unit = { record ->
-        setLayers(emptyList())
-        setRootRecordId(null)
-        service.select(record)
-        history = false
+        service.showRoot(record)
     }
     val hierarchyRootId = rootRecordId ?: if (layers.isEmpty()) displayedRecord?.id else null
     val hierarchyEntries = remember(hierarchyRootId, revision) {
@@ -104,74 +97,54 @@ fun UnderstandingPanel(service: UnderstandingService) {
         }
     }
 
-    Column(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val actionItems: @Composable () -> Unit = {
-                RecentRecordsButton(recentRecords) { record ->
-                    selectRoot(record)
-                }
-                OutlinedButton(onClick = { history = !history }) { Text(if (history) "返回图" else "历史") }
-            }
-            val actions: @Composable () -> Unit = {
-                if (maxWidth < 260.dp) {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { actionItems() }
-                } else {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { actionItems() }
-                }
-            }
-            if (maxWidth < 420.dp) {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("Understanding")
-                    actions()
-                }
-            } else {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Understanding", modifier = Modifier.weight(1f))
-                    actions()
-                }
-            }
-        }
+    Column(Modifier.fillMaxSize().padding(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         if (history) {
             Text("历史记录")
-            TextField(search, modifier = Modifier.fillMaxWidth(), placeholder = { Text("搜索问题和回答") })
+            TextField(search, modifier = Modifier.fillMaxWidth(), placeholder = { Text("搜索标题或问题") })
         }
         if (service.repository.readOnly) Text("此项目已在另一 IDE 实例中打开，当前只读")
-        if (layers.isNotEmpty() && !history) {
-            OutlinedButton(onClick = {
-                val parentLayers = layers.dropLast(1)
-                val parentIndex = hierarchyEntries.indexOfFirst { it.layers == parentLayers }
-                if (parentIndex >= 0) navigateToIndex(parentIndex)
-            }) { Text("‹ 返回") }
-        }
-        if ((selected == null && layers.isEmpty()) || history) {
+        if (service.panelPage == PanelPage.WELCOME || (selected == null && layers.isEmpty() && !history)) {
+            UnderstandingWelcome(service, recentRecords, Modifier.weight(1f), selectRoot)
+        } else if (history) {
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (records.isEmpty() && looseQuestions.isEmpty()) Text("暂无理解记录")
+                if (records.isEmpty()) Text("暂无理解记录")
                 records.forEach { record ->
-                    val count = service.repository.questionsForRecord(record.id).size
-                    HistoryRecordRow(record, selected?.id == record.id, count) {
-                        selectRoot(record)
-                    }
-                }
-                if (looseQuestions.isNotEmpty()) Text("尚未归入理解图的提问")
-                looseQuestions.forEach { item ->
-                    val answers = service.repository.answersForQuestion(item.id)
-                    HistoryQuestionRow(item, answers.map { it.answer })
+                    RecordCandidateRow(record, selected?.id == record.id,
+                        onClick = { selectRoot(record) },
+                        onDelete = { service.deleteRoot(record.id) })
                 }
             }
         } else {
-            when (currentLayer) {
-                is FollowUpLayer -> QuestionIndexView(
-                    service, requireNotNull(displayedRecord), currentLayer.nodeId, revision, Modifier.weight(1f),
-                    hierarchyItems, navigateToIndex,
-                ) { child, nodeId ->
-                    service.select(child, nodeId, navigateSource = !service.graphStates.get(GraphLayerKey(child.id, nodeId)).navigationPinned)
-                    setLayers(layers + FollowUpLayer(child.id, nodeId))
+            Box(Modifier.weight(1f)) {
+                when (currentLayer) {
+                    is FollowUpLayer -> QuestionIndexView(
+                        service, requireNotNull(displayedRecord), currentLayer.nodeId, revision, Modifier.fillMaxSize(),
+                        hierarchyItems, navigateToIndex,
+                    ) { child, nodeId ->
+                        service.select(child, nodeId, navigateSource = !service.graphStates.get(GraphLayerKey(child.id, nodeId)).navigationPinned)
+                        setLayers(layers + FollowUpLayer(child.id, nodeId))
+                    }
+                    null -> RecordView(service, requireNotNull(displayedRecord), revision, Modifier.fillMaxSize(),
+                        hierarchyItems, navigateToIndex) { nodeId ->
+                        setRootRecordId(displayedRecord.id)
+                        service.select(displayedRecord, nodeId, navigateSource = !service.graphStates.get(GraphLayerKey(displayedRecord.id, nodeId)).navigationPinned)
+                        setLayers(layers + FollowUpLayer(displayedRecord.id, nodeId))
+                    }
                 }
-                null -> RecordView(service, requireNotNull(displayedRecord), revision, Modifier.weight(1f),
-                    hierarchyItems, navigateToIndex) { nodeId ->
-                    setRootRecordId(displayedRecord.id)
-                    service.select(displayedRecord, nodeId, navigateSource = !service.graphStates.get(GraphLayerKey(displayedRecord.id, nodeId)).navigationPinned)
-                    setLayers(layers + FollowUpLayer(displayedRecord.id, nodeId))
+                if (layers.isNotEmpty() || service.canReturnToPrevious) {
+                    Column(Modifier.align(Alignment.TopEnd).padding(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        if (layers.isNotEmpty()) {
+                            OutlinedButton(onClick = {
+                                val parentLayers = layers.dropLast(1)
+                                val parentIndex = hierarchyEntries.indexOfFirst { it.layers == parentLayers }
+                                if (parentIndex >= 0) navigateToIndex(parentIndex)
+                            }) { Text("‹ 返回") }
+                        }
+                        if (service.canReturnToPrevious) {
+                            OutlinedButton(onClick = service::returnToPrevious) { Text(service.returnLabel) }
+                        }
+                    }
                 }
             }
         }
@@ -190,9 +163,17 @@ private fun RecordView(
 ) {
     val graphKey = GraphLayerKey(record.id)
     val questionCounts = remember(record.id, revision) {
-        service.repository.questionsForRecord(record.id).groupingBy { question ->
+        service.repository.questionsForRecord(record.id).filter {
+            service.repository.recordForQuestion(it.id) != null
+        }.groupingBy { question ->
             service.repository.getContext(question.contextToken).nodeId
         }.eachCount().filterKeys { it != null }.mapKeys { it.key!! }
+    }
+    val noteCounts = remember(record.id, revision) {
+        record.graph.nodes.mapNotNull { node ->
+            val count = service.repository.pendingQuestionsForNode(record.id, node.id).size
+            node.id.takeIf { count > 0 }?.let { it to count }
+        }.toMap()
     }
     val explorer = remember(record.id, record.revision) {
         val state = graphBrowseState(service, graphKey)
@@ -202,7 +183,8 @@ private fun RecordView(
     var choices by remember(record.id, record.revision) { mutableStateOf<List<com.master.understanding.model.GraphEdge>>(emptyList()) }
     val current = remember(pathRevision, record.id, record.revision) { explorer.currentNodeId }
     val diagram = remember(record.id, record.revision) {
-        runCatching { createUnderstandingDiagram(record, graphBrowseState(service, graphKey)).apply {
+        runCatching { createUnderstandingDiagram(record, graphBrowseState(service, graphKey),
+            clusters = listOf(rootDiagramCluster(record))).apply {
             bindGraphState(service, graphKey)
         } }
     }
@@ -231,6 +213,11 @@ private fun RecordView(
             service.copyNodeContext(record, nodeId)
             diagram.getOrNull()?.showCopied(nodeId)
         }
+        val addNote = diagram.getOrNull()?.onAddNodeNote { service.addNodeNote(record, it) }
+        val viewNote = diagram.getOrNull()?.onNoteBadgeClicked { nodeId, component, point ->
+            service.showNodeNotes(record, nodeId, component, point)
+        }
+        val editTitle = diagram.getOrNull()?.onClusterTitleEdit { service.editRecordTitle(record.id) }
         val synchronization = service.onSelectionChanged { recordId, nodeId ->
             if (recordId == record.id) {
                 nodeId?.let {
@@ -246,6 +233,9 @@ private fun RecordView(
             selection?.close()
             questionSelection?.close()
             copySelection?.close()
+            addNote?.close()
+            viewNote?.close()
+            editTitle?.close()
             synchronization.close()
             diagram.getOrNull()?.let { builder ->
                 persistView(service, record, builder, explorer)
@@ -253,8 +243,9 @@ private fun RecordView(
             }
         }
     }
-    DisposableEffect(diagram, questionCounts) {
+    DisposableEffect(diagram, questionCounts, noteCounts) {
         diagram.getOrNull()?.setQuestionCounts(questionCounts)
+        diagram.getOrNull()?.setPendingNoteCounts(noteCounts)
         onDispose { }
     }
     DisposableEffect(diagram, choices) {
@@ -298,7 +289,6 @@ private fun RecordView(
         onDispose { active = false }
     }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(record.question)
         diagram.onSuccess { builder ->
             key(builder) {
                 SwingPanel(factory = { builder.jComponent }, modifier = Modifier.fillMaxWidth().weight(1f))

@@ -1,9 +1,7 @@
 package com.master.understanding.core
 
 import com.google.gson.Gson
-import com.master.understanding.model.Evidence
 import com.master.understanding.model.SourceAnchor
-import com.master.understanding.model.UnderstandingAnswer
 import com.master.understanding.model.UnderstandingContext
 import com.master.understanding.model.UnderstandingGraph
 import com.master.understanding.model.UnderstandingInputException
@@ -14,6 +12,7 @@ import com.master.understanding.model.requireInput
 import com.master.understanding.model.validate
 import com.master.understanding.storage.UnderstandingRepository
 import com.master.understanding.storage.newId
+import com.master.understanding.storage.reviseRecordGraph
 
 class UnderstandingCore(
     private val repository: UnderstandingRepository,
@@ -77,23 +76,26 @@ class UnderstandingCore(
         schemaVersion: Int,
         requestId: String,
         question: String,
-        answer: String,
         graph: UnderstandingGraph,
         placement: String,
         contextToken: String? = null,
         questionId: String? = null,
         parentId: String? = null,
+        displayTitle: String? = null,
     ): UnderstandingRecord {
         validateVersion(schemaVersion)
-        requireInput(question.isNotBlank() && answer.isNotBlank(), "问题和回答不能为空")
+        requireInput(question.isNotBlank(), "问题不能为空")
+        requireInput(displayTitle == null || displayTitle.isNotBlank(), "标题不能为空")
         graph.validate()
+        requireInput(graph.nodes.any { it.kind != "placeholder" }, "回答必须包含实际图节点")
         val savedQuestion = questionId?.let(repository::getQuestion)
         requireInput(savedQuestion == null || savedQuestion.text == question.trim(), "questionId 与原问题不一致")
+        requireInput(savedQuestion == null || placement == "child", "节点注释的回答必须作为子图保存")
         val token = contextToken ?: savedQuestion?.contextToken
         requireInput(savedQuestion == null || savedQuestion.contextToken == token, "questionId 与 contextToken 不一致")
         val context = token?.let(repository::getContext)
         val parent = resolveParent(placement, parentId, context)
-        val payload = gson.toJson(listOf(schemaVersion, question.trim(), answer.trim(), graph, placement, token, questionId, parentId))
+        val payload = gson.toJson(listOf(schemaVersion, question.trim(), graph, placement, token, questionId, parentId, displayTitle?.trim()))
         val json = repository.request(requestId, "present_understanding", payload) { db ->
             val effectiveQuestion = savedQuestion ?: if (placement == "child" && context?.recordId != null) {
                 UnderstandingQuestion(
@@ -111,10 +113,11 @@ class UnderstandingCore(
                 parentId = parent,
                 questionId = effectiveQuestion?.id,
                 question = question.trim(),
-                answer = answer.trim(),
+                answer = "",
                 contextToken = token,
                 graph = graph,
                 createdAt = System.currentTimeMillis(),
+                displayTitle = displayTitle?.trim(),
             )
             repository.insertRecord(db, record)
             gson.toJson(record)
@@ -122,59 +125,24 @@ class UnderstandingCore(
         return gson.fromJson(json, UnderstandingRecord::class.java)
     }
 
-    fun appendAnswer(
+    fun revise(
         schemaVersion: Int,
         requestId: String,
-        answer: String,
-        evidence: List<Evidence> = emptyList(),
-        questionId: String? = null,
-        contextToken: String? = null,
-        question: String? = null,
-        replacesAnswerId: String? = null,
-    ): UnderstandingAnswer {
+        question: String,
+        graph: UnderstandingGraph,
+        recordId: String,
+        expectedRevision: Int,
+    ): UnderstandingRecord {
         validateVersion(schemaVersion)
-        requireInput(answer.isNotBlank(), "回答不能为空")
-        evidence.forEach { item ->
-            requireInput(item.id.isNotBlank(), "证据 ID 不能为空")
-            item.anchor.validate()
-            item.dependencies.forEach(SourceAnchor::validate)
+        requireInput(question.isNotBlank(), "问题不能为空")
+        requireInput(recordId.isNotBlank() && expectedRevision > 0, "修订需要记录 ID 和预期版本")
+        graph.validate()
+        requireInput(graph.nodes.any { it.kind != "placeholder" }, "回答必须包含实际图节点")
+        val payload = gson.toJson(listOf(schemaVersion, question.trim(), graph, "revise", recordId, expectedRevision))
+        val json = repository.request(requestId, "present_understanding", payload) { db ->
+            gson.toJson(repository.reviseRecordGraph(db, recordId, expectedRevision, question.trim(), graph))
         }
-        val savedQuestion = questionId?.let(repository::getQuestion)
-        requireInput(savedQuestion != null || !contextToken.isNullOrBlank() && !question.isNullOrBlank(), "需要 questionId 或固定来源与问题")
-        if (replacesAnswerId != null) {
-            requireInput(savedQuestion != null, "替换回答需要 questionId")
-            requireInput(repository.getAnswer(replacesAnswerId).questionId == savedQuestion?.id, "旧回答不属于该问题")
-        }
-        if (savedQuestion != null && contextToken != null) {
-            requireInput(savedQuestion.contextToken == contextToken, "questionId 与 contextToken 不一致")
-        }
-        val token = savedQuestion?.contextToken ?: contextToken!!
-        val context = repository.getContext(token)
-        val payload = gson.toJson(listOf(schemaVersion, answer.trim(), evidence, questionId, token, question?.trim(), replacesAnswerId))
-        val json = repository.request(requestId, "append_understanding_answer", payload) { db ->
-            if (replacesAnswerId != null) {
-                requireInput(repository.answersForQuestion(savedQuestion!!.id).any { it.id == replacesAnswerId }, "旧回答已被替换")
-            }
-            val effectiveQuestion = savedQuestion ?: UnderstandingQuestion(
-                id = newId(),
-                text = question!!.trim(),
-                contextToken = token,
-                ownerRecordId = context.recordId,
-                status = "pending",
-                createdAt = System.currentTimeMillis(),
-            ).also { repository.insertQuestion(db, it) }
-            val result = UnderstandingAnswer(
-                id = newId(),
-                questionId = effectiveQuestion.id,
-                answer = answer.trim(),
-                evidence = evidence,
-                createdAt = System.currentTimeMillis(),
-                supersedesId = replacesAnswerId,
-            )
-            repository.insertAnswer(db, result)
-            gson.toJson(result)
-        }
-        return gson.fromJson(json, UnderstandingAnswer::class.java)
+        return gson.fromJson(json, UnderstandingRecord::class.java)
     }
 
     private fun validateVersion(value: Int) {

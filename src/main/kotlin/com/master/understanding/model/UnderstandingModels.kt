@@ -74,6 +74,7 @@ data class UnderstandingRecord(
     val contextToken: String?,
     val graph: UnderstandingGraph,
     val createdAt: Long,
+    val displayTitle: String? = null,
 )
 
 data class UnderstandingAnswer(

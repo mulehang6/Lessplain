@@ -17,6 +17,7 @@ import com.master.understanding.diagram.DiagramExamplePanel
 import com.master.understanding.diagram.createUnderstandingDiagram
 import com.master.understanding.diagram.bindGraphState
 import com.master.understanding.diagram.graphBrowseState
+import com.master.understanding.diagram.requestFocusCluster
 import com.master.understanding.diagram.saveGraphViewState
 import com.master.understanding.ide.GraphLayerKey
 import com.master.understanding.core.StaticExplorer
@@ -27,7 +28,7 @@ import com.master.understanding.model.GraphEdge
 import com.master.understanding.model.UnderstandingGraph
 import com.master.understanding.model.UnderstandingQuestion
 import com.master.understanding.model.UnderstandingRecord
-import org.jetbrains.jewel.ui.component.Text
+import com.master.understanding.storage.pendingQuestionsForNode
 
 internal data class FollowUpLayer(val recordId: String, val nodeId: String)
 
@@ -55,12 +56,10 @@ internal fun QuestionIndexView(
 ) {
     val graphKey = GraphLayerKey(record.id, nodeId)
     val questions = remember(record.id, nodeId, revision) { questionsForNode(service, record, nodeId) }
-    val title = record.graph.nodes.firstOrNull { it.id == nodeId }?.label ?: "节点"
     val contentSignature = remember(record.id, nodeId, revision) {
         questions.map { question ->
             val child = service.repository.recordForQuestion(question.id)
-            listOf(question.id, question.status, child?.id.orEmpty(), child?.revision.toString(),
-                service.repository.answersForQuestion(question.id).lastOrNull()?.id.orEmpty()).joinToString(":")
+            listOf(question.id, child?.id.orEmpty(), child?.revision.toString()).joinToString(":")
         }
     }
     val canvas = remember(record.id, nodeId, contentSignature) {
@@ -71,6 +70,10 @@ internal fun QuestionIndexView(
             clusters = canvas.clusters, examplePanels = canvas.examplePanels).apply {
             bindGraphState(service, graphKey)
         }
+    }
+    DisposableEffect(diagram, service.panelFocusQuestionId) {
+        service.panelFocusQuestionId?.let(diagram::requestFocusCluster)
+        onDispose { }
     }
     DisposableEffect(diagram, hierarchy, onNavigateIndex) {
         diagram.setHierarchy(hierarchy, onNavigateIndex)
@@ -148,6 +151,17 @@ internal fun QuestionIndexView(
                 diagram.showCopied(id)
             }
         }
+        val addNote = diagram.onAddNodeNote { id ->
+            canvas.sources[id]?.let { service.addNodeNote(it.record, it.nodeId) }
+        }
+        val viewNote = diagram.onNoteBadgeClicked { id, component, point ->
+            canvas.sources[id]?.let { service.showNodeNotes(it.record, it.nodeId, component, point) }
+        }
+        val editTitle = diagram.onClusterTitleEdit { id ->
+            questions.firstOrNull { it.id == id }?.let { question ->
+                service.repository.recordForQuestion(question.id)?.let { service.editRecordTitle(it.id) }
+            }
+        }
         val questionSelection = diagram.onQuestionBadgeClicked { id ->
             canvas.sources[id]?.takeIf { questionsForNode(service, it.record, it.nodeId).isNotEmpty() }?.let {
                 onChildQuestions(it.record, it.nodeId)
@@ -170,6 +184,9 @@ internal fun QuestionIndexView(
             selection.close()
             sourceSelection.close()
             copy.close()
+            addNote.close()
+            viewNote.close()
+            editTitle.close()
             questionSelection.close()
             clusterSelection.close()
             diagram.setStepActions(null, null)
@@ -180,8 +197,14 @@ internal fun QuestionIndexView(
         diagram.setQuestionCounts(liveQuestionCounts)
         onDispose { }
     }
+    DisposableEffect(diagram, revision, canvas) {
+        diagram.setPendingNoteCounts(canvas.sources.mapNotNull { (id, source) ->
+            val count = service.repository.pendingQuestionsForNode(source.record.id, source.nodeId).size
+            id.takeIf { count > 0 }?.let { it to count }
+        }.toMap())
+        onDispose { }
+    }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("$title · ${questions.size} 个追问")
         key(diagram) {
             SwingPanel(factory = { diagram.jComponent }, modifier = Modifier.fillMaxWidth().weight(1f))
         }
@@ -191,7 +214,8 @@ internal fun QuestionIndexView(
 internal fun questionsForNode(
     service: UnderstandingService, record: UnderstandingRecord, nodeId: String,
 ): List<UnderstandingQuestion> = service.repository.questionsForRecord(record.id).filter { question ->
-    service.repository.getContext(question.contextToken).nodeId == nodeId
+    service.repository.getContext(question.contextToken).nodeId == nodeId &&
+        service.repository.recordForQuestion(question.id) != null
 }
 
 internal fun buildQuestionCanvas(
@@ -210,14 +234,9 @@ internal fun buildQuestionCanvas(
     val panels = mutableListOf<DiagramExamplePanel>()
     questions.forEach { question ->
         val child = service.repository.recordForQuestion(question.id)
+        if (child == null) return@forEach
         val prefix = "q${question.id}_"
-        if (child == null) {
-            val id = "${prefix}answer"
-            val answered = service.repository.answersForQuestion(question.id).isNotEmpty()
-            nodes += GraphNode(id, if (answered) "已有文字回答\n尚无示例图" else "等待回答", kind = "placeholder")
-            sources[id] = SourceNode(owner, ownerNodeId)
-            clusters += DiagramCluster(question.id, question.text, setOf(id))
-        } else {
+        run {
             val ids = child.graph.nodes.mapTo(linkedSetOf()) { prefix + it.id }
             child.graph.nodes.forEach { node ->
                 val id = prefix + node.id
@@ -233,7 +252,7 @@ internal fun buildQuestionCanvas(
                 val target = service.repository.getContext(nested.contextToken).nodeId
                 if (target != null) counts[prefix + target] = (counts[prefix + target] ?: 0) + 1
             }
-            clusters += DiagramCluster(question.id, question.text, ids)
+            clusters += DiagramCluster(question.id, child.displayTitle ?: question.text, ids)
             examplePanel(question, child, prefix)?.let(panels::add)
         }
     }

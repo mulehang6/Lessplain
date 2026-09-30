@@ -50,23 +50,21 @@ class UnderstandingCoreTest {
         assertTrue(prepared.payload.contains(prepared.question.id))
         assertTrue(prepared.payload.contains(source.token))
 
-        val rootRecord = core.present(1, "create-a", "主问题", "结论", graph, "root")
+        val rootRecord = core.present(1, "create-a", "主问题", graph, "root")
         val graphContext = core.captureContext(rootRecord.id, "start", source.anchor)
         val childQuestion = core.prepareQuestion("这条分支为什么存在？", graphContext.token)
-        val child = core.present(1, "create-child", childQuestion.question.text, "因为条件不同", graph, "child", questionId = childQuestion.question.id)
+        val child = core.present(1, "create-child", childQuestion.question.text, graph, "child", questionId = childQuestion.question.id)
         assertEquals(rootRecord.id, child.parentId)
         assertEquals(rootRecord.id, repository.getQuestion(childQuestion.question.id).ownerRecordId)
         assertEquals(childQuestion.question.id, repository.questionsForRecord(rootRecord.id).single().id)
         assertEquals(child.id, repository.recordForQuestion(childQuestion.question.id)?.id)
-        assertEquals(child.id, core.present(1, "create-child", childQuestion.question.text, "因为条件不同", graph, "child", questionId = childQuestion.question.id).id)
+        assertEquals(child.id, core.present(1, "create-child", childQuestion.question.text, graph, "child", questionId = childQuestion.question.id).id)
         assertFailsWith<UnderstandingInputException> {
-            core.present(1, "create-child", childQuestion.question.text, "另一回答", graph, "child", questionId = childQuestion.question.id)
+            core.present(1, "create-child", childQuestion.question.text, graph, "child",
+                questionId = childQuestion.question.id, displayTitle = "不同标题")
         }
 
-        val answer = core.appendAnswer(1, "answer-a", "补充说明", questionId = prepared.question.id)
-        assertEquals(answer.id, core.appendAnswer(1, "answer-a", "补充说明", questionId = prepared.question.id).id)
-        assertEquals(listOf(answer.id), repository.answersForQuestion(prepared.question.id).map { it.id })
-        assertEquals("answered", repository.getQuestion(prepared.question.id).status)
+        assertEquals("pending", repository.getQuestion(prepared.question.id).status)
         assertEquals(source.token, repository.getQuestion(prepared.question.id).contextToken)
         assertEquals(prepared.question.id, repository.questionsForContext(source.token).single().id)
         repository.saveBrowseState(BrowseState(rootRecord.id, nodeId = "yes", staticPath = listOf("e-yes"), zoom = 1.5, panX = 10.0, panY = 15.0, hasPan = true))
@@ -78,7 +76,7 @@ class UnderstandingCoreTest {
             assertEquals(2, reopened.recentRecords().size)
             assertEquals(listOf(rootRecord.id), reopened.recentRootRecords().map { it.id })
             assertEquals(listOf(rootRecord.id), reopened.recentRootRecords("这条分支").map { it.id })
-            assertTrue(reopened.recentQuestions("补充说明").any { it.id == prepared.question.id })
+            assertTrue(reopened.recentQuestions("为什么保存").any { it.id == prepared.question.id })
             assertEquals("yes", reopened.getBrowseState(rootRecord.id)?.nodeId)
             assertEquals(1.5, reopened.getBrowseState(rootRecord.id)?.zoom)
             assertEquals(10.0, reopened.getBrowseState(rootRecord.id)?.panX)
@@ -90,7 +88,7 @@ class UnderstandingCoreTest {
         UnderstandingRepository(root).use { first ->
             val core = UnderstandingCore(first)
             assertFailsWith<UnderstandingInputException> {
-                core.present(1, "no-source", "问题", "回答", graph, "child")
+                core.present(1, "no-source", "问题", graph, "child")
             }
             assertFailsWith<UnderstandingInputException> { core.context("missing") }
             UnderstandingRepository(root).use { second ->
@@ -105,38 +103,19 @@ class UnderstandingCoreTest {
     }
 
     @Test
-    fun `revised answer replaces visible text without deleting the original`() {
-        UnderstandingRepository(root).use { repository ->
-            val core = UnderstandingCore(repository)
-            val context = core.captureContext()
-            val question = core.prepareQuestion("这一行做什么？", context.token).question
-            val original = core.appendAnswer(1, "original", "冗长解释", questionId = question.id)
-            val revision = core.appendAnswer(1, "revision", "输入 username=alice，得到 alice", questionId = question.id,
-                replacesAnswerId = original.id)
-            assertEquals(listOf(revision.id), repository.answersForQuestion(question.id).map { it.id })
-            assertEquals("冗长解释", repository.getAnswer(original.id).answer)
-            assertEquals(revision.id, core.appendAnswer(1, "revision", "输入 username=alice，得到 alice",
-                questionId = question.id, replacesAnswerId = original.id).id)
-            assertFailsWith<UnderstandingInputException> {
-                core.appendAnswer(1, "revision-again", "另一回答", questionId = question.id, replacesAnswerId = original.id)
-            }
-        }
-    }
-
-    @Test
     fun `present from copied node context creates a visible child question`() {
         UnderstandingRepository(root).use { repository ->
             val core = UnderstandingCore(repository)
-            val parent = core.present(1, "parent", "主图", "回答", graph, "root")
+            val parent = core.present(1, "parent", "主图", graph, "root")
             val context = core.captureContext(parent.id, "start")
-            val child = core.present(1, "copied-node-answer", "这一行做什么？", "看图中示例", graph,
+            val child = core.present(1, "copied-node-answer", "这一行做什么？", graph,
                 "child", contextToken = context.token)
             assertEquals(parent.id, child.parentId)
             val savedQuestion = repository.questionsForRecord(parent.id).single()
             assertEquals(child.questionId, savedQuestion.id)
             assertEquals("start", repository.getContext(savedQuestion.contextToken).nodeId)
             assertEquals(child.id, repository.recordForQuestion(savedQuestion.id)?.id)
-            assertEquals(child.id, core.present(1, "copied-node-answer", "这一行做什么？", "看图中示例", graph,
+            assertEquals(child.id, core.present(1, "copied-node-answer", "这一行做什么？", graph,
                 "child", contextToken = context.token).id)
         }
     }
@@ -261,14 +240,14 @@ class UnderstandingCoreTest {
     fun `hierarchy includes descendants below the current question and sibling branches`() {
         UnderstandingRepository(root).use { repository ->
             val core = UnderstandingCore(repository)
-            val parent = core.present(1, "hierarchy-root", "主问题", "回答", graph, "root")
-            val child = core.present(1, "hierarchy-child", "第一层", "回答", graph, "child",
+            val parent = core.present(1, "hierarchy-root", "主问题", graph, "root")
+            val child = core.present(1, "hierarchy-child", "第一层", graph, "child",
                 contextToken = core.captureContext(parent.id, "start").token)
-            val grandchild = core.present(1, "hierarchy-grandchild", "第二层", "回答", graph, "child",
+            val grandchild = core.present(1, "hierarchy-grandchild", "第二层", graph, "child",
                 contextToken = core.captureContext(child.id, "yes").token)
-            core.present(1, "hierarchy-great-grandchild", "第三层", "回答", graph, "child",
+            core.present(1, "hierarchy-great-grandchild", "第三层", graph, "child",
                 contextToken = core.captureContext(grandchild.id, "no").token)
-            core.present(1, "hierarchy-sibling", "另一分支", "回答", graph, "child",
+            core.present(1, "hierarchy-sibling", "另一分支", graph, "child",
                 contextToken = core.captureContext(parent.id, "no").token)
 
             val entries = graphHierarchyEntries(repository, parent.id)
@@ -344,5 +323,15 @@ class UnderstandingCoreTest {
         assertTrue(symbolMatches("save", "A.save"))
         assertTrue(symbolMatches("AdminLoginController.login(HttpServletRequest,HttpServletResponse)", "AdminLoginController.login.username"))
         assertFalse(symbolMatches("A.save", "B.save"))
+    }
+
+    @Test
+    fun `multi-line source anchor includes the complete logic block`() {
+        val source = "fun save() {\n    if (ready) {\n        persist()\n    }\n}"
+        val block = "if (ready) {\n        persist()\n    }"
+        val anchor = SourceAnchor("src/A.kt", "save", block, sha256(source), 2)
+        val located = matchAnchorText(anchor, source) { "save" }
+        assertEquals(LocationStatus.EXACT, located.location)
+        assertEquals(block, source.substring(located.offset!!, located.offset + block.length))
     }
 }

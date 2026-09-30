@@ -7,6 +7,7 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.project.Project
 import com.master.understanding.diagram.openRecordInEditor
 import com.master.understanding.ide.UnderstandingService
+import com.master.understanding.ide.PanelPage
 
 /** Opens the selected record from the tool window title bar. */
 internal class OpenUnderstandingInEditorAction(
@@ -16,7 +17,7 @@ internal class OpenUnderstandingInEditorAction(
     override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
     override fun update(event: AnActionEvent) {
-        event.presentation.isEnabled = service.activeRecordId != null
+        event.presentation.isEnabled = service.panelPage == PanelPage.CANVAS && service.activeRecordId != null
     }
 
     override fun actionPerformed(event: AnActionEvent) {
