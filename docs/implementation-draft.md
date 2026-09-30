@@ -2,7 +2,7 @@
 
 产品范围以 [主设计文档](code-understanding-design-v0.5.md) 为准。以下是开发建议，不是完成状态；先验证关键接口，再固定实现。
 
-选型记录：2026-09-27 已放弃原生 Diagram，当前图由插件的 Swing 组件绘制。下文“优先验证 Diagrams”的内容保留为当时的评估过程；现状和待复验项见根目录 [README](../../README.md)。
+选型记录：2026-09-27 已放弃原生 Diagram，当前图由插件的 Swing 组件绘制。下文“优先验证 Diagrams”的内容保留为当时的评估过程；现状和待复验项见根目录 [README](../README.md)。
 
 ## 1. 兼容与图形实现
 
@@ -32,11 +32,10 @@ Agent handoff 也做成薄适配层，不依赖 AI Chat。首版只要求“复�
 | 工具 | 关键输入与返回 |
 | --- | --- |
 | get_understanding_context | 输入可选 contextToken；返回固定来源、能力列表及 token，省略时捕获当前选择 |
-| get_understanding | 输入 recordId、可选 revision；返回已保存的问题、回答、图和证据引用 |
-| list_understandings | 输入可选 query、parentId、分页 cursor；返回匹配记录与下一页位置，简短问答也可检索 |
-| present_understanding | 输入 questionId?、contextToken?、question、answer、placement、graph、evidence；创建独立记录，返回 recordId、revision 和校验结果 |
-| update_understanding | 输入 recordId、expectedRevision、answer、graph、evidence；写入新版本，保留旧版本 |
-| append_understanding_answer | 输入 questionId?、contextToken、question、answer、evidence；保存补充问答及来源，返回 answerId，不强制创建独立图 |
+| get_understanding | 输入 recordId、可选 revision；返回已保存的问题、显示标题、图和证据引用 |
+| list_understandings | 输入可选 query、parentId、分页 cursor；返回匹配的图记录与下一页位置 |
+| present_understanding | 输入 questionId?、contextToken?、question、displayTitle?、placement、graph；创建图记录，返回 recordId、revision 和校验结果 |
+| update_understanding | 输入 recordId、expectedRevision、displayTitle?、graph、evidence；写入新版本，保留旧版本 |
 | update_runtime | 输入 recordId、graphRevision、traceId、sourceRevision、events、completeness；接收整份单调用记录 |
 | set_tree_annotations | 输入 scope、expectedRevision、sourceRevision、entries；按范围替换说明，entries 含 path、roles[]、evidenceRefs |
 | present_project_understanding | 输入 projectGraphId?、expectedRevision?、sourceRevision、coverage、nodes、edges、evidence；创建或更新全局图版本 |

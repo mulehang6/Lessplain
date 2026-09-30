@@ -1,6 +1,6 @@
 # Master Understanding：真实插件基础实施计划
 
-本文保留启动阶段的计划及选型过程。当前实现以 [README](README.md) 为准；下文关于原生 Diagram、单一浏览状态和旧运行配置的条目是当时的计划，不代表现状。
+本文保留启动阶段的计划及选型过程。当前实现以 [README](../README.md) 为准；下文关于原生 Diagram、单一浏览状态和旧运行配置的条目是当时的计划，不代表现状。
 
 ## 目标与范围
 
@@ -8,7 +8,7 @@
 
 **Agent 提交理解图 → 看图与定位源码 → 复制节点来源 → 用户提出追问 → 回答归回原处 → 重启恢复。**
 
-开始前读取工程及上级的 `AGENTS.md`，以及 `prototype/docs/` 下的 `code-understanding-design-v0.5.md`、`context.md`、`implementation-draft.md`。产品要求以主设计文档为准，本批实施范围以本计划为准。
+开始前读取工程及上级的 `../../AGENTS.md`，以及 `docs` 下的 `code-understanding-design-v0.5.md`、`context.md`、`implementation-draft.md`。产品要求以主设计文档为准，本批实施范围以本计划为准。
 
 本批不实现真实 Trace、完整 Diff 理解、全局项目分析和目录说明。覆盖整个项目的全局图仍属于首个完整版本，本批不能被宣称为完整产品。不继续扩建 React 原型。
 
