@@ -11,11 +11,9 @@ import kotlin.math.sin
 /** Shared node appearance and hover actions for root and follow-up canvases. */
 internal object DiagramNodePainter {
     private val nodeFill = JBColor(Color.WHITE, Color(0x36383D))
-    private val startFill = JBColor(Color(0xDDF7EE), Color(0x22513F))
-    private val endFill = JBColor(Color(0xFDE8E8), Color(0x713039))
     private val nodeBorder = JBColor(Color(0x64748B), Color(0x9AA4B2))
-    private val focusBorder = JBColor(Color(0xB45309), Color(0xFFCA70))
-    private val focusHalo = JBColor(Color(217, 119, 6, 45), Color(255, 202, 112, 70))
+    private val focusBorder = JBColor(Color(0x2563EB), Color(0x72B7FF))
+    private val focusHalo = JBColor(Color(37, 99, 235, 22), Color(114, 183, 255, 28))
     private val textColor = JBColor(Color(0x111827), Color(0xF2F4F7))
     private val actionFill = JBColor(Color(0xEEF4FF), Color(0x254663))
     private val actionBorder = JBColor(Color(0x2563EB), Color(0x72B7FF))
@@ -26,51 +24,54 @@ internal object DiagramNodePainter {
     fun questionBounds(node: Rectangle2D.Double): Rectangle2D.Double =
         Rectangle2D.Double(node.x + 40, node.maxY + 8, 28.0, 28.0)
 
+    fun noteBounds(node: Rectangle2D.Double): Rectangle2D.Double =
+        Rectangle2D.Double(node.maxX - 20, node.y - 14, 28.0, 28.0)
+
     fun paint(
         g: Graphics2D,
         layout: UnderstandingGraphLayout,
         focused: String?,
         hovered: String?,
         questionCounts: Map<String, Int>,
+        pendingNoteCounts: Map<String, Int>,
         startIds: Set<String>,
         endIds: Set<String>,
         choiceTargets: Set<String> = emptySet(),
         choicePhase: Float = 0f,
         copiedNodeId: String? = null,
+        visible: Rectangle2D? = null,
     ) {
         g.font = UIManager.getFont("Label.font") ?: g.font
         layout.nodes.values.forEach { placed ->
             val bounds = placed.bounds
             val id = placed.node.id
+            if (visible != null && !visible.intersects(bounds.x - 24, bounds.y - 24,
+                    bounds.width + 48, bounds.height + 68)) return@forEach
             val current = id == focused
             if (current) {
                 g.color = focusHalo
-                g.stroke = BasicStroke(10f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
-                g.drawRoundRect(bounds.x.toInt() - 3, bounds.y.toInt() - 3,
-                    bounds.width.toInt() + 6, bounds.height.toInt() + 6, 18, 18)
+                g.stroke = BasicStroke(4f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
+                g.drawRoundRect(bounds.x.toInt() - 2, bounds.y.toInt() - 2,
+                    bounds.width.toInt() + 4, bounds.height.toInt() + 4, 10, 10)
             }
             if (id in choiceTargets) {
                 val alpha = (90 + 120 * ((sin(choicePhase.toDouble()) + 1) / 2)).toInt()
                 g.color = Color(255, 193, 77, alpha)
-                g.stroke = BasicStroke(11f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
+                g.stroke = BasicStroke(4f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
                 g.drawRoundRect(bounds.x.toInt() - 3, bounds.y.toInt() - 3,
                     bounds.width.toInt() + 6, bounds.height.toInt() + 6, 18, 18)
             }
-            g.color = when {
-                placed.node.kind == "placeholder" -> nodeFill
-                id in endIds -> endFill
-                id in startIds -> startFill
-                else -> nodeFill
-            }
-            g.fillRoundRect(bounds.x.toInt(), bounds.y.toInt(), bounds.width.toInt(), bounds.height.toInt(), 14, 14)
-            g.color = if (current) focusBorder else nodeBorder
-            g.stroke = BasicStroke(if (current) 4f else 1.5f)
-            g.drawRoundRect(bounds.x.toInt(), bounds.y.toInt(), bounds.width.toInt(), bounds.height.toInt(), 14, 14)
+            g.color = nodeFill
+            g.fillRoundRect(bounds.x.toInt(), bounds.y.toInt(), bounds.width.toInt(), bounds.height.toInt(), 10, 10)
+            g.color = if (current || id == hovered || id in choiceTargets) focusBorder else nodeBorder
+            g.stroke = BasicStroke(if (current) 2f else 1f)
+            g.drawRoundRect(bounds.x.toInt(), bounds.y.toInt(), bounds.width.toInt(), bounds.height.toInt(), 10, 10)
             g.color = textColor
             paintLabel(g, placed)
             if (id == hovered || id == copiedNodeId) {
                 paintAction(g, copyBounds(bounds), if (id == copiedNodeId) "✓" else "⧉")
                 if (id == hovered && (questionCounts[id] ?: 0) > 0) paintAction(g, questionBounds(bounds), "?")
+                if (id == hovered && (pendingNoteCounts[id] ?: 0) > 0) paintAction(g, noteBounds(bounds), "note")
             }
         }
     }
@@ -82,6 +83,14 @@ internal object DiagramNodePainter {
         g.stroke = BasicStroke(1.5f)
         g.drawRoundRect(bounds.x.toInt(), bounds.y.toInt(), bounds.width.toInt(), bounds.height.toInt(), 8, 8)
         g.color = textColor
+        if (label == "note") {
+            val x = bounds.x.toInt() + 7
+            val y = bounds.y.toInt() + 7
+            g.drawRoundRect(x, y, 14, 10, 4, 4)
+            g.drawLine(x + 4, y + 10, x + 4, y + 14)
+            g.drawLine(x + 4, y + 14, x + 8, y + 10)
+            return
+        }
         val metrics = g.fontMetrics
         g.drawString(label, (bounds.centerX - metrics.stringWidth(label) / 2).toFloat(),
             (bounds.centerY + metrics.ascent / 2.0 - 2).toFloat())
@@ -90,28 +99,16 @@ internal object DiagramNodePainter {
     private fun paintLabel(g: Graphics2D, placed: PlacedNode) {
         val metrics = g.fontMetrics
         val maxWidth = placed.bounds.width.toInt() - 24
-        val lines = mutableListOf<String>()
-        placed.node.label.split('\n').forEach { paragraph ->
-            var line = ""
-            paragraph.codePoints().forEach { codePoint ->
-                val next = line + String(Character.toChars(codePoint))
-                if (line.isNotEmpty() && metrics.stringWidth(next) > maxWidth) {
-                    lines += line
-                    line = String(Character.toChars(codePoint))
-                } else line = next
-            }
-            lines += line
-        }
+        val lines = DiagramTextMetrics.lines(placed.node.label, maxWidth, g.font)
         val visible = lines.take(3).toMutableList()
         if (lines.size > 3 && visible.isNotEmpty()) {
             var last = visible.last()
             while (last.isNotEmpty() && metrics.stringWidth("$last…") > maxWidth) last = last.dropLast(1)
             visible[visible.lastIndex] = "$last…"
         }
-        val startY = placed.bounds.centerY - (visible.size - 1) * metrics.height / 2.0 + metrics.ascent / 2.0
+        val startY = placed.bounds.y + 14 + metrics.ascent
         visible.forEachIndexed { index, text ->
-            val x = placed.bounds.centerX - metrics.stringWidth(text) / 2.0
-            g.drawString(text, x.toFloat(), (startY + index * metrics.height).toFloat())
+            g.drawString(text, (placed.bounds.x + 12).toFloat(), (startY + index * metrics.height).toFloat())
         }
     }
 }

@@ -25,6 +25,7 @@ import com.master.understanding.ui.buildQuestionCanvas
 import com.master.understanding.ui.FollowUpLayer
 import com.master.understanding.ui.graphHierarchyEntries
 import com.master.understanding.ui.questionsForNode
+import com.master.understanding.storage.pendingQuestionsForNode
 import java.awt.BorderLayout
 import java.awt.FlowLayout
 import java.beans.PropertyChangeListener
@@ -38,20 +39,20 @@ class UnderstandingVirtualFile(record: UnderstandingRecord, val questionNodeId: 
     LightVirtualFile(understandingTabTitle(record, questionNodeId), PlainTextFileType.INSTANCE, "") {
     val recordId: String = record.id
     val revision: Int = record.revision
-    val fullTitle: String = if (questionNodeId == null) record.question else {
+    val fullTitle: String = if (questionNodeId == null) record.displayTitle ?: record.question else {
         val node = record.graph.nodes.firstOrNull { it.id == questionNodeId }?.label ?: "节点"
-        "${record.question} / $node 的追问"
+        "${record.displayTitle ?: record.question} / $node 的追问"
     }
     var parentFile: UnderstandingVirtualFile? = null
 }
 
 internal fun understandingTabTitle(record: UnderstandingRecord, questionNodeId: String?): String {
     val title = (questionNodeId?.let { id -> record.graph.nodes.firstOrNull { it.id == id }?.label }
-        ?: record.question).replace(Regex("\\s+"), " ").trim()
+        ?: record.displayTitle ?: record.question).replace(Regex("\\s+"), " ").trim()
     val limit = 12
     val count = title.codePointCount(0, title.length)
     val short = if (count > limit) title.substring(0, title.offsetByCodePoints(0, limit)) + "…" else title
-    return "${if (questionNodeId == null) "理解图" else "追问"} · $short"
+    return short
 }
 
 class UnderstandingFileEditorProvider : FileEditorProvider, DumbAware {
@@ -76,7 +77,8 @@ private class UnderstandingFileEditor(private val project: Project, private val 
     private val builder = (questionCanvas?.let { canvas ->
         createUnderstandingDiagram(canvas.record, graphBrowseState(service, graphKey),
             clusters = canvas.clusters, examplePanels = canvas.examplePanels)
-    } ?: createUnderstandingDiagram(record, graphBrowseState(service, graphKey))).apply {
+    } ?: createUnderstandingDiagram(record, graphBrowseState(service, graphKey),
+        clusters = listOf(rootDiagramCluster(record)))).apply {
         bindGraphState(service, graphKey)
     }
     private val explorer = (questionCanvas?.record ?: record).graph.nodes.firstOrNull()?.let {
@@ -129,6 +131,21 @@ private class UnderstandingFileEditor(private val project: Project, private val 
         if (source != null) service.copyNodeContext(source.record, source.nodeId)
         else if (questionCanvas == null) service.copyNodeContext(record, nodeId)
         builder.showCopied(nodeId)
+    }
+    private val addNote = builder.onAddNodeNote { nodeId ->
+        val source = questionCanvas?.sources?.get(nodeId)
+            ?: if (questionCanvas == null) com.master.understanding.ui.SourceNode(record, nodeId) else null
+        source?.let { service.addNodeNote(it.record, it.nodeId) }
+    }
+    private val viewNote = builder.onNoteBadgeClicked { nodeId, component, point ->
+        val source = questionCanvas?.sources?.get(nodeId)
+            ?: if (questionCanvas == null) com.master.understanding.ui.SourceNode(record, nodeId) else null
+        source?.let { service.showNodeNotes(it.record, it.nodeId, component, point) }
+    }
+    private val editTitle = builder.onClusterTitleEdit { clusterId ->
+        val target = if (questionCanvas == null) record else
+            service.repository.recordForQuestion(clusterId)
+        target?.let { service.editRecordTitle(it.id) }
     }
     private val changed = service.onChanged { updateQuestionCounts() }
     private val backButton = JButton("‹ 返回").apply {
@@ -226,17 +243,27 @@ private class UnderstandingFileEditor(private val project: Project, private val 
                 id.takeIf { count > 0 }?.let { it to count }
             }.toMap()
             builder.setQuestionCounts(counts)
+            builder.setPendingNoteCounts(questionCanvas.sources.mapNotNull { (id, source) ->
+                val count = service.repository.pendingQuestionsForNode(source.record.id, source.nodeId).size
+                id.takeIf { count > 0 }?.let { it to count }
+            }.toMap())
             return
         }
-        val counts = service.repository.questionsForRecord(record.id).groupingBy { question ->
+        val counts = service.repository.questionsForRecord(record.id).filter {
+            service.repository.recordForQuestion(it.id) != null
+        }.groupingBy { question ->
             service.repository.getContext(question.contextToken).nodeId
         }.eachCount().filterKeys { it != null }.mapKeys { it.key!! }
         builder.setQuestionCounts(counts)
+        builder.setPendingNoteCounts(record.graph.nodes.mapNotNull { node ->
+            val count = service.repository.pendingQuestionsForNode(record.id, node.id).size
+            node.id.takeIf { count > 0 }?.let { it to count }
+        }.toMap())
     }
 
     override fun getComponent(): JComponent = panel
     override fun getPreferredFocusedComponent(): JComponent = builder.jComponent
-    override fun getName(): String = "Understanding"
+    override fun getName(): String = virtualFile.name
     override fun setState(state: FileEditorState) = Unit
     override fun isModified(): Boolean = false
     override fun isValid(): Boolean = !disposed && record.revision == virtualFile.revision
@@ -251,6 +278,9 @@ private class UnderstandingFileEditor(private val project: Project, private val 
         questionSelection.close()
         clusterSelection.close()
         copySelection.close()
+        addNote.close()
+        viewNote.close()
+        editTitle.close()
         changed.close()
         builder.setStepActions(null, null)
         if (questionCanvas == null && !service.repository.readOnly) {

@@ -1,0 +1,144 @@
+package com.master.understanding.diagram
+
+import com.master.understanding.ide.GraphLayoutPreference
+import com.master.understanding.model.GraphEdge
+import com.master.understanding.model.GraphNode
+import com.master.understanding.model.UnderstandingGraph
+import com.master.understanding.model.UnderstandingRecord
+import java.awt.Toolkit
+import java.awt.event.ComponentEvent
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import javax.swing.SwingUtilities
+import javax.swing.Timer
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
+import org.junit.jupiter.api.Test
+
+class DiagramAsyncLayoutTest {
+    private val graph = UnderstandingGraph(
+        listOf(GraphNode("a", "开始"), GraphNode("b", "结束")),
+        listOf(GraphEdge("ab", "a", "b", "control_flow")),
+    )
+    private val record = UnderstandingRecord("async", 1, null, null, "测试", "", null, graph, 0)
+
+    @Test
+    fun `first valid size starts layout without manual arrange in either setup order`() {
+        SwingUtilities.invokeAndWait {
+            for (preferenceBeforeSize in listOf(false, true)) {
+                val diagram = createUnderstandingDiagram(record)
+                try {
+                    if (preferenceBeforeSize) diagram.setLayoutPreference(GraphLayoutPreference.HORIZONTAL)
+                    diagram.setSize(if (preferenceBeforeSize) 700 else 1000, 500)
+                    if (!preferenceBeforeSize) diagram.setLayoutPreference(GraphLayoutPreference.AUTO)
+                    await { diagram.layoutReady }
+                    assertEquals(LayoutDirection.HORIZONTAL, diagram.activeDirection)
+                    assertTrue(diagram.initializedViewport)
+                    assertEquals(graph.nodes.size, diagram.layout.nodes.size)
+                } finally { diagram.dispose() }
+            }
+        }
+    }
+
+    @Test
+    fun `automatic direction freezes until arrange and explicit direction wins`() {
+        SwingUtilities.invokeAndWait {
+            val diagram = createUnderstandingDiagram(record)
+            try {
+                assertFalse(diagram.layoutReady)
+                resize(diagram, 700)
+                await { diagram.layoutReady && diagram.activeDirection == LayoutDirection.VERTICAL }
+                resize(diagram, 1000)
+                assertEquals(LayoutDirection.VERTICAL, diagram.activeDirection)
+                diagram.arrangeNodes()
+                await { diagram.layoutReady && diagram.activeDirection == LayoutDirection.HORIZONTAL }
+                diagram.setLayoutPreference(GraphLayoutPreference.VERTICAL)
+                await { diagram.layoutReady && diagram.activeDirection == LayoutDirection.VERTICAL }
+            } finally { diagram.dispose() }
+        }
+    }
+
+    @Test
+    fun `stale result is discarded and failure can retry`() {
+        val firstStarted = CountDownLatch(1)
+        val releaseFirst = CountDownLatch(1)
+        val attempts = AtomicInteger()
+        SwingUtilities.invokeAndWait {
+            val diagram = UnderstandingDiagram(record, null, layoutComputer = { direction ->
+                when (attempts.incrementAndGet()) {
+                    1 -> {
+                        firstStarted.countDown()
+                        releaseFirst.await(5, TimeUnit.SECONDS)
+                        layoutUnderstandingGraph(graph, direction)
+                    }
+                    2 -> error("测试失败")
+                    else -> layoutUnderstandingGraph(graph, direction)
+                }
+            })
+            try {
+                resize(diagram, 700)
+                assertTrue(firstStarted.await(5, TimeUnit.SECONDS))
+                diagram.setLayoutPreference(GraphLayoutPreference.HORIZONTAL)
+                releaseFirst.countDown()
+                await { diagram.layoutFailure != null }
+                assertFalse(diagram.layoutReady)
+                assertTrue(diagram.retryFailedLayout())
+                await { diagram.layoutReady && diagram.activeDirection == LayoutDirection.HORIZONTAL }
+                assertEquals(3, attempts.get())
+            } finally {
+                releaseFirst.countDown()
+                diagram.dispose()
+            }
+        }
+    }
+
+    @Test
+    fun `disposing coordinator interrupts work and drops its result`() {
+        val started = CountDownLatch(1)
+        val interrupted = CountDownLatch(1)
+        val delivered = AtomicInteger()
+        val coordinator = DiagramLayoutCoordinator(
+            compute = {
+                started.countDown()
+                try {
+                    CountDownLatch(1).await(5, TimeUnit.SECONDS)
+                } catch (_: InterruptedException) {
+                    interrupted.countDown()
+                }
+                layoutUnderstandingGraph(graph, it)
+            },
+            onResult = { _, _ -> delivered.incrementAndGet() },
+        )
+        SwingUtilities.invokeAndWait { coordinator.request(LayoutDirection.VERTICAL) }
+        assertTrue(started.await(5, TimeUnit.SECONDS))
+        SwingUtilities.invokeAndWait { coordinator.close() }
+        assertTrue(interrupted.await(5, TimeUnit.SECONDS))
+        SwingUtilities.invokeAndWait { }
+        assertEquals(0, delivered.get())
+    }
+
+    private fun resize(diagram: UnderstandingDiagram, width: Int) {
+        diagram.setSize(width, 500)
+        diagram.dispatchEvent(ComponentEvent(diagram, ComponentEvent.COMPONENT_RESIZED))
+    }
+
+    private fun await(done: () -> Boolean) {
+        if (done()) return
+        val loop = Toolkit.getDefaultToolkit().systemEventQueue.createSecondaryLoop()
+        val started = System.nanoTime()
+        var timedOut = false
+        val timer = Timer(5) {
+            if (done()) loop.exit()
+            else if (System.nanoTime() - started > 5_000_000_000L) {
+                timedOut = true
+                loop.exit()
+            }
+        }
+        timer.start()
+        loop.enter()
+        timer.stop()
+        assertFalse(timedOut, "布局计算超时")
+    }
+}

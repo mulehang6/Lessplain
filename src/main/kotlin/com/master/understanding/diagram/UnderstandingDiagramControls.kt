@@ -9,14 +9,16 @@ import java.awt.Dimension
 import java.awt.Graphics
 import java.awt.Graphics2D
 import java.awt.RenderingHints
-import java.awt.geom.Path2D
 import javax.swing.Icon
 import javax.swing.AbstractButton
 import javax.swing.JButton
 import javax.swing.JMenuItem
 import javax.swing.JPanel
 import javax.swing.JPopupMenu
-import javax.swing.JToggleButton
+import javax.swing.JCheckBoxMenuItem
+import javax.swing.ButtonGroup
+import javax.swing.JRadioButtonMenuItem
+import com.master.understanding.ide.GraphLayoutPreference
 import javax.swing.UIManager
 
 /** Compact controls painted in the same Swing layer as the graph. */
@@ -32,62 +34,26 @@ internal class UnderstandingDiagramControls(private val diagram: UnderstandingDi
     private val zoomOut = button(GraphControlIcon(IconKind.ZOOM_OUT), "缩小") { diagram.zoom /= 1.2 }
     private val fit = button(GraphControlIcon(IconKind.FIT), "显示全图") { diagram.fitContent() }
     private val arrangeNodes = button(GraphControlIcon(IconKind.ARRANGE), "一键整理节点") { diagram.arrangeNodes() }
-    private val flow = button(GraphControlIcon(IconKind.PAUSE), "暂停路径流动") {
-        diagram.flowEnabled = !diagram.flowEnabled
-    }
-    private val pin = JToggleButton(GraphControlIcon(IconKind.PIN)).apply {
-        setToolTipText(HtmlChunk.text("停止自动跳转源码"))
-        getAccessibleContext().accessibleName = "停止自动跳转源码"
-        preferredSize = Dimension(BUTTON_SIZE, BUTTON_SIZE)
-        addActionListener { diagram.navigationPinned = isSelected }
-    }
-    private val follow = JToggleButton(GraphControlIcon(IconKind.FOLLOW)).apply {
-        setToolTipText(HtmlChunk.text("停止自动跟随节点"))
-        getAccessibleContext().accessibleName = "停止自动跟随节点"
-        preferredSize = Dimension(BUTTON_SIZE, BUTTON_SIZE)
-        addActionListener { diagram.autoFollowNode = !isSelected }
-    }
     private val clusterNav = button(GraphControlIcon(IconKind.CLUSTERS), "跳转到追问") { showClusterMenu() }
     private val hierarchy = button(GraphControlIcon(IconKind.HIERARCHY), "查看层级") { showHierarchyMenu() }
+    private val behavior = button(GraphControlIcon(IconKind.MORE), "画布行为") { showBehaviorMenu() }
+    val sideControls = JPanel(null).apply { isOpaque = false }
     private var hierarchyItems = emptyList<DiagramHierarchyItem>()
     private var onNavigateHierarchy: ((Int) -> Unit)? = null
     val previousButton = button(GraphControlIcon(IconKind.PREVIOUS), "上一步") { diagram.previousStep() }
     val nextButton = button(GraphControlIcon(IconKind.NEXT), "下一步") { diagram.nextStep() }
-    private val buttons: List<AbstractButton> = listOf(zoomIn, zoomOut, fit, arrangeNodes, flow, pin, follow) +
-        (if (diagram.clusters.isEmpty()) emptyList() else listOf(clusterNav)) + hierarchy
+    private val buttons: List<AbstractButton> = listOf(zoomIn, zoomOut, fit, arrangeNodes)
 
     init {
         isOpaque = false
         buttons.forEach(::add)
+        sideControls.add(clusterNav)
+        sideControls.add(hierarchy)
+        sideControls.add(behavior)
+        clusterNav.isVisible = diagram.clusterCount > 1
         hierarchy.isVisible = false
         previousButton.isVisible = false
         nextButton.isVisible = false
-    }
-
-    fun updateFlow(enabled: Boolean) {
-        flow.icon = GraphControlIcon(if (enabled) IconKind.PAUSE else IconKind.PLAY)
-        val label = if (enabled) "暂停路径流动" else "播放路径流动"
-        flow.setToolTipText(HtmlChunk.text(label))
-        flow.getAccessibleContext().accessibleName = label
-        flow.repaint()
-    }
-
-    fun updatePinned(pinned: Boolean) {
-        pin.icon = GraphControlIcon(if (pinned) IconKind.PINNED else IconKind.PIN)
-        val label = if (pinned) "恢复自动跳转源码" else "停止自动跳转源码"
-        pin.setToolTipText(HtmlChunk.text(label))
-        pin.getAccessibleContext().accessibleName = label
-        pin.isSelected = pinned
-        pin.repaint()
-    }
-
-    fun updateAutoFollow(enabled: Boolean) {
-        follow.icon = GraphControlIcon(if (enabled) IconKind.FOLLOW else IconKind.FOLLOW_OFF)
-        val label = if (enabled) "停止自动跟随节点" else "恢复自动跟随节点"
-        follow.setToolTipText(HtmlChunk.text(label))
-        follow.getAccessibleContext().accessibleName = label
-        follow.isSelected = !enabled
-        follow.repaint()
     }
 
     fun updateSteps(hasPrevious: Boolean, hasNext: Boolean) {
@@ -95,6 +61,11 @@ internal class UnderstandingDiagramControls(private val diagram: UnderstandingDi
         nextButton.isVisible = hasNext
         arrangeSteps(diagram.width, diagram.height)
         diagram.repaint()
+    }
+
+    fun refreshClusters() {
+        clusterNav.isVisible = diagram.clusterCount > 1
+        arrangeSide(diagram.width, diagram.height)
     }
 
     fun updateStepAvailability(hasPrevious: Boolean, hasNext: Boolean) {
@@ -106,7 +77,7 @@ internal class UnderstandingDiagramControls(private val diagram: UnderstandingDi
         hierarchyItems = items
         onNavigateHierarchy = navigate
         hierarchy.isVisible = items.size > 1
-        arrange(diagram.width)
+        arrangeSide(diagram.width, diagram.height)
     }
 
     private fun showHierarchyMenu() {
@@ -122,17 +93,26 @@ internal class UnderstandingDiagramControls(private val diagram: UnderstandingDi
     }
 
     fun arrange(availableWidth: Int) {
-        val visible = buttons.filter { it.isVisible }
-        val columns = when {
-            availableWidth >= 204 -> minOf(5, visible.size)
-            availableWidth >= 96 -> 2
-            else -> 1
-        }
+        val columns = if (availableWidth >= 160) 4 else if (availableWidth >= 96) 2 else 1
+        val visible = buttons
         val rows = (visible.size + columns - 1) / columns
         setBounds(12, 12, columns * BUTTON_SIZE + (columns - 1) * GAP, rows * BUTTON_SIZE + (rows - 1) * GAP)
         visible.forEachIndexed { index, button ->
             button.setBounds((index % columns) * (BUTTON_SIZE + GAP), (index / columns) * (BUTTON_SIZE + GAP),
                 BUTTON_SIZE, BUTTON_SIZE)
+        }
+    }
+
+    fun arrangeSide(availableWidth: Int, availableHeight: Int) {
+        val visible = listOf(clusterNav, hierarchy, behavior).filter { it.isVisible }
+        val panelHeight = visible.size * BUTTON_SIZE + (visible.size - 1) * GAP
+        val minTop = y + height + GAP
+        val maxTop = (availableHeight - INSET - BUTTON_SIZE - GAP - panelHeight).coerceAtLeast(0)
+        val top = ((availableHeight - panelHeight) / 2).coerceAtLeast(minTop).coerceAtMost(maxTop)
+        sideControls.setBounds((availableWidth - INSET - BUTTON_SIZE).coerceAtLeast(0), top,
+            BUTTON_SIZE, panelHeight)
+        visible.forEachIndexed { index, button ->
+            button.setBounds(0, index * (BUTTON_SIZE + GAP), BUTTON_SIZE, BUTTON_SIZE)
         }
     }
 
@@ -161,6 +141,36 @@ internal class UnderstandingDiagramControls(private val diagram: UnderstandingDi
         }
     }
 
+    private fun showBehaviorMenu() {
+        JPopupMenu().apply {
+            add(JMenuItem("恢复 100% 缩放").apply { addActionListener { diagram.zoom = 1.0 } })
+            addSeparator()
+            val directionGroup = ButtonGroup()
+            listOf(
+                GraphLayoutPreference.AUTO to "方向：自动",
+                GraphLayoutPreference.VERTICAL to "方向：纵向",
+                GraphLayoutPreference.HORIZONTAL to "方向：横向",
+            ).forEach { (preference, title) ->
+                val item = JRadioButtonMenuItem(title, diagram.layoutPreference == preference).apply {
+                    addActionListener { diagram.setLayoutPreference(preference) }
+                }
+                directionGroup.add(item)
+                add(item)
+            }
+            addSeparator()
+            add(JCheckBoxMenuItem("路径流动", diagram.flowEnabled).apply {
+                addActionListener { diagram.flowEnabled = isSelected }
+            })
+            add(JCheckBoxMenuItem("自动跳转源码", !diagram.navigationPinned).apply {
+                addActionListener { diagram.navigationPinned = !isSelected }
+            })
+            add(JCheckBoxMenuItem("自动跟随节点", diagram.autoFollowNode).apply {
+                addActionListener { diagram.autoFollowNode = isSelected }
+            })
+            show(behavior, 0, behavior.height)
+        }
+    }
+
     private fun button(icon: Icon, label: String, action: () -> Unit): JButton = JButton(icon).apply {
         setToolTipText(HtmlChunk.text(label))
         getAccessibleContext().accessibleName = label
@@ -175,7 +185,7 @@ internal class UnderstandingDiagramControls(private val diagram: UnderstandingDi
     }
 }
 
-private enum class IconKind { ZOOM_IN, ZOOM_OUT, FIT, ARRANGE, PAUSE, PLAY, PIN, PINNED, FOLLOW, FOLLOW_OFF, CLUSTERS, HIERARCHY, PREVIOUS, NEXT }
+private enum class IconKind { ZOOM_IN, ZOOM_OUT, FIT, ARRANGE, CLUSTERS, HIERARCHY, MORE, PREVIOUS, NEXT }
 
 /** Simple vector glyphs so the controls remain visible in IDE themes and preview rendering. */
 private class GraphControlIcon(private val kind: IconKind) : Icon {
@@ -206,34 +216,6 @@ private class GraphControlIcon(private val kind: IconKind) : Icon {
                     g.drawLine(11, 15, 15, 15)
                     g.drawLine(15, 11, 15, 15)
                 }
-                IconKind.PAUSE -> {
-                    g.fillRoundRect(3, 2, 3, 12, 1, 1)
-                    g.fillRoundRect(10, 2, 3, 12, 1, 1)
-                }
-                IconKind.PLAY -> {
-                    val triangle = Path2D.Double().apply {
-                        moveTo(4.0, 2.0)
-                        lineTo(13.0, 8.0)
-                        lineTo(4.0, 14.0)
-                        closePath()
-                    }
-                    g.fill(triangle)
-                }
-                IconKind.PIN, IconKind.PINNED -> {
-                    if (kind == IconKind.PINNED) g.fillRoundRect(4, 2, 8, 5, 2, 2)
-                    else g.drawRoundRect(4, 2, 8, 5, 2, 2)
-                    g.drawLine(3, 7, 13, 7)
-                    g.drawLine(8, 7, 8, 15)
-                }
-                IconKind.FOLLOW, IconKind.FOLLOW_OFF -> {
-                    g.drawOval(3, 3, 10, 10)
-                    g.fillOval(6, 6, 4, 4)
-                    g.drawLine(8, 0, 8, 2)
-                    g.drawLine(8, 14, 8, 16)
-                    g.drawLine(0, 8, 2, 8)
-                    g.drawLine(14, 8, 16, 8)
-                    if (kind == IconKind.FOLLOW_OFF) g.drawLine(1, 15, 15, 1)
-                }
                 IconKind.CLUSTERS -> {
                     g.drawRoundRect(1, 2, 14, 4, 2, 2)
                     g.drawRoundRect(1, 10, 14, 4, 2, 2)
@@ -250,6 +232,11 @@ private class GraphControlIcon(private val kind: IconKind) : Icon {
                     g.drawLine(3, 12, 8, 12)
                     g.fillOval(9, 3, 4, 4)
                     g.fillOval(9, 10, 4, 4)
+                }
+                IconKind.MORE -> {
+                    g.fillOval(2, 7, 3, 3)
+                    g.fillOval(7, 7, 3, 3)
+                    g.fillOval(12, 7, 3, 3)
                 }
                 IconKind.PREVIOUS, IconKind.NEXT -> {
                     val direction = if (kind == IconKind.PREVIOUS) -1 else 1

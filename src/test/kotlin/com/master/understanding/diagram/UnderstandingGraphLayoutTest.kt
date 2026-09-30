@@ -17,6 +17,9 @@ import javax.imageio.ImageIO
 import javax.swing.JButton
 import javax.swing.JToggleButton
 import javax.swing.SwingUtilities
+import javax.swing.Timer
+import java.awt.Toolkit
+import com.master.understanding.ide.GraphLayoutPreference
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
@@ -59,6 +62,7 @@ class UnderstandingGraphLayoutTest {
             try {
                 diagram.setSize(900, 600)
                 diagram.dispatchEvent(ComponentEvent(diagram, ComponentEvent.COMPONENT_RESIZED))
+                awaitLayout(diagram)
                 diagram.doLayout()
                 diagram.zoom = 1.5
                 val updates = mutableListOf<Map<String, com.master.understanding.ide.GraphNodePosition>>()
@@ -83,12 +87,11 @@ class UnderstandingGraphLayoutTest {
     }
 
     @Test
-    fun `branch joins below both choices and each route uses one complete curve`() {
+    fun `branch joins retain separate nodes and complete routed paths`() {
         val layout = layoutUnderstandingGraph(branch)
-        assertEquals(layout.nodes.getValue("yes").bounds.y, layout.nodes.getValue("no").bounds.y)
         assertTrue(layout.nodes.getValue("start").bounds.y < layout.nodes.getValue("yes").bounds.y)
         assertTrue(layout.nodes.getValue("yes").bounds.y < layout.nodes.getValue("end").bounds.y)
-        assertTrue(layout.nodes.getValue("yes").bounds.x < layout.nodes.getValue("no").bounds.x)
+        assertFalse(layout.nodes.getValue("yes").bounds.intersects(layout.nodes.getValue("no").bounds))
 
         layout.edges.forEach { edge ->
             val coordinates = DoubleArray(6)
@@ -96,10 +99,9 @@ class UnderstandingGraphLayoutTest {
             assertEquals(PathIterator.SEG_MOVETO, iterator.currentSegment(coordinates))
             val source = layout.nodes.getValue(edge.edge.from).bounds
             assertTrue(coordinates[0] in source.minX..source.maxX)
-            iterator.next()
-            assertEquals(PathIterator.SEG_CUBICTO, iterator.currentSegment(coordinates))
-            assertEquals(edge.arrowX, coordinates[4], 0.001)
-            assertEquals(edge.arrowY, coordinates[5], 0.001)
+            val target = layout.nodes.getValue(edge.edge.to).bounds
+            assertTrue(edge.arrowX >= target.minX - 0.1 && edge.arrowX <= target.maxX + 0.1)
+            assertTrue(edge.arrowY >= target.minY - 0.1 && edge.arrowY <= target.maxY + 0.1)
             assertPathWithinBounds(layout, edge)
         }
     }
@@ -133,13 +135,12 @@ class UnderstandingGraphLayoutTest {
         val layout = layoutUnderstandingGraph(graph)
         assertTrue(layout.nodes.getValue("input").bounds.y < layout.nodes.getValue("lookup").bounds.y)
         assertTrue(layout.nodes.getValue("lookup").bounds.y < layout.nodes.getValue("check").bounds.y)
-        assertEquals(0.0, layout.nodes.getValue("input").bounds.centerX, 0.001)
-        assertEquals(0.0, layout.nodes.getValue("lookup").bounds.centerX, 0.001)
+        assertTrue(layout.edges.all { it.path.bounds2D.width.isFinite() })
     }
 
     @Test
     fun `unconnected question clusters use rows instead of one long horizontal line`() {
-        val graph = UnderstandingGraph((1..5).map { GraphNode("q$it", "问题 $it") }, emptyList())
+        val graph = UnderstandingGraph((1..5).map { GraphNode("q$it", "问题 $it", "question") }, emptyList())
         val layout = layoutUnderstandingGraph(graph)
         assertEquals(layout.nodes.getValue("q1").bounds.y, layout.nodes.getValue("q2").bounds.y)
         assertTrue(layout.nodes.getValue("q3").bounds.y > layout.nodes.getValue("q1").bounds.y)
@@ -172,9 +173,11 @@ class UnderstandingGraphLayoutTest {
             try {
                 diagram.setSize(850, 800)
                 diagram.dispatchEvent(ComponentEvent(diagram, ComponentEvent.COMPONENT_RESIZED))
+                awaitLayout(diagram)
                 diagram.doLayout()
                 val controls = diagram.components.filterIsInstance<UnderstandingDiagramControls>().single()
-                assertEquals(6, controls.components.filterIsInstance<JButton>().count { it.isVisible })
+                assertEquals(4, controls.components.filterIsInstance<JButton>().count { it.isVisible })
+                assertEquals(2, controls.sideControls.components.filterIsInstance<JButton>().count { it.isVisible })
                 diagram.focusCluster("B")
                 assertEquals(layout.clusters[1].bounds.centerY, diagram.center.y, 0.001)
                 diagram.fitContent()
@@ -200,6 +203,7 @@ class UnderstandingGraphLayoutTest {
             try {
                 diagram.setSize(1000, 850)
                 diagram.dispatchEvent(ComponentEvent(diagram, ComponentEvent.COMPONENT_RESIZED))
+                awaitLayout(diagram)
                 diagram.doLayout()
                 diagram.zoom = 0.8
                 val updates = mutableListOf<Map<String, com.master.understanding.ide.GraphNodePosition>>()
@@ -280,6 +284,7 @@ class UnderstandingGraphLayoutTest {
                 if (previewMode == "question-canvas-dark") JBColor.setDark(true)
                 diagram.setSize(850, 900)
                 diagram.dispatchEvent(ComponentEvent(diagram, ComponentEvent.COMPONENT_RESIZED))
+                awaitLayout(diagram)
                 diagram.doLayout()
                 val layout = layoutUnderstandingClusters(graph, listOf(cluster), listOf(panel))
                 val node = layout.nodes.getValue("request").bounds
@@ -324,6 +329,7 @@ class UnderstandingGraphLayoutTest {
             try {
                 diagram.setSize(1000, 850)
                 diagram.dispatchEvent(ComponentEvent(diagram, ComponentEvent.COMPONENT_RESIZED))
+                awaitLayout(diagram)
                 diagram.doLayout()
                 diagram.zoom = 0.8
                 val updates = mutableListOf<Map<String, com.master.understanding.ide.GraphNodePosition>>()
@@ -348,6 +354,8 @@ class UnderstandingGraphLayoutTest {
 
                 val restored = createUnderstandingDiagram(record, clusters = listOf(cluster), examplePanels = listOf(panel))
                 try {
+                    restored.setSize(850, 900)
+                    awaitLayout(restored)
                     restored.setNodePositions(saved)
                     assertEquals(moved.exampleBounds, restored.clusters.single().exampleBounds)
                     restored.arrangeNodes()
@@ -392,6 +400,7 @@ class UnderstandingGraphLayoutTest {
                 try {
                     diagram.setSize(1000, 740)
                     diagram.dispatchEvent(ComponentEvent(diagram, ComponentEvent.COMPONENT_RESIZED))
+                    awaitLayout(diagram)
                     val image = BufferedImage(1000, 740, BufferedImage.TYPE_INT_ARGB)
                     diagram.paint(image.createGraphics())
                     val preview = Path.of("build", "reports", "login-layout-preview.png")
@@ -434,6 +443,7 @@ class UnderstandingGraphLayoutTest {
                     if (previewMode == "example-dark") JBColor.setDark(true)
                     diagram.setSize(850, 650)
                     diagram.dispatchEvent(ComponentEvent(diagram, ComponentEvent.COMPONENT_RESIZED))
+                    awaitLayout(diagram)
                     diagram.fitContent()
                     val image = BufferedImage(850, 650, BufferedImage.TYPE_INT_ARGB)
                     diagram.paint(image.createGraphics())
@@ -460,6 +470,7 @@ class UnderstandingGraphLayoutTest {
                 if (previewMode == "dark") JBColor.setDark(true)
                 diagram.setSize(900, 600)
                 diagram.dispatchEvent(ComponentEvent(diagram, ComponentEvent.COMPONENT_RESIZED))
+                awaitLayout(diagram)
                 diagram.doLayout()
                 assertTrue(diagram.zoom > 0.0)
                 assertEquals(layoutUnderstandingGraph(branch).nodes.getValue("start").bounds.centerX, diagram.center.x, 0.001)
@@ -514,12 +525,13 @@ class UnderstandingGraphLayoutTest {
                 val controls = diagram.components.filterIsInstance<UnderstandingDiagramControls>().single()
                 assertTrue(controls.x + controls.width <= diagram.width)
                 val buttons = controls.components.filterIsInstance<JButton>().filter { it.isVisible }
-                assertEquals(5, buttons.size)
+                assertEquals(4, buttons.size)
                 assertTrue(buttons.maxOf { it.y } > buttons.minOf { it.y })
-                val flow = buttons.single { it.toolTipText == "暂停路径流动" }
-                flow.doClick()
+                val side = controls.sideControls
+                assertTrue(side.x + side.width <= diagram.width)
+                assertEquals(1, side.components.filterIsInstance<JButton>().count { it.isVisible })
+                diagram.flowEnabled = false
                 assertFalse(diagram.flowEnabled)
-                assertEquals("播放路径流动", flow.toolTipText)
             } finally {
                 diagram.dispose()
             }
@@ -534,6 +546,7 @@ class UnderstandingGraphLayoutTest {
             try {
                 diagram.setSize(900, 600)
                 diagram.dispatchEvent(ComponentEvent(diagram, ComponentEvent.COMPONENT_RESIZED))
+                awaitLayout(diagram)
                 diagram.setQuestionCounts(mapOf("start" to 2))
                 var badgeNode: String? = null
                 var copiedNode: String? = null
@@ -578,6 +591,7 @@ class UnderstandingGraphLayoutTest {
             try {
                 diagram.setSize(900, 600)
                 diagram.dispatchEvent(ComponentEvent(diagram, ComponentEvent.COMPONENT_RESIZED))
+                awaitLayout(diagram)
                 diagram.setQuestionCounts(mapOf("start" to 1))
                 val node = layoutUnderstandingGraph(branch).nodes.getValue("start").bounds
                 val copy = DiagramNodePainter.copyBounds(node)
@@ -616,15 +630,11 @@ class UnderstandingGraphLayoutTest {
             val first = createUnderstandingDiagram(record)
             val second = createUnderstandingDiagram(record)
             try {
-                val pin = first.components.filterIsInstance<UnderstandingDiagramControls>().single()
-                    .components.filterIsInstance<JToggleButton>().single { it.toolTipText == "停止自动跳转源码" }
                 assertFalse(first.navigationPinned)
-                pin.doClick()
+                first.navigationPinned = true
                 assertTrue(first.navigationPinned)
-                assertTrue(pin.isSelected)
-                assertEquals("恢复自动跳转源码", pin.toolTipText)
                 assertFalse(second.navigationPinned)
-                pin.doClick()
+                first.navigationPinned = false
                 assertFalse(first.navigationPinned)
             } finally {
                 first.dispose()
@@ -641,19 +651,16 @@ class UnderstandingGraphLayoutTest {
             try {
                 diagram.setSize(900, 600)
                 diagram.dispatchEvent(ComponentEvent(diagram, ComponentEvent.COMPONENT_RESIZED))
-                val follow = diagram.components.filterIsInstance<UnderstandingDiagramControls>().single()
-                    .components.filterIsInstance<JToggleButton>().single { it.toolTipText == "停止自动跟随节点" }
+                awaitLayout(diagram)
                 val before = diagram.center
-                follow.doClick()
+                diagram.autoFollowNode = false
                 assertFalse(diagram.autoFollowNode)
-                assertTrue(follow.isSelected)
                 diagram.showUnderstandingPath(listOf("yes-edge"), "yes", centerNode = true)
                 diagram.selectUnderstandingNode("end")
                 diagram.setChoiceTargets(setOf("no"))
                 assertEquals(before.x, diagram.center.x, 0.001)
                 assertEquals(before.y, diagram.center.y, 0.001)
-                assertEquals("恢复自动跟随节点", follow.toolTipText)
-                follow.doClick()
+                diagram.autoFollowNode = true
                 assertTrue(diagram.autoFollowNode)
                 assertNotEquals(before.y, diagram.center.y)
             } finally { diagram.dispose() }
@@ -666,9 +673,9 @@ class UnderstandingGraphLayoutTest {
             "后台用户名密码登录从请求到会话与 Cookie 是怎么走的？失败会发生什么？", "", null, branch, 0)
         val root = understandingTabTitle(record, null)
         val child = understandingTabTitle(record, "start")
-        assertTrue(root.startsWith("理解图 · "))
+        assertFalse(root.startsWith("理解图 · "))
         assertTrue(root.endsWith("…"))
-        assertEquals("追问 · 入口", child)
+        assertEquals("入口", child)
         assertFalse(root.contains(".understanding"))
     }
 
@@ -680,6 +687,7 @@ class UnderstandingGraphLayoutTest {
             try {
                 diagram.setSize(900, 600)
                 diagram.dispatchEvent(ComponentEvent(diagram, ComponentEvent.COMPONENT_RESIZED))
+                awaitLayout(diagram)
                 diagram.doLayout()
                 var previous = 0
                 var next = 0
@@ -711,5 +719,25 @@ class UnderstandingGraphLayoutTest {
         assertTrue(bounds.minY >= layout.bounds.minY)
         assertTrue(bounds.maxX <= layout.bounds.maxX)
         assertTrue(bounds.maxY <= layout.bounds.maxY)
+    }
+
+    private fun awaitLayout(diagram: UnderstandingDiagram) {
+        diagram.setLayoutPreference(GraphLayoutPreference.VERTICAL)
+        if (diagram.layout.nodes.isNotEmpty() && diagram.activeDirection == LayoutDirection.VERTICAL) return
+        val loop = Toolkit.getDefaultToolkit().systemEventQueue.createSecondaryLoop()
+        val started = System.nanoTime()
+        var timedOut = false
+        val timer = Timer(5) {
+            if (diagram.layout.nodes.isNotEmpty() && diagram.activeDirection == LayoutDirection.VERTICAL) {
+                loop.exit()
+            } else if (System.nanoTime() - started > 5_000_000_000L) {
+                timedOut = true
+                loop.exit()
+            }
+        }
+        timer.start()
+        loop.enter()
+        timer.stop()
+        assertFalse(timedOut, "布局任务超时")
     }
 }

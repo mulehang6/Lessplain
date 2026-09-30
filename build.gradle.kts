@@ -15,6 +15,9 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     testRuntimeOnly(libs.junit)
     implementation("org.xerial:sqlite-jdbc:3.49.1.0")
+    implementation("org.eclipse.elk:org.eclipse.elk.core:0.12.0")
+    implementation("org.eclipse.elk:org.eclipse.elk.graph:0.12.0")
+    implementation("org.eclipse.elk:org.eclipse.elk.alg.layered:0.12.0")
 
     // IntelliJ Platform Gradle Plugin Dependencies Extension - read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin-dependencies-extension.html
     intellijPlatform {
@@ -67,5 +70,7 @@ kotlin {
 }
 
 tasks.test {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        if (!providers.gradleProperty("graphBenchmark").isPresent) excludeTags("benchmark")
+    }
 }

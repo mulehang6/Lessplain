@@ -1,12 +1,37 @@
 package com.master.understanding.ide
 
 import com.master.understanding.model.BrowseState
+import com.master.understanding.diagram.LayoutDirection
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class GraphViewStateStoreTest {
+    @Test
+    fun `legacy coordinates migrate to vertical while each direction keeps its own viewport`() {
+        val values = mutableMapOf<String, String>()
+        val key = GraphLayerKey("legacy")
+        values[key.propertyName()] = """{"browse":{"recordId":"legacy","nodeId":"n",
+            "staticPath":["e"],"zoom":1.2,"panX":40.0,"panY":70.0,"hasPan":true},
+            "nodePositions":{"n":{"x":20.0,"y":30.0}}}"""
+        val store = GraphViewStateStore(values::get) { name, value -> values[name] = value }
+        val migrated = store.get(key)
+        assertEquals(GraphLayoutPreference.AUTO, migrated.layoutPreference)
+        assertEquals(40.0, migrated.viewport(LayoutDirection.VERTICAL)?.panX)
+        assertEquals(null, migrated.viewport(LayoutDirection.HORIZONTAL))
+        assertEquals(GraphNodePosition(20.0, 30.0), migrated.positions(LayoutDirection.VERTICAL)["n"])
+        val horizontal = BrowseState("legacy", "n", listOf("e"), 0.9, 200.0, 300.0, true)
+        store.update(key) { it.withViewport(LayoutDirection.HORIZONTAL, horizontal)
+            .withPositions(LayoutDirection.HORIZONTAL, mapOf("n" to GraphNodePosition(400.0, 500.0)))
+            .copy(layoutPreference = GraphLayoutPreference.HORIZONTAL) }
+        val restored = store.get(key)
+        assertEquals(40.0, restored.viewport(LayoutDirection.VERTICAL)?.panX)
+        assertEquals(200.0, restored.viewport(LayoutDirection.HORIZONTAL)?.panX)
+        assertEquals(GraphNodePosition(20.0, 30.0), restored.positions(LayoutDirection.VERTICAL)["n"])
+        assertEquals(GraphNodePosition(400.0, 500.0), restored.positions(LayoutDirection.HORIZONTAL)["n"])
+    }
+
     @Test
     fun `each history record and follow up canvas restores its own settings`() {
         val values = mutableMapOf<String, String>()

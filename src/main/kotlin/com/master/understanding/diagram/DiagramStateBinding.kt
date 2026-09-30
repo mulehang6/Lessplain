@@ -13,16 +13,25 @@ internal fun UnderstandingDiagram.bindGraphState(service: UnderstandingService, 
     navigationPinned = state.navigationPinned
     autoFollowNode = state.autoFollowNode
     flowEnabled = state.flowEnabled
-    setNodePositions(state.nodePositions)
+    setDirectionState(LayoutDirection.VERTICAL, state.verticalViewport, state.verticalPositions)
+    setDirectionState(LayoutDirection.HORIZONTAL, state.horizontalViewport, state.horizontalPositions)
+    setLayoutPreference(state.layoutPreference, persist = false)
     onPinChanged { value -> service.graphStates.update(key) { it.copy(navigationPinned = value) } }
     onAutoFollowChanged { value -> service.graphStates.update(key) { it.copy(autoFollowNode = value) } }
     onFlowChanged { value -> service.graphStates.update(key) { it.copy(flowEnabled = value) } }
-    onNodePositionsChanged { value -> service.graphStates.update(key) { it.copy(nodePositions = value) } }
+    onNodePositionsChanged { value ->
+        service.graphStates.update(key) { it.withPositions(activeDirection, value) }
+    }
+    onLayoutPreferenceChanged { value ->
+        service.graphStates.update(key) { it.copy(layoutPreference = value) }
+    }
     bindStateSubscription(service.graphStates.listen(key) { current ->
         navigationPinned = current.navigationPinned
         autoFollowNode = current.autoFollowNode
         flowEnabled = current.flowEnabled
-        setNodePositions(current.nodePositions)
+        setDirectionState(LayoutDirection.VERTICAL, current.verticalViewport, current.verticalPositions)
+        setDirectionState(LayoutDirection.HORIZONTAL, current.horizontalViewport, current.horizontalPositions)
+        setLayoutPreference(current.layoutPreference, persist = false)
     })
 }
 
@@ -35,8 +44,7 @@ internal fun saveGraphViewState(
 ) {
     val center = diagram.center
     service.graphStates.update(key) { previous ->
-        previous.copy(
-            browse = BrowseState(key.canvasId, nodeId, path, diagram.zoom, center.x, center.y, true),
-        )
+        val browse = BrowseState(key.canvasId, nodeId, path, diagram.zoom, center.x, center.y, true)
+        previous.withViewport(diagram.activeDirection, browse).copy(browse = browse)
     }
 }
