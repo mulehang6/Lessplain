@@ -7,6 +7,14 @@ import org.junit.jupiter.api.Test
 
 class SourceInlayControlBoundsTest {
     @Test
+    fun `long source captions wrap without losing characters`() {
+        val caption = "写入 app、module、signature、apiPrefix 后继续处理"
+        val lines = wrapSourceInlayLabel(caption, 12) { it.length }
+        assertTrue(lines.size > 2)
+        assertEquals(caption, lines.joinToString(""))
+        assertTrue(lines.all { it.length <= 12 })
+    }
+    @Test
     fun `step buttons stay beside the hint and keep separate hit areas`() {
         for (left in listOf(0, 80, 240)) {
             for (textWidth in listOf(120, 460)) {

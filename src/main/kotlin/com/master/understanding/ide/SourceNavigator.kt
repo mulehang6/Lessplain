@@ -51,8 +51,8 @@ internal fun matchAnchorText(anchor: SourceAnchor, content: String, symbolAt: (I
     }
     if (versionMatches && expectedOffset != null) {
         val lineEnd = content.indexOf('\n', expectedOffset).takeIf { it >= 0 } ?: content.length
-        val inLine = content.substring(expectedOffset, lineEnd).indexOf(anchor.text)
-        if (inLine >= 0) return LocatedSource(LocationStatus.EXACT, EvidenceStatus.UNCHANGED, expectedOffset + inLine)
+        val match = content.indexOf(anchor.text, expectedOffset)
+        if (match in expectedOffset..lineEnd) return LocatedSource(LocationStatus.EXACT, EvidenceStatus.UNCHANGED, match)
     }
     val matches = mutableListOf<Int>()
     var index = content.indexOf(anchor.text)
