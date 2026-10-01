@@ -13,7 +13,6 @@ import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import java.awt.event.MouseMotionAdapter
 import javax.swing.BorderFactory
-import javax.swing.DefaultListCellRenderer
 import javax.swing.JLabel
 import javax.swing.JList
 import javax.swing.JPanel
@@ -43,10 +42,9 @@ internal fun showRecentRecordPopup(service: UnderstandingService, anchor: Compon
                 index == hoveredIndex -> JBColor(Color(0xEEF0F3), Color(0x303237))
                 else -> JBColor(Color.WHITE, Color(0x1E1F22))
             }
-            JPanel(BorderLayout(12, 0)).apply {
+            JPanel(BorderLayout()).apply {
                 background = fill
                 border = BorderFactory.createEmptyBorder(0, 12, 0, 12)
-                add(JLabel("✳").apply { foreground = JBColor(Color(0xD77932), Color(0xF39B5E)) }, BorderLayout.WEST)
                 add(JLabel(value.displayTitle ?: value.question).apply {
                     foreground = JBColor.foreground()
                 }, BorderLayout.CENTER)
