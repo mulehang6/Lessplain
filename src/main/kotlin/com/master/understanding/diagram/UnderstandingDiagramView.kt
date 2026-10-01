@@ -114,12 +114,14 @@ internal class UnderstandingDiagram(
             updateTimer()
             repaint()
             flowChanged?.invoke(value)
+            controls.refreshBehavior()
         }
     var navigationPinned: Boolean = false
         set(value) {
             if (field == value) return
             field = value
             pinChanged?.invoke(value)
+            controls.refreshBehavior()
         }
     var autoFollowNode: Boolean = true
         set(value) {
@@ -131,6 +133,7 @@ internal class UnderstandingDiagram(
                 pendingCenterNodeId = null
             }
             followChanged?.invoke(value)
+            controls.refreshBehavior()
         }
 
     internal val flowTimer = Timer(45) { advanceFlow() }
@@ -201,6 +204,7 @@ internal class UnderstandingDiagram(
         if (persist && layoutReady) viewportChanged?.invoke()
         layoutPreference = value
         if (persist) preferenceChanged?.invoke(value)
+        controls.refreshBehavior()
         requestLayout()
     }
 
@@ -455,6 +459,7 @@ internal class UnderstandingDiagram(
 
     override fun dispose() {
         disposed = true
+        controls.dispose()
         layoutCoordinator.close()
         flowTimer.stop()
         choiceTimer.stop()
