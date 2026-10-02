@@ -1,19 +1,12 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="Master Understanding IDE (standalone)" type="GradleRunConfiguration" factoryName="Gradle">
-    <log_file alias="idea.log" path="$PROJECT_DIR$/.intellijPlatform/sandbox/*/*/log_runIdeLatest/idea.log" show_all="true" />
+  <configuration default="false" name="Master Understanding Tests" type="GradleRunConfiguration" factoryName="Gradle">
     <ExternalSystemSettings>
       <option name="executionName" />
-      <option name="externalProjectPath" value="$PROJECT_DIR$" />
+      <option name="externalProjectPath" value="$PROJECT_DIR$/master-understanding" />
       <option name="externalSystemIdString" value="GRADLE" />
       <option name="scriptParameters" value="" />
-      <option name="taskDescriptions">
-        <list />
-      </option>
-      <option name="taskNames">
-        <list>
-          <option value="runIdeLatest" />
-        </list>
-      </option>
+      <option name="taskDescriptions"><list /></option>
+      <option name="taskNames"><list><option value="test" /></list></option>
       <option name="vmOptions" value="" />
     </ExternalSystemSettings>
     <ExternalSystemDebugServerProcess>false</ExternalSystemDebugServerProcess>
