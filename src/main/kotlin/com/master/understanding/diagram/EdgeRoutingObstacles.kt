@@ -83,7 +83,11 @@ private data class EdgeReservation(
 )
 
 /** Reservations allow necessary crossings but reject hidden labels, arrows and long shared runs. */
-internal class EdgeRoutingObstacles(nodes: Collection<PlacedNode>, private val extras: List<Rectangle2D>) {
+internal class EdgeRoutingObstacles(
+    nodes: Collection<PlacedNode>,
+    private val extras: List<Rectangle2D>,
+    private val edgeObstacles: Map<String, List<Rectangle2D>> = emptyMap(),
+) {
     private val nodeIndex = RoutingSpatialIndex<PlacedNode>().apply {
         nodes.forEach { add(it.bounds, it) }
     }
@@ -106,11 +110,12 @@ internal class EdgeRoutingObstacles(nodes: Collection<PlacedNode>, private val e
 
     fun crossesNode(edge: PlacedEdge): Boolean = edge.segments.any { segment ->
         nodeIndex.query(segment.bounds).any { node -> segment.crosses(interior(node.bounds)) } ||
-            extras.any(segment::crosses)
+            (extras + edgeObstacles[edge.edge.id].orEmpty()).any(segment::crosses)
     }
 
     fun labelCrossesNode(edge: PlacedEdge): Boolean = edge.resolvedLabelBounds?.let { bounds ->
-        nodeIndex.query(bounds).any { it.bounds.intersects(bounds) } || extras.any(bounds::intersects)
+        nodeIndex.query(bounds).any { it.bounds.intersects(bounds) } ||
+            (extras + edgeObstacles[edge.edge.id].orEmpty()).any(bounds::intersects)
     } == true
 
     /** Only actual collisions return IDs; an isolated crossing is not a routing defect. */
@@ -133,7 +138,8 @@ internal class EdgeRoutingObstacles(nodes: Collection<PlacedNode>, private val e
     }
 
     fun labelCost(bounds: Rectangle2D, edgeId: String): Double {
-        val blocked = nodeIndex.query(bounds).count { it.bounds.intersects(bounds) } + extras.count(bounds::intersects)
+        val blocked = nodeIndex.query(bounds).count { it.bounds.intersects(bounds) } +
+            (extras + edgeObstacles[edgeId].orEmpty()).count(bounds::intersects)
         val occupied = edgeIndex.query(bounds).count {
             it.edgeId != edgeId && (it.segment?.crosses(bounds) ?: it.bounds.intersects(bounds))
         }
@@ -142,12 +148,36 @@ internal class EdgeRoutingObstacles(nodes: Collection<PlacedNode>, private val e
 
     fun collisionCost(edge: PlacedEdge): Double {
         val blocked = edge.segments.count { segment ->
-            nodeIndex.query(segment.bounds).any { segment.crosses(interior(it.bounds)) } || extras.any(segment::crosses)
+            nodeIndex.query(segment.bounds).any { segment.crosses(interior(it.bounds)) } ||
+                (extras + edgeObstacles[edge.edge.id].orEmpty()).any(segment::crosses)
         }
         return blocked * 1_000_000_000.0 + conflicts(edge).size * 100_000.0 +
             (edge.resolvedLabelBounds?.let { labelCost(it, edge.edge.id) +
                 if (it.intersects(edge.arrowPath.bounds2D)) 100_000.0 else 0.0 } ?: 0.0)
     }
+
+    /** Grid corridors cannot cross content, and prefer crossings over parallel shared runs. */
+    fun corridorCost(segment: RoutingSegment, edgeId: String): Double {
+        if (nodeIndex.query(segment.bounds).any { segment.crosses(interior(it.bounds)) } ||
+            (extras + edgeObstacles[edgeId].orEmpty()).any(segment::crosses)) return Double.POSITIVE_INFINITY
+        return edgeIndex.query(segment.bounds).filter { it.edgeId != edgeId }.sumOf { obstacle ->
+            if (obstacle.segment?.let { segment.sharedRun(it) > 0 } ?: segment.crosses(obstacle.bounds))
+                100_000.0 else 0.0
+        }
+    }
+
+    /** Existing lanes and label borders supply alternate grid channels when simple doglegs fail. */
+    fun occupiedChannels(edgeId: String, horizontal: Boolean): List<Double> = reservations
+        .filterKeys { it != edgeId }.values.flatten().flatMap { reservation ->
+            val segment = reservation.segment
+            when {
+                segment == null -> if (horizontal) listOf(reservation.bounds.minY - 12, reservation.bounds.maxY + 12)
+                    else listOf(reservation.bounds.minX - 12, reservation.bounds.maxX + 12)
+                horizontal && abs(segment.y1 - segment.y2) < 0.01 -> listOf(segment.y1 - 12, segment.y1 + 12)
+                !horizontal && abs(segment.x1 - segment.x2) < 0.01 -> listOf(segment.x1 - 12, segment.x1 + 12)
+                else -> emptyList()
+            }
+        }.distinct()
 
     private fun interior(bounds: Rectangle2D): Rectangle2D = Rectangle2D.Double(
         bounds.x + 0.5, bounds.y + 0.5, max(0.0, bounds.width - 1), max(0.0, bounds.height - 1),

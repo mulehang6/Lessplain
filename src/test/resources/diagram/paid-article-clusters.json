@@ -1,0 +1,651 @@
+{
+  "nodes": [
+    {
+      "id": "request",
+      "label": "接收 articleId 与登录用户",
+      "kind": "step"
+    },
+    {
+      "id": "lookup",
+      "label": "查支付记录，不存在则创建",
+      "kind": "step"
+    },
+    {
+      "id": "article_guard",
+      "label": "文章存在且支持当前付费渠道？",
+      "kind": "step"
+    },
+    {
+      "id": "create",
+      "label": "创建 NOT_PAY 记录与校验码",
+      "kind": "step"
+    },
+    {
+      "id": "response",
+      "label": "回写变更，返回支付信息",
+      "kind": "step"
+    },
+    {
+      "id": "lock",
+      "label": "事务内加写锁，读取渠道",
+      "kind": "step"
+    },
+    {
+      "id": "state",
+      "label": "成功/支付中/失败/过期？",
+      "kind": "step"
+    },
+    {
+      "id": "reuse",
+      "label": "成功或支付中：不刷新",
+      "kind": "step"
+    },
+    {
+      "id": "reset",
+      "label": "失败：重置为 NOT_PAY",
+      "kind": "step"
+    },
+    {
+      "id": "expire",
+      "label": "过期：重新生成校验码",
+      "kind": "step"
+    },
+    {
+      "id": "factory",
+      "label": "按 payWay 选择支付服务",
+      "kind": "step"
+    },
+    {
+      "id": "email_qr",
+      "label": "收款码渠道：构造支付信息",
+      "kind": "step"
+    },
+    {
+      "id": "author_code",
+      "label": "读取作者收款码",
+      "kind": "step"
+    },
+    {
+      "id": "email_throttle",
+      "label": "180 秒内重复通知直接返回",
+      "kind": "step"
+    },
+    {
+      "id": "email_send",
+      "label": "生成确认邮件，更新通知信息",
+      "kind": "step"
+    },
+    {
+      "id": "email_parse",
+      "label": "解析校验码与作者确认结果",
+      "kind": "step"
+    },
+    {
+      "id": "wx_order",
+      "label": "复用预支付信息或创建订单",
+      "kind": "step"
+    },
+    {
+      "id": "wx_query",
+      "label": "用户确认时主动查单",
+      "kind": "step"
+    },
+    {
+      "id": "wx_callback",
+      "label": "接收微信支付结果回调",
+      "kind": "step"
+    },
+    {
+      "id": "wx_verify",
+      "label": "验签解密后解析 Transaction",
+      "kind": "step"
+    },
+    {
+      "id": "wx_map",
+      "label": "第三方状态映射到本地状态",
+      "kind": "step"
+    },
+    {
+      "id": "wx_ack",
+      "label": "业务成功返回 200，否则 500",
+      "kind": "step"
+    },
+    {
+      "id": "user_confirm",
+      "label": "用户声明支付完成，发起确认",
+      "kind": "step"
+    },
+    {
+      "id": "owner_guard",
+      "label": "锁记录，核对购买者",
+      "kind": "step"
+    },
+    {
+      "id": "mark_paying",
+      "label": "未支付记录更新为 PAYING",
+      "kind": "step"
+    },
+    {
+      "id": "channel_confirm",
+      "label": "调用渠道的 paying 操作",
+      "kind": "step"
+    },
+    {
+      "id": "confirm_save",
+      "label": "无变化/写失败短路，否则发布",
+      "kind": "step"
+    },
+    {
+      "id": "author_callback",
+      "label": "作者确认入口选择 EMAIL",
+      "kind": "step"
+    },
+    {
+      "id": "callback_guard",
+      "label": "锁记录并核对校验码",
+      "kind": "step"
+    },
+    {
+      "id": "callback_idempotent",
+      "label": "相同状态或已成功：幂等返回",
+      "kind": "step"
+    },
+    {
+      "id": "callback_save",
+      "label": "回写状态、时间与第三方单号",
+      "kind": "step"
+    },
+    {
+      "id": "publish",
+      "label": "PAYING 与成功/失败分别发事件",
+      "kind": "step"
+    },
+    {
+      "id": "event",
+      "label": "发布进程内通知事件",
+      "kind": "step"
+    },
+    {
+      "id": "listener",
+      "label": "异步消费 PAYING/PAY",
+      "kind": "step"
+    },
+    {
+      "id": "recipient",
+      "label": "PAYING 通知作者，终态通知买家",
+      "kind": "step"
+    },
+    {
+      "id": "notice_save",
+      "label": "按历史与文案决定新增通知",
+      "kind": "step"
+    },
+    {
+      "id": "notice_status",
+      "label": "按 PAYING/成功/失败选择消息",
+      "kind": "step"
+    },
+    {
+      "id": "websocket",
+      "label": "向在线会话发送 JSON 消息",
+      "kind": "step"
+    },
+    {
+      "id": "read_gate",
+      "label": "付费文章核对登录用户与作者",
+      "kind": "step"
+    },
+    {
+      "id": "has_paid",
+      "label": "数据库状态是否为 SUCCEED？",
+      "kind": "step"
+    },
+    {
+      "id": "read_result",
+      "label": "有权限返回全文，否则截取预览",
+      "kind": "step"
+    }
+  ],
+  "edges": [
+    {
+      "id": "request--lookup",
+      "from": "request",
+      "to": "lookup",
+      "relation": "call",
+      "coverage": "静态调用关系；未实际发起支付"
+    },
+    {
+      "id": "lookup--article_guard",
+      "from": "lookup",
+      "to": "article_guard",
+      "relation": "call",
+      "coverage": "条件或数据关联：没有记录。"
+    },
+    {
+      "id": "article_guard--create",
+      "from": "article_guard",
+      "to": "create",
+      "relation": "control_flow",
+      "condition": "文章存在、渠道有效且允许"
+    },
+    {
+      "id": "create--lock",
+      "from": "create",
+      "to": "lock",
+      "relation": "control_flow",
+      "coverage": "createPayRecord 返回后，toPay 继续锁住新记录"
+    },
+    {
+      "id": "lookup--lock",
+      "from": "lookup",
+      "to": "lock",
+      "relation": "control_flow",
+      "condition": "已有记录"
+    },
+    {
+      "id": "lock--state",
+      "from": "lock",
+      "to": "state",
+      "relation": "control_flow"
+    },
+    {
+      "id": "state--reuse",
+      "from": "state",
+      "to": "reuse",
+      "relation": "control_flow",
+      "condition": "SUCCEED 或 PAYING"
+    },
+    {
+      "id": "state--reset",
+      "from": "state",
+      "to": "reset",
+      "relation": "control_flow",
+      "condition": "FAIL"
+    },
+    {
+      "id": "state--expire",
+      "from": "state",
+      "to": "expire",
+      "relation": "control_flow",
+      "condition": "未终结且预支付信息过期"
+    },
+    {
+      "id": "state--factory",
+      "from": "state",
+      "to": "factory",
+      "relation": "control_flow",
+      "condition": "未终结且缓存仍有效"
+    },
+    {
+      "id": "reuse--factory",
+      "from": "reuse",
+      "to": "factory",
+      "relation": "control_flow"
+    },
+    {
+      "id": "reset--factory",
+      "from": "reset",
+      "to": "factory",
+      "relation": "control_flow"
+    },
+    {
+      "id": "expire--factory",
+      "from": "expire",
+      "to": "factory",
+      "relation": "control_flow"
+    },
+    {
+      "id": "factory--email_qr",
+      "from": "factory",
+      "to": "email_qr",
+      "relation": "call",
+      "coverage": "条件或数据关联：EMAIL。"
+    },
+    {
+      "id": "email_qr--author_code",
+      "from": "email_qr",
+      "to": "author_code",
+      "relation": "call"
+    },
+    {
+      "id": "author_code--response",
+      "from": "author_code",
+      "to": "response",
+      "relation": "control_flow",
+      "coverage": "toPay 返回 PayInfoDTO 后由业务服务补齐响应"
+    },
+    {
+      "id": "channel_confirm--email_throttle",
+      "from": "channel_confirm",
+      "to": "email_throttle",
+      "relation": "call",
+      "coverage": "条件或数据关联：EMAIL。"
+    },
+    {
+      "id": "email_throttle--email_send",
+      "from": "email_throttle",
+      "to": "email_send",
+      "relation": "control_flow",
+      "condition": "未被限频",
+      "coverage": "调用继续；异常仅记录日志，当前实现仍返回 true"
+    },
+    {
+      "id": "email_throttle--confirm_save",
+      "from": "email_throttle",
+      "to": "confirm_save",
+      "relation": "control_flow",
+      "condition": "限频返回 false",
+      "coverage": "updatePaying 会直接返回，不写回；分支汇总见该节点源码"
+    },
+    {
+      "id": "email_send--confirm_save",
+      "from": "email_send",
+      "to": "confirm_save",
+      "relation": "control_flow",
+      "coverage": "paying 正常结束或捕获异常后返回 true"
+    },
+    {
+      "id": "author_callback--email_parse",
+      "from": "author_callback",
+      "to": "email_parse",
+      "relation": "call",
+      "coverage": "EmailPayServiceImpl→ThirdPayHandler→EmailPayIntegration，读取人工确认请求"
+    },
+    {
+      "id": "email_parse--callback_guard",
+      "from": "email_parse",
+      "to": "callback_guard",
+      "relation": "call",
+      "coverage": "构造 PayCallbackBo 后 callback.apply 调用 updatePayStatus"
+    },
+    {
+      "id": "factory--wx_order",
+      "from": "factory",
+      "to": "wx_order",
+      "relation": "call",
+      "coverage": "条件或数据关联：非 EMAIL。"
+    },
+    {
+      "id": "wx_order--response",
+      "from": "wx_order",
+      "to": "response",
+      "relation": "control_flow",
+      "coverage": "支付服务返回后回写数据库并构造响应；第三方下单异常未在该方法捕获"
+    },
+    {
+      "id": "channel_confirm--wx_query",
+      "from": "channel_confirm",
+      "to": "wx_query",
+      "relation": "call",
+      "coverage": "条件或数据关联：非 EMAIL。"
+    },
+    {
+      "id": "wx_query--confirm_save",
+      "from": "wx_query",
+      "to": "confirm_save",
+      "relation": "control_flow",
+      "coverage": "查询终态会刷新 record；查询异常仅记录日志，方法仍返回 true"
+    },
+    {
+      "id": "wx_callback--wx_ack",
+      "from": "wx_callback",
+      "to": "wx_ack",
+      "relation": "call",
+      "coverage": "WX_NATIVE 渠道进入 OnlinePayServiceImpl.payCallback；TEST- 分支不更新真实支付记录"
+    },
+    {
+      "id": "wx_ack--wx_verify",
+      "from": "wx_ack",
+      "to": "wx_verify",
+      "relation": "call",
+      "coverage": "ThirdPayHandler 按 WX_NATIVE 路由至微信 integration"
+    },
+    {
+      "id": "wx_verify--wx_map",
+      "from": "wx_verify",
+      "to": "wx_map",
+      "relation": "call",
+      "coverage": "条件或数据关联：验签解密成功。"
+    },
+    {
+      "id": "wx_map--callback_guard",
+      "from": "wx_map",
+      "to": "callback_guard",
+      "relation": "call",
+      "coverage": "回调控制器的 callback.apply 调用 updatePayStatus；仅非 TEST- 订单"
+    },
+    {
+      "id": "user_confirm--owner_guard",
+      "from": "user_confirm",
+      "to": "owner_guard",
+      "relation": "call",
+      "coverage": "条件或数据关联：succeed=true。"
+    },
+    {
+      "id": "owner_guard--mark_paying",
+      "from": "owner_guard",
+      "to": "mark_paying",
+      "relation": "control_flow",
+      "condition": "购买者匹配且非终态",
+      "coverage": "不匹配抛禁止访问；SUCCEED/FAIL 直接幂等返回"
+    },
+    {
+      "id": "mark_paying--channel_confirm",
+      "from": "mark_paying",
+      "to": "channel_confirm",
+      "relation": "control_flow"
+    },
+    {
+      "id": "confirm_save--publish",
+      "from": "confirm_save",
+      "to": "publish",
+      "relation": "control_flow",
+      "condition": "有变化且写回成功"
+    },
+    {
+      "id": "create--user_confirm",
+      "from": "create",
+      "to": "user_confirm",
+      "relation": "data_flow",
+      "coverage": "条件或数据关联：payId。两次请求通过记录 ID 关联；不是后端自动调用，也未声称用户已经实际付款"
+    },
+    {
+      "id": "callback_guard--callback_idempotent",
+      "from": "callback_guard",
+      "to": "callback_idempotent",
+      "relation": "control_flow",
+      "condition": "记录存在且校验码匹配",
+      "coverage": "不匹配抛异常"
+    },
+    {
+      "id": "callback_idempotent--callback_save",
+      "from": "callback_idempotent",
+      "to": "callback_save",
+      "relation": "control_flow",
+      "condition": "状态不同且原状态非 SUCCEED"
+    },
+    {
+      "id": "callback_save--publish",
+      "from": "callback_save",
+      "to": "publish",
+      "relation": "control_flow",
+      "condition": "数据库写回成功"
+    },
+    {
+      "id": "callback_save--reset",
+      "from": "callback_save",
+      "to": "reset",
+      "relation": "data_flow",
+      "coverage": "条件或数据关联：下一次请求读到 FAIL。重新请求 toPay 时读取失败记录重置；不是 updatePayStatus 直接调用"
+    },
+    {
+      "id": "publish--event",
+      "from": "publish",
+      "to": "event",
+      "relation": "call",
+      "coverage": "MsgNotifyHelper.publish 获取 bean 后调用 publishMsg；调用仍在事务方法内，不声称 afterCommit"
+    },
+    {
+      "id": "event--listener",
+      "from": "event",
+      "to": "listener",
+      "relation": "call",
+      "coverage": "条件或数据关联：PAYING/PAY。SpringUtil 发布 NotifyMsgEvent；listener 类级 @Async，真实完成顺序未观测"
+    },
+    {
+      "id": "listener--recipient",
+      "from": "listener",
+      "to": "recipient",
+      "relation": "call",
+      "coverage": "只展开 PAYING/PAY，其他通知类型不在本图范围"
+    },
+    {
+      "id": "recipient--notice_save",
+      "from": "recipient",
+      "to": "notice_save",
+      "relation": "control_flow"
+    },
+    {
+      "id": "notice_save--notice_status",
+      "from": "notice_save",
+      "to": "notice_status",
+      "relation": "control_flow",
+      "coverage": "新增或无需新增均继续推送；不能称为完全去重"
+    },
+    {
+      "id": "notice_status--websocket",
+      "from": "notice_status",
+      "to": "websocket",
+      "relation": "call",
+      "coverage": "条件或数据关联：PAYING/SUCCEED/FAIL。"
+    },
+    {
+      "id": "callback_save--has_paid",
+      "from": "callback_save",
+      "to": "has_paid",
+      "relation": "data_flow",
+      "coverage": "条件或数据关联：持久化状态。下一次阅读请求重新查询记录；不是支付回调直接调用阅读服务"
+    },
+    {
+      "id": "confirm_save--has_paid",
+      "from": "confirm_save",
+      "to": "has_paid",
+      "relation": "data_flow",
+      "coverage": "条件或数据关联：查单后持久化状态。在线查询可能带回终态；是否解锁由后续读取的 SUCCEED 决定"
+    },
+    {
+      "id": "read_gate--has_paid",
+      "from": "read_gate",
+      "to": "has_paid",
+      "relation": "call",
+      "coverage": "条件或数据关联：已登录且非作者。"
+    },
+    {
+      "id": "has_paid--read_result",
+      "from": "has_paid",
+      "to": "read_result",
+      "relation": "control_flow",
+      "condition": "布尔结果",
+      "coverage": "回到 mark 的 condition.get；SUCCEED 才可读，否则预览"
+    },
+    {
+      "id": "read_gate--read_result",
+      "from": "read_gate",
+      "to": "read_result",
+      "relation": "control_flow",
+      "condition": "作者，或未登录",
+      "coverage": "作者短路通过；未登录短路失败，不查询支付记录"
+    }
+  ],
+  "clusters": [
+    {
+      "id": "purchase",
+      "title": "发起购买与创建记录",
+      "nodeIds": [
+        "request",
+        "lookup",
+        "article_guard",
+        "create",
+        "response"
+      ]
+    },
+    {
+      "id": "prepare",
+      "title": "锁定记录与支付信息复用",
+      "nodeIds": [
+        "lock",
+        "state",
+        "reuse",
+        "reset",
+        "expire",
+        "factory"
+      ]
+    },
+    {
+      "id": "email-channel",
+      "title": "个人收款码与作者确认",
+      "nodeIds": [
+        "email_qr",
+        "author_code",
+        "email_throttle",
+        "email_send",
+        "email_parse"
+      ]
+    },
+    {
+      "id": "wechat-channel",
+      "title": "微信下单、查单与验签",
+      "nodeIds": [
+        "wx_order",
+        "wx_query",
+        "wx_callback",
+        "wx_verify",
+        "wx_map",
+        "wx_ack"
+      ]
+    },
+    {
+      "id": "confirmation",
+      "title": "用户确认与状态持久化",
+      "nodeIds": [
+        "user_confirm",
+        "owner_guard",
+        "mark_paying",
+        "channel_confirm",
+        "confirm_save"
+      ]
+    },
+    {
+      "id": "callbacks",
+      "title": "回调校验与终态汇合",
+      "nodeIds": [
+        "author_callback",
+        "callback_guard",
+        "callback_idempotent",
+        "callback_save",
+        "publish"
+      ]
+    },
+    {
+      "id": "notifications",
+      "title": "异步通知与在线推送",
+      "nodeIds": [
+        "event",
+        "listener",
+        "recipient",
+        "notice_save",
+        "notice_status",
+        "websocket"
+      ]
+    },
+    {
+      "id": "reading",
+      "title": "下一次阅读检查与全文解锁",
+      "nodeIds": [
+        "read_gate",
+        "has_paid",
+        "read_result"
+      ]
+    }
+  ]
+}

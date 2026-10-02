@@ -2,21 +2,25 @@ package com.master.understanding.diagram
 
 import java.awt.geom.Rectangle2D
 
-/** Repairs only conflicting connectors, protecting the stable mainline before other edge IDs. */
+/** Repairs conflicting connectors; prevalidated group-local edges can remain fixed before mainline routing. */
 internal fun repairEdgeRoutes(
     nodes: Map<String, PlacedNode>,
     edges: List<PlacedEdge>,
     mainlineIds: Set<String>,
     movedEdgeIds: Set<String> = emptySet(),
     obstacles: List<Rectangle2D> = emptyList(),
+    edgeObstacles: Map<String, List<Rectangle2D>> = emptyMap(),
+    stableEdgeIds: Set<String> = emptySet(),
 ): List<PlacedEdge> {
     if (edges.isEmpty()) return edges
-    val ordered = edges.sortedWith(compareBy<PlacedEdge> { it.edge.id !in mainlineIds }.thenBy { it.edge.id })
+    val ordered = edges.sortedWith(compareBy<PlacedEdge> { it.edge.id !in stableEdgeIds }
+        .thenBy { it.edge.id !in mainlineIds }.thenBy { it.edge.id })
     val rank = ordered.mapIndexed { index, edge -> edge.edge.id to index }.toMap()
-    val scene = EdgeRoutingObstacles(nodes.values, obstacles)
+    val scene = EdgeRoutingObstacles(nodes.values, obstacles, edgeObstacles)
     edges.forEach(scene::add)
     val affected = movedEdgeIds.toMutableSet()
     ordered.forEach { edge ->
+        if (edge.edge.id in stableEdgeIds) return@forEach
         if (scene.crossesNode(edge) || scene.labelCrossesNode(edge) ||
             edge.resolvedLabelBounds?.intersects(edge.arrowPath.bounds2D) == true) affected.add(edge.edge.id)
         scene.conflicts(edge).forEach { other ->
@@ -25,7 +29,7 @@ internal fun repairEdgeRoutes(
     }
     if (affected.isEmpty()) return edges
     affected.forEach(scene::remove)
-    val router = LocalEdgeRouter(nodes, ordered, obstacles)
+    val router = LocalEdgeRouter(nodes, ordered, obstacles, edgeObstacles)
     val repaired = hashMapOf<String, PlacedEdge>()
     val byId = ordered.associateBy { it.edge.id }
     val pending = java.util.TreeSet<String>(compareBy { rank.getValue(it) }).apply { addAll(affected) }
@@ -34,7 +38,7 @@ internal fun repairEdgeRoutes(
         val edge = byId.getValue(id)
         val result = router.route(edge, scene, edge.edge.id in movedEdgeIds)
         // A forced route may need a neighbouring connector to yield its lane; expand only that local set.
-        scene.conflicts(result).filter { it !in affected }.forEach { other ->
+        scene.conflicts(result).filter { it !in affected && it !in stableEdgeIds }.forEach { other ->
             affected.add(other)
             scene.remove(other)
             pending.add(other)
@@ -49,3 +53,9 @@ internal fun repairEdgeRoutes(
 internal fun clusterRoutingObstacles(clusters: List<PlacedCluster>): List<Rectangle2D> = clusters.flatMap {
     listOfNotNull(DiagramClusterText.titleBounds(it), it.exampleBounds)
 }
+
+/** A connector can enter its own endpoint groups, but must travel around every unrelated group. */
+internal fun unrelatedClusterObstacles(clusters: List<PlacedCluster>, edges: List<PlacedEdge>): Map<String, List<Rectangle2D>> =
+    edges.associate { edge -> edge.edge.id to clusters.filter {
+        edge.edge.from !in it.nodeIds && edge.edge.to !in it.nodeIds
+    }.map { cluster -> cluster.bounds.let { Rectangle2D.Double(it.x + 1, it.y + 1, it.width - 2, it.height - 2) } } }

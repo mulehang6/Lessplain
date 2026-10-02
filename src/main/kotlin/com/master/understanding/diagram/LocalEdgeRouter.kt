@@ -10,6 +10,7 @@ internal class LocalEdgeRouter(
     private val nodes: Map<String, PlacedNode>,
     orderedEdges: List<PlacedEdge>,
     private val extras: List<Rectangle2D>,
+    private val edgeObstacles: Map<String, List<Rectangle2D>> = emptyMap(),
 ) {
     private val outgoing = orderedEdges.groupBy { it.edge.from }
     private val incoming = orderedEdges.groupBy { it.edge.to }
@@ -18,21 +19,36 @@ internal class LocalEdgeRouter(
         var best = placeLabel(original, obstacles, preservePosition = !moved)
         var bestCost = if (moved) Double.POSITIVE_INFINITY else cost(best, obstacles)
         if (!moved && obstacles.collisionCost(best) == 0.0) return best
+        fun consider(points: List<Point2D.Double>): PlacedEdge? {
+            val target = points.last()
+            val previous = points.dropLast(1).last { it.distance(target) > 0.01 }
+            val candidate = placeLabel(original.copy(path = roundedEdgePath(points), arrowX = target.x,
+                arrowY = target.y, arrowDx = target.x - previous.x, arrowDy = target.y - previous.y,
+                labelBounds = null), obstacles, preservePosition = false)
+            val collision = obstacles.collisionCost(candidate)
+            val score = collision + lengthCost(candidate)
+            if (score < bestCost) {
+                best = candidate
+                bestCost = score
+            }
+            return candidate.takeIf { collision == 0.0 }
+        }
         for ((sourceSide, targetSide) in sidePairs(original)) {
             for (variant in listOf(0.0, 12.0, -12.0, 24.0, -24.0)) {
                 for (points in candidates(original, variant, sourceSide, targetSide)) {
-                    val target = points.last()
-                    val previous = points.dropLast(1).last { it.distance(target) > 0.01 }
-                    val candidate = placeLabel(original.copy(path = roundedEdgePath(points), arrowX = target.x,
-                        arrowY = target.y, arrowDx = target.x - previous.x, arrowDy = target.y - previous.y,
-                        labelBounds = null), obstacles, preservePosition = false)
-                    val collision = obstacles.collisionCost(candidate)
-                    val score = collision + lengthCost(candidate)
-                    if (score < bestCost) {
-                        best = candidate
-                        bestCost = score
-                    }
-                    if (collision == 0.0) return candidate
+                    consider(points)?.let { return it }
+                }
+            }
+        }
+        if (edgeObstacles[original.edge.id].orEmpty().isNotEmpty()) {
+            for ((sourceSide, targetSide) in sidePairs(original)) {
+                for (variant in listOf(0.0, 12.0, -12.0, 24.0, -24.0)) {
+                    val shell = candidates(original, variant, sourceSide, targetSide).first()
+                    val boxes = nodes.values.map { it.bounds } + extras + edgeObstacles[original.edge.id].orEmpty()
+                    val corridor = routeOrthogonalCorridor(shell[1], shell[shell.lastIndex - 1],
+                        original.edge.id, boxes, obstacles) ?: continue
+                    val points = listOf(shell.first()) + corridor + shell.last()
+                    consider(points)?.let { return it }
                 }
             }
         }
@@ -79,13 +95,14 @@ internal class LocalEdgeRouter(
         val vertical = sourceSide.dx == 0
         val first = port(source, sourceSide, outgoing.getValue(edge.edge.from), edge, variant)
         val last = port(target, targetSide, incoming.getValue(edge.edge.to), edge, variant)
-        val stub = if (self) 24 else 18
+        // Distinct departure/arrival lanes can require bends at different distances from a shared node.
+        val stub = (if (self) 24 else 18) + abs(variant)
         val start = Point2D.Double(first.x + sourceSide.dx * stub, first.y + sourceSide.dy * stub)
         val end = Point2D.Double(last.x + targetSide.dx * stub, last.y + targetSide.dy * stub)
         fun path(vararg middle: Point2D.Double) = listOf(first, start) + middle + listOf(end, last)
         yield(path(Point2D.Double(start.x, end.y)))
         yield(path(Point2D.Double(end.x, start.y)))
-        val boxes = nodes.values.map { it.bounds } + extras
+        val boxes = nodes.values.map { it.bounds } + extras + edgeObstacles[edge.edge.id].orEmpty()
         fun channels(horizontal: Boolean): List<Double> {
             val a = if (horizontal) start.y else start.x
             val b = if (horizontal) end.y else end.x

@@ -1,0 +1,337 @@
+{
+  "nodes": [
+    {
+      "id": "post",
+      "label": "接收文章提交请求",
+      "kind": "step"
+    },
+    {
+      "id": "prepare",
+      "label": "转换文章、处理 slug/图片/敏感词",
+      "kind": "step"
+    },
+    {
+      "id": "transaction",
+      "label": "事务内：新建还是更新？",
+      "kind": "step"
+    },
+    {
+      "id": "insert",
+      "label": "新建：审核状态、多表与阅读记录",
+      "kind": "step"
+    },
+    {
+      "id": "update",
+      "label": "更新：文章、正文、标签与审核状态",
+      "kind": "step"
+    },
+    {
+      "id": "new_events",
+      "label": "新建：CREATE，再按状态追加事件",
+      "kind": "step"
+    },
+    {
+      "id": "update_events",
+      "label": "更新：按条件发布 ONLINE/REVIEW",
+      "kind": "step"
+    },
+    {
+      "id": "dispatch",
+      "label": "进程内分发：同步处理、异步调度",
+      "kind": "step"
+    },
+    {
+      "id": "column",
+      "label": "可选关联专栏，回调返回 articleId",
+      "kind": "step"
+    },
+    {
+      "id": "response",
+      "label": "事务执行返回后：响应 id 与 slug",
+      "kind": "step"
+    },
+    {
+      "id": "es_listener",
+      "label": "异步：非 DELETE 事件尝试同步",
+      "kind": "step"
+    },
+    {
+      "id": "es_gate",
+      "label": "检查搜索开关、ID 与索引",
+      "kind": "step"
+    },
+    {
+      "id": "es_disabled",
+      "label": "搜索关闭或 ID 空：停止",
+      "kind": "step"
+    },
+    {
+      "id": "es_exists",
+      "label": "HEAD：ES 已有这篇文章吗？",
+      "kind": "step"
+    },
+    {
+      "id": "es_skip",
+      "label": "索引或既有文档缺失：跳过",
+      "kind": "step"
+    },
+    {
+      "id": "es_state",
+      "label": "读取数据库，核对文章状态",
+      "kind": "step"
+    },
+    {
+      "id": "es_delete",
+      "label": "数据失效或非在线：删除旧索引",
+      "kind": "step"
+    },
+    {
+      "id": "es_write",
+      "label": "在线且有效：更新文档并刷新",
+      "kind": "step"
+    },
+    {
+      "id": "stats_listener",
+      "label": "异步：筛选上线/下线/删除事件",
+      "kind": "step"
+    },
+    {
+      "id": "stats_cache",
+      "label": "重算作者文章数，写 Redis",
+      "kind": "step"
+    },
+    {
+      "id": "rank_listener",
+      "label": "异步：ONLINE 时尝试增加积分",
+      "kind": "step"
+    },
+    {
+      "id": "sitemap_listener",
+      "label": "同步：按事件维护站点地图",
+      "kind": "step"
+    },
+    {
+      "id": "sitemap_add",
+      "label": "ONLINE：写入站点地图 Redis",
+      "kind": "step"
+    }
+  ],
+  "edges": [
+    {
+      "id": "post--prepare",
+      "from": "post",
+      "to": "prepare",
+      "relation": "call"
+    },
+    {
+      "id": "prepare--transaction",
+      "from": "prepare",
+      "to": "transaction",
+      "relation": "control_flow"
+    },
+    {
+      "id": "transaction--insert",
+      "from": "transaction",
+      "to": "insert",
+      "relation": "control_flow",
+      "condition": "articleId 为空或 0"
+    },
+    {
+      "id": "transaction--update",
+      "from": "transaction",
+      "to": "update",
+      "relation": "control_flow",
+      "condition": "articleId 非空且非 0"
+    },
+    {
+      "id": "insert--new_events",
+      "from": "insert",
+      "to": "new_events",
+      "relation": "control_flow"
+    },
+    {
+      "id": "update--update_events",
+      "from": "update",
+      "to": "update_events",
+      "relation": "control_flow"
+    },
+    {
+      "id": "new_events--dispatch",
+      "from": "new_events",
+      "to": "dispatch",
+      "relation": "call"
+    },
+    {
+      "id": "update_events--dispatch",
+      "from": "update_events",
+      "to": "dispatch",
+      "relation": "call"
+    },
+    {
+      "id": "new_events--column",
+      "from": "new_events",
+      "to": "column",
+      "relation": "control_flow"
+    },
+    {
+      "id": "update_events--column",
+      "from": "update_events",
+      "to": "column",
+      "relation": "control_flow"
+    },
+    {
+      "id": "column--response",
+      "from": "column",
+      "to": "response",
+      "relation": "control_flow"
+    },
+    {
+      "id": "dispatch--sitemap_listener",
+      "from": "dispatch",
+      "to": "sitemap_listener",
+      "relation": "call"
+    },
+    {
+      "id": "dispatch--es_listener",
+      "from": "dispatch",
+      "to": "es_listener",
+      "relation": "call"
+    },
+    {
+      "id": "dispatch--stats_listener",
+      "from": "dispatch",
+      "to": "stats_listener",
+      "relation": "call"
+    },
+    {
+      "id": "dispatch--rank_listener",
+      "from": "dispatch",
+      "to": "rank_listener",
+      "relation": "call"
+    },
+    {
+      "id": "es_listener--es_gate",
+      "from": "es_listener",
+      "to": "es_gate",
+      "relation": "call"
+    },
+    {
+      "id": "es_gate--es_disabled",
+      "from": "es_gate",
+      "to": "es_disabled",
+      "relation": "control_flow",
+      "condition": "搜索未启用，或 articleId 为空"
+    },
+    {
+      "id": "es_gate--es_skip",
+      "from": "es_gate",
+      "to": "es_skip",
+      "relation": "control_flow",
+      "condition": "搜索启用且 ID 有效，但索引不存在"
+    },
+    {
+      "id": "es_gate--es_exists",
+      "from": "es_gate",
+      "to": "es_exists",
+      "relation": "control_flow",
+      "condition": "搜索启用、ID 有效且索引存在"
+    },
+    {
+      "id": "es_exists--es_skip",
+      "from": "es_exists",
+      "to": "es_skip",
+      "relation": "control_flow",
+      "condition": "ES 文档不存在"
+    },
+    {
+      "id": "es_exists--es_state",
+      "from": "es_exists",
+      "to": "es_state",
+      "relation": "control_flow",
+      "condition": "ES 文档已存在"
+    },
+    {
+      "id": "es_state--es_delete",
+      "from": "es_state",
+      "to": "es_delete",
+      "relation": "control_flow",
+      "condition": "数据库数据缺失、已删除或非 ONLINE"
+    },
+    {
+      "id": "es_state--es_write",
+      "from": "es_state",
+      "to": "es_write",
+      "relation": "control_flow",
+      "condition": "数据库数据存在、未删除且 ONLINE"
+    },
+    {
+      "id": "stats_listener--stats_cache",
+      "from": "stats_listener",
+      "to": "stats_cache",
+      "relation": "control_flow",
+      "condition": "ONLINE/OFFLINE/DELETE"
+    },
+    {
+      "id": "sitemap_listener--sitemap_add",
+      "from": "sitemap_listener",
+      "to": "sitemap_add",
+      "relation": "control_flow",
+      "condition": "ONLINE"
+    }
+  ],
+  "clusters": [
+    {
+      "id": "submission",
+      "title": "主线：文章保存、事件发布与响应",
+      "nodeIds": [
+        "post",
+        "prepare",
+        "transaction",
+        "insert",
+        "update",
+        "new_events",
+        "update_events",
+        "dispatch",
+        "column",
+        "response"
+      ]
+    },
+    {
+      "id": "search",
+      "title": "异步分支：搜索索引",
+      "nodeIds": [
+        "es_listener",
+        "es_gate",
+        "es_disabled",
+        "es_exists",
+        "es_skip",
+        "es_state",
+        "es_delete",
+        "es_write"
+      ]
+    },
+    {
+      "id": "author-statistics",
+      "title": "异步分支：作者文章统计",
+      "nodeIds": [
+        "stats_listener",
+        "stats_cache"
+      ]
+    },
+    {
+      "id": "activity",
+      "title": "异步分支：活跃积分",
+      "nodeIds": [
+        "rank_listener"
+      ]
+    },
+    {
+      "id": "sitemap",
+      "title": "同步分支：站点地图",
+      "nodeIds": [
+        "sitemap_listener",
+        "sitemap_add"
+      ]
+    }
+  ]
+}
