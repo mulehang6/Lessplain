@@ -17,6 +17,7 @@ internal class DiagramLayoutCoordinator(
     private var pending: Request? = null
     private var closed = false
     private val geometryCache = mutableMapOf<LayoutDirection, UnderstandingGraphLayout>()
+    val busy: Boolean get() = running || pending != null
 
     fun request(direction: LayoutDirection) {
         if (closed) return

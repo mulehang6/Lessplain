@@ -43,7 +43,7 @@ class DiagramAsyncLayoutTest {
     }
 
     @Test
-    fun `automatic direction freezes until arrange and explicit direction wins`() {
+    fun `arrange preserves automatic direction and explicit direction wins`() {
         SwingUtilities.invokeAndWait {
             val diagram = createUnderstandingDiagram(record)
             try {
@@ -53,10 +53,42 @@ class DiagramAsyncLayoutTest {
                 resize(diagram, 1000)
                 assertEquals(LayoutDirection.VERTICAL, diagram.activeDirection)
                 diagram.arrangeNodes()
-                await { diagram.layoutReady && diagram.activeDirection == LayoutDirection.HORIZONTAL }
+                await { !diagram.layoutBusy }
+                assertEquals(LayoutDirection.VERTICAL, diagram.activeDirection)
                 diagram.setLayoutPreference(GraphLayoutPreference.VERTICAL)
                 await { diagram.layoutReady && diagram.activeDirection == LayoutDirection.VERTICAL }
             } finally { diagram.dispose() }
+        }
+    }
+
+    @Test
+    fun `arrange clears only positions in the visible direction and leaves preference unchanged`() {
+        SwingUtilities.invokeAndWait {
+            for (preference in GraphLayoutPreference.entries) {
+                val diagram = createUnderstandingDiagram(record)
+                try {
+                    diagram.setLayoutPreference(preference)
+                    resize(diagram, 1000)
+                    await { diagram.layoutReady }
+                    val direction = diagram.activeDirection
+                    val other = if (direction == LayoutDirection.HORIZONTAL) LayoutDirection.VERTICAL else LayoutDirection.HORIZONTAL
+                    val saved = mapOf("a" to com.master.understanding.ide.GraphNodePosition(900.0, 800.0))
+                    diagram.setDirectionState(other, null, saved)
+                    diagram.setNodePositions(saved)
+                    var cleared = 0
+                    diagram.onNodePositionsChanged { if (it.isEmpty()) cleared++ }
+                    resize(diagram, 500)
+                    diagram.arrangeNodes()
+                    await { !diagram.layoutBusy }
+                    assertEquals(direction, diagram.activeDirection)
+                    assertEquals(preference, diagram.layoutPreference)
+                    assertTrue(diagram.nodePositions.isEmpty(), "$preference/$direction 整理后仍保留 ${diagram.nodePositions}")
+                    assertEquals(1, cleared)
+                    diagram.setLayoutPreference(if (other == LayoutDirection.VERTICAL) GraphLayoutPreference.VERTICAL else GraphLayoutPreference.HORIZONTAL)
+                    await { diagram.activeDirection == other }
+                    assertEquals(saved, diagram.nodePositions)
+                } finally { diagram.dispose() }
+            }
         }
     }
 

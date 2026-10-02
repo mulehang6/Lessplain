@@ -23,6 +23,7 @@ internal class DiagramMouseInteraction(private val diagram: UnderstandingDiagram
         }
         if (event.button != MouseEvent.BUTTON1) return
         diagram.requestFocusInWindow()
+        diagram.overlays.pressed(event.point)
         pressPoint = event.point
         previousDragPoint = event.point
         draggedNodeId = null
@@ -67,12 +68,19 @@ internal class DiagramMouseInteraction(private val diagram: UnderstandingDiagram
             val copyNode = diagram.copyActionAt(event.point)
             val questionNode = diagram.questionActionAt(event.point)
             val noteNode = diagram.noteActionAt(event.point)
-            if (noteNode != null) diagram.noteCallbacks.toList().forEach { it(noteNode, diagram, event.point) }
+            val titleEdit = diagram.clusterEditAt(event.point)
+            if (titleEdit != null) diagram.titleCallbacks.toList().forEach { it(titleEdit) }
+            else if (noteNode != null) {
+                if (diagram.hasNodeNote(noteNode)) {
+                    diagram.noteCallbacks.toList().forEach { it(noteNode, diagram, event.point) }
+                } else diagram.addNoteCallbacks.toList().forEach { it(noteNode) }
+            }
             else if (copyNode != null) diagram.copyCallbacks.toList().forEach { it(copyNode) }
             else if (questionNode != null) diagram.questionCallbacks.toList().forEach { it(questionNode) }
             else diagram.nodeAt(event.point)?.let { diagram.selectUnderstandingNode(it, notify = true) }
         }
         previousDragPoint = null
+        diagram.overlays.released(event.point, dragged)
         pressPoint = null
         if (dragged) {
             if (draggedNodeId != null || draggedExampleClusterId != null) diagram.commitNodePositions()
@@ -102,8 +110,9 @@ internal class DiagramMouseInteraction(private val diagram: UnderstandingDiagram
             diagram.noteActionAt(event.point) != null -> DiagramNodeAction.NOTE
             else -> null
         }
+        diagram.overlays.moved(event.point)
         if (oldHover != hover || oldAction != diagram.hoveredAction) diagram.repaint()
-        diagram.cursor = if (hover != null || diagram.examplePanelAt(event.point) != null ||
+        diagram.cursor = if (hover != null || diagram.hoveredAction != null || diagram.examplePanelAt(event.point) != null ||
             diagram.clusterTitleAt(event.point) != null) Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
         else Cursor.getDefaultCursor()
     }
@@ -111,6 +120,7 @@ internal class DiagramMouseInteraction(private val diagram: UnderstandingDiagram
     override fun mouseExited(event: MouseEvent) {
         diagram.hoveredNodeId = null
         diagram.hoveredAction = null
+        diagram.overlays.exited()
         diagram.repaint()
     }
 

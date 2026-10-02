@@ -11,12 +11,12 @@ import javax.swing.SwingUtilities
 
 class DiagramClusterTextTest {
     @Test
-    fun `root title wraps while legacy answer is absent from the canvas`() {
+    fun `question group title wraps while prose answer is absent from the canvas`() {
         val title = "后台用户名密码登录从请求到会话与 Cookie 是怎么走的？失败会发生什么？".repeat(3)
         val answer = "会话保存登录状态。".repeat(80)
         val record = UnderstandingRecord("root", 1, null, null, title, answer, null,
             UnderstandingGraph(emptyList(), emptyList()), 0)
-        val cluster = rootDiagramCluster(record)
+        val cluster = DiagramCluster("question", record.question, record.graph.nodes.mapTo(linkedSetOf()) { it.id })
         val layout = layoutUnderstandingClusters(record.graph, listOf(cluster))
         val placed = layout.clusters.single()
 
@@ -31,7 +31,7 @@ class DiagramClusterTextTest {
         val graph = UnderstandingGraph(listOf(GraphNode("start", "读取参数")), emptyList())
         val record = UnderstandingRecord("root", 1, null, null, "登录流程？",
             "控制器读取参数后查用户。".repeat(50), null, graph, 0)
-        val cluster = rootDiagramCluster(record)
+        val cluster = DiagramCluster("question", record.question, record.graph.nodes.mapTo(linkedSetOf()) { it.id })
         val collapsed = layoutUnderstandingClusters(graph, listOf(cluster)).clusters.single()
         assertEquals(cluster.title, collapsed.textLayout.titleLines.joinToString(""))
     }
@@ -41,7 +41,7 @@ class DiagramClusterTextTest {
         SwingUtilities.invokeAndWait {
             val record = UnderstandingRecord("root", 1, null, null, "问题", "回答", null,
                 UnderstandingGraph(emptyList(), emptyList()), 0)
-            val root = rootDiagramCluster(record)
+            val root = DiagramCluster("question", record.question, record.graph.nodes.mapTo(linkedSetOf()) { it.id })
             fun visibleSideButtons(clusters: List<DiagramCluster>): Int {
                 val diagram = createUnderstandingDiagram(record, clusters = clusters)
                 return try {

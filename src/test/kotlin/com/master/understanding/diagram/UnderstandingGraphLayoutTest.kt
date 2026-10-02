@@ -15,7 +15,6 @@ import java.nio.file.Files
 import java.nio.file.Path
 import javax.imageio.ImageIO
 import javax.swing.JButton
-import javax.swing.JToggleButton
 import javax.swing.SwingUtilities
 import javax.swing.Timer
 import java.awt.Toolkit
@@ -67,7 +66,7 @@ class UnderstandingGraphLayoutTest {
                 diagram.zoom = 1.5
                 val updates = mutableListOf<Map<String, com.master.understanding.ide.GraphNodePosition>>()
                 diagram.onNodePositionsChanged(updates::add)
-                val node = layoutUnderstandingGraph(branch).nodes.getValue("start").bounds
+                val node = diagram.layout.nodes.getValue("start").bounds
                 val x = (diagram.width / 2 + (node.centerX - diagram.center.x) * diagram.zoom).toInt()
                 val y = (diagram.height / 2 + (node.centerY - diagram.center.y) * diagram.zoom).toInt()
                 diagram.dispatchEvent(MouseEvent(diagram, MouseEvent.MOUSE_PRESSED, 0, 0, x, y,
@@ -179,7 +178,7 @@ class UnderstandingGraphLayoutTest {
                 assertEquals(4, controls.components.filterIsInstance<JButton>().count { it.isVisible })
                 assertEquals(2, controls.sideControls.components.filterIsInstance<JButton>().count { it.isVisible })
                 diagram.focusCluster("B")
-                assertEquals(layout.clusters[1].bounds.centerY, diagram.center.y, 0.001)
+                assertEquals(diagram.layout.nodes.getValue("b1").bounds.centerY, diagram.center.y, 0.001)
                 diagram.fitContent()
                 assertEquals(layout.bounds.centerY, diagram.center.y, 0.001)
             } finally { diagram.dispose() }
@@ -473,10 +472,10 @@ class UnderstandingGraphLayoutTest {
                 awaitLayout(diagram)
                 diagram.doLayout()
                 assertTrue(diagram.zoom > 0.0)
-                assertEquals(layoutUnderstandingGraph(branch).nodes.getValue("start").bounds.centerX, diagram.center.x, 0.001)
+                assertEquals(diagram.layout.nodes.getValue("start").bounds.centerX, diagram.center.x, 0.001)
                 diagram.showUnderstandingPath(listOf("yes-edge"), "yes", centerNode = true)
-                assertEquals(layoutUnderstandingGraph(branch).nodes.getValue("yes").bounds.centerX, diagram.center.x, 0.001)
-                assertEquals(layoutUnderstandingGraph(branch).nodes.getValue("yes").bounds.centerY, diagram.center.y, 0.001)
+                assertEquals(diagram.layout.nodes.getValue("yes").bounds.centerX, diagram.center.x, 0.001)
+                assertEquals(diagram.layout.nodes.getValue("yes").bounds.centerY, diagram.center.y, 0.001)
                 val image = BufferedImage(900, 600, BufferedImage.TYPE_INT_ARGB)
                 diagram.paint(image.createGraphics())
                 assertNotEquals(image.getRGB(450, 300), image.getRGB(0, 0))
@@ -554,7 +553,7 @@ class UnderstandingGraphLayoutTest {
                 diagram.onQuestionBadgeClicked { badgeNode = it }
                 diagram.onCopyNodeContext { copiedNode = it }
                 diagram.onNodeSelected { selectedNode = it }
-                val node = layoutUnderstandingGraph(branch).nodes.getValue("start").bounds
+                val node = diagram.layout.nodes.getValue("start").bounds
                 val hoverX = (diagram.width / 2 + (node.centerX - diagram.center.x) * diagram.zoom).toInt()
                 val hoverY = (diagram.height / 2 + (node.centerY - diagram.center.y) * diagram.zoom).toInt()
                 diagram.dispatchEvent(MouseEvent(diagram, MouseEvent.MOUSE_MOVED, 0, 0, hoverX, hoverY, 0, false))
@@ -593,7 +592,7 @@ class UnderstandingGraphLayoutTest {
                 diagram.dispatchEvent(ComponentEvent(diagram, ComponentEvent.COMPONENT_RESIZED))
                 awaitLayout(diagram)
                 diagram.setQuestionCounts(mapOf("start" to 1))
-                val node = layoutUnderstandingGraph(branch).nodes.getValue("start").bounds
+                val node = diagram.layout.nodes.getValue("start").bounds
                 val copy = DiagramNodePainter.copyBounds(node)
                 val questions = DiagramNodePainter.questionBounds(node)
                 assertTrue(copy.y > node.maxY)
@@ -703,7 +702,7 @@ class UnderstandingGraphLayoutTest {
                 var selected: String? = null
                 diagram.onNodeSelected { selected = it }
                 diagram.setChoiceTargets(setOf("yes", "no"))
-                val node = layoutUnderstandingGraph(branch).nodes.getValue("yes").bounds
+                val node = diagram.layout.nodes.getValue("yes").bounds
                 val x = (diagram.width / 2 + (node.centerX - diagram.center.x) * diagram.zoom).toInt()
                 val y = (diagram.height / 2 + (node.centerY - diagram.center.y) * diagram.zoom).toInt()
                 diagram.dispatchEvent(MouseEvent(diagram, MouseEvent.MOUSE_PRESSED, 0, 0, x, y, 1, false, MouseEvent.BUTTON1))

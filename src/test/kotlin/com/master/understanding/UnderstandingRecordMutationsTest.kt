@@ -31,13 +31,13 @@ class UnderstandingRecordMutationsTest {
         UnderstandingRepository(root).use { repository ->
             val core = UnderstandingCore(repository)
             assertFailsWith<UnderstandingInputException> {
-                core.present(1, "empty", "getParameter 如何取值？", UnderstandingGraph(emptyList(), emptyList()), "root")
+                core.present(3, "empty", "getParameter 如何取值？", UnderstandingGraph(emptyList(), emptyList()), "root")
             }
             assertFailsWith<UnderstandingInputException> {
-                core.present(1, "placeholder", "getParameter 如何取值？",
+                core.present(3, "placeholder", "getParameter 如何取值？",
                     UnderstandingGraph(listOf(GraphNode("waiting", "等待", "placeholder")), emptyList()), "root")
             }
-            val saved = core.present(1, "graph", "getParameter 如何取值？", graph, "root",
+            val saved = core.present(3, "graph", "getParameter 如何取值？", graph, "root",
                 displayTitle = "读取请求参数")
             assertEquals("", saved.answer)
             assertEquals("读取请求参数", saved.displayTitle)
@@ -58,13 +58,13 @@ class UnderstandingRecordMutationsTest {
     fun `pending node note can change until a graph answers it`() {
         UnderstandingRepository(root).use { repository ->
             val core = UnderstandingCore(repository)
-            val rootRecord = core.present(1, "root", "参数怎么读取", graph, "root")
+            val rootRecord = core.present(3, "root", "参数怎么读取", graph, "root")
             val context = core.captureContext(rootRecord.id, "request")
             val note = core.prepareQuestion("为什么需要这个参数？", context.token).question
             assertEquals(note.id, repository.pendingQuestionsForNode(rootRecord.id, "request").single().id)
             val edited = repository.editPendingQuestion(note.id, "缺少 username 时会怎样？")
             assertEquals("缺少 username 时会怎样？", edited.text)
-            val child = core.present(1, "child", edited.text, graph, "child", questionId = note.id)
+            val child = core.present(3, "child", edited.text, graph, "child", questionId = note.id)
             assertEquals(rootRecord.id, child.parentId)
             assertTrue(repository.pendingQuestionsForNode(rootRecord.id, "request").isEmpty())
             assertEquals("answered", repository.getQuestion(note.id).status)
@@ -78,18 +78,18 @@ class UnderstandingRecordMutationsTest {
         var questionId = ""
         UnderstandingRepository(root).use { repository ->
             val core = UnderstandingCore(repository)
-            val parent = core.present(1, "root-write", "参数流向", graph, "root")
+            val parent = core.present(3, "root-write", "参数流向", graph, "root")
             rootId = parent.id
             val context = core.captureContext(parent.id, "request")
             val note = core.prepareQuestion("值从何而来？", context.token).question
             questionId = note.id
-            core.present(1, "child-write", note.text, graph, "child", questionId = note.id)
+            core.present(3, "child-write", note.text, graph, "child", questionId = note.id)
             val removed = repository.deleteRootRecord(parent.id)
             assertEquals(2, removed.recordIds.size)
             assertTrue(questionId in removed.questionIds)
             assertTrue(repository.recentRootRecords().isEmpty())
             assertFailsWith<UnderstandingInputException> {
-                core.present(1, "root-write", "参数流向", graph, "root")
+                core.present(3, "root-write", "参数流向", graph, "root")
             }
         }
         UnderstandingRepository(root).use { reopened ->

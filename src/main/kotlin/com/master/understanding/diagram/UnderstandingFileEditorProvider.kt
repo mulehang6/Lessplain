@@ -25,6 +25,10 @@ import com.master.understanding.ui.buildQuestionCanvas
 import com.master.understanding.ui.FollowUpLayer
 import com.master.understanding.ui.graphHierarchyEntries
 import com.master.understanding.ui.questionsForNode
+import com.master.understanding.ui.bindContentActions
+import com.master.understanding.ui.SourceNode
+import com.master.understanding.ui.projectCanvasPathToSource
+import com.master.understanding.ui.projectSourcePathToCanvas
 import com.master.understanding.storage.pendingQuestionsForNode
 import java.awt.BorderLayout
 import java.awt.FlowLayout
@@ -77,8 +81,7 @@ private class UnderstandingFileEditor(private val project: Project, private val 
     private val builder = (questionCanvas?.let { canvas ->
         createUnderstandingDiagram(canvas.record, graphBrowseState(service, graphKey),
             clusters = canvas.clusters, examplePanels = canvas.examplePanels)
-    } ?: createUnderstandingDiagram(record, graphBrowseState(service, graphKey),
-        clusters = listOf(rootDiagramCluster(record)))).apply {
+    } ?: createUnderstandingDiagram(record, graphBrowseState(service, graphKey))).apply {
         bindGraphState(service, graphKey)
     }
     private val explorer = (questionCanvas?.record ?: record).graph.nodes.firstOrNull()?.let {
@@ -88,8 +91,10 @@ private class UnderstandingFileEditor(private val project: Project, private val 
     private var choices: List<GraphEdge> = emptyList()
     private val selection = builder.onNodeSelected { nodeId ->
         val chosen = choices.firstOrNull { it.to == nodeId }
-        if (choices.isNotEmpty() && chosen == null) return@onNodeSelected
-        if (chosen != null) explorer?.choose(chosen.id) else explorer?.jumpTo(nodeId)
+        val current = explorer ?: return@onNodeSelected
+        if (chosen == null && nodeId == current.currentNodeId) return@onNodeSelected
+        val moved = if (chosen != null) current.choose(chosen.id) is StepResult.Moved else current.jumpTo(nodeId)
+        if (!moved) return@onNodeSelected
         choices = emptyList()
         updatePath()
     }
@@ -99,7 +104,22 @@ private class UnderstandingFileEditor(private val project: Project, private val 
                 source.record.id == recordId && source.nodeId == nodeId
             }?.key
         val current = explorer
-        if (id != null && current != null && id != current.currentNodeId && current.jumpTo(id)) {
+        if (id != null && current != null) {
+            val previousNodeId = current.currentNodeId
+            val previousPath = current.path
+            val source = questionCanvas?.sources?.get(id)
+            val projectedPath = source?.let {
+                val sourceBrowse = service.graphStates.get(GraphLayerKey(it.record.id)).browse
+                    ?: service.repository.getBrowseState(it.record.id)
+                val sourcePath = sourceBrowse?.takeIf { state -> state.nodeId == it.nodeId }?.staticPath.orEmpty()
+                projectSourcePathToCanvas(questionCanvas, sourcePath, it, id)
+            }
+            val browse = graphBrowseState(service, graphKey)
+            val restored = projectedPath?.let { current.restorePath(it, id) }
+                ?: browse?.takeIf { state -> state.nodeId == id }
+                    ?.let { state -> current.restorePath(state.staticPath, id) }
+                ?: current.jumpTo(id)
+            if (restored && previousNodeId == current.currentNodeId && previousPath == current.path) return@onSelectionChanged
             choices = emptyList()
             builder.setChoiceTargets(emptySet())
             builder.showUnderstandingPath(current.path, id, centerNode = true)
@@ -109,21 +129,25 @@ private class UnderstandingFileEditor(private val project: Project, private val 
     }
     private val questionSelection = builder.onQuestionBadgeClicked { nodeId ->
         val source = questionCanvas?.sources?.get(nodeId)
-            ?: if (questionCanvas == null) com.master.understanding.ui.SourceNode(record, nodeId) else null
+            ?: if (questionCanvas == null) SourceNode(record, nodeId) else null
         source?.takeIf { questionsForNode(service, it.record, it.nodeId).isNotEmpty() }?.let {
             service.select(it.record, it.nodeId, navigateSource = false)
             openRecordInEditor(project, it.record, it.nodeId, replace = virtualFile)
         }
     }
     private val clusterSelection = builder.onClusterSelected { nodeId ->
-        explorer?.jumpTo(nodeId)
+        val current = explorer ?: return@onClusterSelected
+        if (nodeId == current.currentNodeId || !current.jumpTo(nodeId)) return@onClusterSelected
         choices = emptyList()
         builder.setChoiceTargets(emptySet())
-        explorer?.let { builder.showUnderstandingPath(it.path, nodeId, centerNode = false) }
-        explorer?.let { saveGraphViewState(service, graphKey, builder, it.path, it.currentNodeId) }
+        builder.showUnderstandingPath(current.path, nodeId, centerNode = false)
+        saveGraphViewState(service, graphKey, builder, current.path, current.currentNodeId)
         questionCanvas?.sources?.get(nodeId)?.let {
-            service.select(it.record, it.nodeId, navigateSource = !builder.navigationPinned)
+            val canvas = questionCanvas
+            service.select(it.record, it.nodeId, navigateSource = !builder.navigationPinned,
+                staticPath = projectCanvasPathToSource(canvas, current.path, it))
         }
+        if (questionCanvas == null) service.select(record, nodeId, navigateSource = !builder.navigationPinned)
         updateStepAvailability()
     }
     private val copySelection = builder.onCopyNodeContext { nodeId ->
@@ -132,21 +156,10 @@ private class UnderstandingFileEditor(private val project: Project, private val 
         else if (questionCanvas == null) service.copyNodeContext(record, nodeId)
         builder.showCopied(nodeId)
     }
-    private val addNote = builder.onAddNodeNote { nodeId ->
-        val source = questionCanvas?.sources?.get(nodeId)
-            ?: if (questionCanvas == null) com.master.understanding.ui.SourceNode(record, nodeId) else null
-        source?.let { service.addNodeNote(it.record, it.nodeId) }
-    }
-    private val viewNote = builder.onNoteBadgeClicked { nodeId, component, point ->
-        val source = questionCanvas?.sources?.get(nodeId)
-            ?: if (questionCanvas == null) com.master.understanding.ui.SourceNode(record, nodeId) else null
-        source?.let { service.showNodeNotes(it.record, it.nodeId, component, point) }
-    }
-    private val editTitle = builder.onClusterTitleEdit { clusterId ->
-        val target = if (questionCanvas == null) record else
-            service.repository.recordForQuestion(clusterId)
-        target?.let { service.editRecordTitle(it.id) }
-    }
+    private val content = builder.bindContentActions(service, { nodeId ->
+        questionCanvas?.sources?.get(nodeId) ?: if (questionCanvas == null) SourceNode(record, nodeId) else null
+    }, { id -> questionCanvas?.clusterSources?.get(id) }, titleRecord = record.takeIf { questionCanvas == null })
+
     private val changed = service.onChanged { updateQuestionCounts() }
     private val backButton = JButton("‹ 返回").apply {
         setToolTipText(HtmlChunk.text("返回上一级理解图"))
@@ -225,7 +238,8 @@ private class UnderstandingFileEditor(private val project: Project, private val 
         updateStepAvailability()
         saveGraphViewState(service, graphKey, builder, current.path, current.currentNodeId)
         val source = questionCanvas?.sources?.get(current.currentNodeId)
-        if (source != null) service.select(source.record, source.nodeId, navigateSource = !builder.navigationPinned)
+        if (source != null) service.select(source.record, source.nodeId, navigateSource = !builder.navigationPinned,
+            staticPath = projectCanvasPathToSource(questionCanvas, current.path, source))
         else if (questionCanvas == null) service.select(record, current.currentNodeId,
             navigateSource = !builder.navigationPinned)
     }
@@ -278,9 +292,7 @@ private class UnderstandingFileEditor(private val project: Project, private val 
         questionSelection.close()
         clusterSelection.close()
         copySelection.close()
-        addNote.close()
-        viewNote.close()
-        editTitle.close()
+        content.close()
         changed.close()
         builder.setStepActions(null, null)
         if (questionCanvas == null && !service.repository.readOnly) {

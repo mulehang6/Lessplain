@@ -7,7 +7,7 @@ import com.intellij.mcpserver.annotations.McpTool
 import com.intellij.mcpserver.mcpFail
 import com.intellij.mcpserver.projectOrNull
 import com.master.understanding.ide.UnderstandingService
-import com.master.understanding.storage.pendingQuestions
+import com.master.understanding.model.requireInput
 import kotlinx.coroutines.currentCoroutineContext
 
 class UnderstandingToolset : McpToolset {
@@ -15,36 +15,29 @@ class UnderstandingToolset : McpToolset {
 
     @Suppress("unused")
     @McpTool(name = "get_understanding_context")
-    @McpDescription("读取固定的提问来源。省略 token 时优先读取用户选中的待答节点注释；后续传回 contextToken 可读取同一来源。")
+    @McpDescription("读取固定来源，以及当前理解图及其追问中的全部待答注释。pendingBatch 每项含 questionId、原问题和固定 context，逐条回答后自动移除注释。")
     suspend fun getUnderstandingContext(
         @McpDescription("可选。先前返回的固定来源 token；空字符串表示捕获当前来源。") contextToken: String = "",
+        @McpDescription("可选。复查批量队列时传回 pendingBatch.scopeRecordId，避免界面切换改变范围；不能与 contextToken 同时指定。") pendingScopeRecordId: String = "",
     ): String = runTool {
         val service = service()
-        val pending = if (contextToken.isBlank()) service.selectedPendingQuestion() else null
-        if (contextToken.isBlank() && pending == null && service.repository.pendingQuestions().size > 1) {
-            mcpFail("存在多条待答注释，请先在节点的注释气泡中选中目标")
-        }
+        requireInput(contextToken.isBlank() || pendingScopeRecordId.isBlank(), "固定来源与批量范围不能同时指定")
         val context = when {
             contextToken.isNotBlank() -> service.core.context(contextToken)
-            pending != null -> service.core.context(pending.contextToken)
+            pendingScopeRecordId.isNotBlank() -> service.core.captureContext(pendingScopeRecordId)
             else -> service.captureCurrentContext()
         }
-        val record = context.recordId?.let(service.repository::getRecord)?.copy(answer = "")
-        val questions = (service.repository.questionsForContext(context.token) +
-            (record?.let { service.repository.questionsForRecord(it.id) } ?: emptyList()))
-            .distinctBy { it.id }
-        gson.toJson(mapOf("context" to context, "record" to record, "questions" to questions,
-            "pendingQuestionId" to pending?.id))
+        gson.toJson(understandingContextPayload(service.repository, context))
     }
 
     @Suppress("unused")
     @McpTool(name = "present_understanding")
     @McpDescription("保存或修订代码理解图。必须有实际图节点，不接受纯文字回答；节点和关系标签保持简短，不提交坐标。")
     suspend fun presentUnderstanding(
-        @McpDescription("协议版本，当前为 1。") schemaVersion: Int,
+        @McpDescription("协议版本，当前只接受 3。") schemaVersion: Int,
         @McpDescription("此次写入的唯一请求 ID；相同内容重试返回原结果。") requestId: String,
         @McpDescription("问题原文。") question: String,
-        @McpDescription("JSON 对象，含 nodes、edges、evidence 数组。关系类型为 control_flow、call、data_flow、dependency 或 structure。") graph: String,
+        @McpDescription("JSON 对象，含 nodes、edges、evidence，不支持 clusters。节点 flowRoles 可含 start、end 或两者；endOutcome 可选 success/failure，必须具有 end 角色，省略表示未分类。失败包括业务拒绝与异常。起止角色与结果按源码语义标注；分支图标由插件按不同的可浏览后继数自动计算，不提交 decision。关系类型为 control_flow、call、data_flow、dependency 或 structure。") graph: String,
         @McpDescription("归属：root、child、sibling、explicit 或 revise。revise 更新原记录的图。") placement: String,
         @McpDescription("可选的简短显示标题；原始问题另行保留。") displayTitle: String = "",
         @McpDescription("固定来源 token；问题已复制时可由 questionId 取得。") contextToken: String = "",

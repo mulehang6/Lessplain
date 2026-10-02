@@ -34,12 +34,16 @@ internal data class FollowUpLayer(val recordId: String, val nodeId: String)
 
 internal data class SourceNode(val record: UnderstandingRecord, val nodeId: String)
 
+internal data class CanvasSourceEdge(val record: UnderstandingRecord, val edgeId: String)
+
 internal data class QuestionCanvas(
     val record: UnderstandingRecord,
     val clusters: List<DiagramCluster>,
     val sources: Map<String, SourceNode>,
     val questionCounts: Map<String, Int>,
     val examplePanels: List<DiagramExamplePanel>,
+    val clusterSources: Map<String, SourceCluster> = emptyMap(),
+    val edgeSources: Map<String, CanvasSourceEdge> = emptyMap(),
 )
 
 /** One node's questions share a single canvas, with one navigable cluster per question. */
@@ -72,7 +76,11 @@ internal fun QuestionIndexView(
         }
     }
     DisposableEffect(diagram, service.panelFocusQuestionId) {
-        service.panelFocusQuestionId?.let(diagram::requestFocusCluster)
+        service.panelFocusQuestionId?.let { questionId ->
+            canvas.clusters.firstOrNull { cluster ->
+                cluster.id == questionId || canvas.clusterSources[cluster.id]?.record?.questionId == questionId
+            }?.id?.let(diagram::requestFocusCluster)
+        }
         onDispose { }
     }
     DisposableEffect(diagram, hierarchy, onNavigateIndex) {
@@ -102,7 +110,8 @@ internal fun QuestionIndexView(
             diagram.setStepAvailability(current.path.isNotEmpty(), current.availableEdges().isNotEmpty())
             saveGraphViewState(service, graphKey, diagram, current.path, current.currentNodeId)
             canvas.sources[current.currentNodeId]?.let {
-                service.select(it.record, it.nodeId, navigateSource = !diagram.navigationPinned)
+                service.select(it.record, it.nodeId, navigateSource = !diagram.navigationPinned,
+                    staticPath = projectCanvasPathToSource(canvas, current.path, it))
             }
         }
         diagram.setStepActions(
@@ -125,9 +134,12 @@ internal fun QuestionIndexView(
             val current = explorer
             if (current != null) {
                 val chosen = choices.firstOrNull { it.to == id }
-                if (chosen != null) current.choose(chosen.id) else current.jumpTo(id)
-                choices = emptyList()
-                updatePath()
+                if (chosen == null && id == current.currentNodeId) return@onNodeSelected
+                val moved = if (chosen != null) current.choose(chosen.id) is StepResult.Moved else current.jumpTo(id)
+                if (moved) {
+                    choices = emptyList()
+                    updatePath()
+                }
             } else canvas.sources[id]?.let {
                 service.select(it.record, it.nodeId, navigateSource = !diagram.navigationPinned)
             }
@@ -137,7 +149,22 @@ internal fun QuestionIndexView(
                 source.record.id == recordId && source.nodeId == nodeId
             }?.key
             val current = explorer
-            if (id != null && current != null && id != current.currentNodeId && current.jumpTo(id)) {
+            if (id != null && current != null) {
+                val previousNodeId = current.currentNodeId
+                val previousPath = current.path
+                val source = canvas.sources.getValue(id)
+                val sourceBrowse = service.graphStates.get(GraphLayerKey(source.record.id)).browse
+                    ?: service.repository.getBrowseState(source.record.id)
+                val sourcePath = sourceBrowse?.takeIf { it.nodeId == source.nodeId }?.staticPath.orEmpty()
+                val projectedPath = projectSourcePathToCanvas(canvas, sourcePath, source, id)
+                val browse = graphBrowseState(service, graphKey)
+                val restored = projectedPath?.let { current.restorePath(it, id) }
+                    ?: browse?.takeIf { state -> state.nodeId == id }
+                        ?.let { state -> current.restorePath(state.staticPath, id) }
+                    ?: current.jumpTo(id)
+                if (restored && previousNodeId == current.currentNodeId && previousPath == current.path) {
+                    return@onSelectionChanged
+                }
                 choices = emptyList()
                 diagram.setChoiceTargets(emptySet())
                 diagram.showUnderstandingPath(current.path, id, centerNode = true)
@@ -151,32 +178,23 @@ internal fun QuestionIndexView(
                 diagram.showCopied(id)
             }
         }
-        val addNote = diagram.onAddNodeNote { id ->
-            canvas.sources[id]?.let { service.addNodeNote(it.record, it.nodeId) }
-        }
-        val viewNote = diagram.onNoteBadgeClicked { id, component, point ->
-            canvas.sources[id]?.let { service.showNodeNotes(it.record, it.nodeId, component, point) }
-        }
-        val editTitle = diagram.onClusterTitleEdit { id ->
-            questions.firstOrNull { it.id == id }?.let { question ->
-                service.repository.recordForQuestion(question.id)?.let { service.editRecordTitle(it.id) }
-            }
-        }
+        val content = diagram.bindContentActions(service, canvas.sources::get, canvas.clusterSources::get)
         val questionSelection = diagram.onQuestionBadgeClicked { id ->
             canvas.sources[id]?.takeIf { questionsForNode(service, it.record, it.nodeId).isNotEmpty() }?.let {
                 onChildQuestions(it.record, it.nodeId)
             }
         }
         val clusterSelection = diagram.onClusterSelected { id ->
-            explorer?.jumpTo(id)
+            val current = explorer ?: return@onClusterSelected
+            if (id == current.currentNodeId || !current.jumpTo(id)) return@onClusterSelected
             choices = emptyList()
             diagram.setChoiceTargets(emptySet())
-            explorer?.let { diagram.showUnderstandingPath(it.path, id, centerNode = false) }
-            diagram.setStepAvailability(explorer?.path?.isNotEmpty() == true,
-                explorer?.availableEdges()?.isNotEmpty() == true)
-            explorer?.let { saveGraphViewState(service, graphKey, diagram, it.path, it.currentNodeId) }
-            canvas.sources[id]?.let {
-                service.select(it.record, it.nodeId, navigateSource = !diagram.navigationPinned)
+            diagram.showUnderstandingPath(current.path, id, centerNode = false)
+            diagram.setStepAvailability(current.path.isNotEmpty(), current.availableEdges().isNotEmpty())
+            saveGraphViewState(service, graphKey, diagram, current.path, current.currentNodeId)
+            canvas.sources[id]?.let { source ->
+                service.select(source.record, source.nodeId, navigateSource = !diagram.navigationPinned,
+                    staticPath = projectCanvasPathToSource(canvas, current.path, source))
             }
         }
         onDispose {
@@ -184,9 +202,7 @@ internal fun QuestionIndexView(
             selection.close()
             sourceSelection.close()
             copy.close()
-            addNote.close()
-            viewNote.close()
-            editTitle.close()
+            content.close()
             questionSelection.close()
             clusterSelection.close()
             diagram.setStepActions(null, null)
@@ -226,41 +242,47 @@ internal fun buildQuestionCanvas(
     revision: Int,
 ): QuestionCanvas {
     val nodes = mutableListOf<GraphNode>()
-    val edges = mutableListOf<com.master.understanding.model.GraphEdge>()
+    val edges = mutableListOf<GraphEdge>()
     val evidence = mutableListOf<com.master.understanding.model.Evidence>()
     val clusters = mutableListOf<DiagramCluster>()
     val sources = linkedMapOf<String, SourceNode>()
     val counts = linkedMapOf<String, Int>()
     val panels = mutableListOf<DiagramExamplePanel>()
+    val clusterSources = linkedMapOf<String, SourceCluster>()
+    val edgeSources = linkedMapOf<String, CanvasSourceEdge>()
     questions.forEach { question ->
         val child = service.repository.recordForQuestion(question.id)
         if (child == null) return@forEach
         val prefix = "q${question.id}_"
         run {
-            val ids = child.graph.nodes.mapTo(linkedSetOf()) { prefix + it.id }
             child.graph.nodes.forEach { node ->
                 val id = prefix + node.id
                 nodes += node.copy(id = id, evidenceIds = node.evidenceIds.map { prefix + it })
                 sources[id] = SourceNode(child, node.id)
             }
             child.graph.edges.forEach { edge ->
-                edges += edge.copy(id = prefix + edge.id, from = prefix + edge.from, to = prefix + edge.to,
+                val canvasEdgeId = prefix + edge.id
+                edges += edge.copy(id = canvasEdgeId, from = prefix + edge.from, to = prefix + edge.to,
                     evidenceIds = edge.evidenceIds.map { prefix + it })
+                edgeSources[canvasEdgeId] = CanvasSourceEdge(child, edge.id)
             }
             child.graph.evidence.forEach { item -> evidence += item.copy(id = prefix + item.id) }
             service.repository.questionsForRecord(child.id).forEach { nested ->
                 val target = service.repository.getContext(nested.contextToken).nodeId
                 if (target != null) counts[prefix + target] = (counts[prefix + target] ?: 0) + 1
             }
-            clusters += DiagramCluster(question.id, child.displayTitle ?: question.text, ids)
-            examplePanel(question, child, prefix)?.let(panels::add)
+            questionClusterMapping(question, child, prefix).forEachIndexed { index, (cluster, source) ->
+                clusters += cluster
+                clusterSources[cluster.id] = source
+                if (index == 0) examplePanel(question, child, prefix)?.copy(clusterId = cluster.id)?.let(panels::add)
+            }
         }
     }
     return QuestionCanvas(
         UnderstandingRecord("questions:${owner.id}:$ownerNodeId", revision, owner.id, null,
             owner.graph.nodes.firstOrNull { it.id == ownerNodeId }?.label ?: "追问", "", null,
             UnderstandingGraph(nodes, edges, evidence), owner.createdAt),
-        clusters, sources, counts, panels,
+        clusters, sources, counts, panels, clusterSources, edgeSources,
     )
 }
 

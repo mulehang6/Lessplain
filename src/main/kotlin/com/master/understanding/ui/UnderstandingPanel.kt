@@ -29,7 +29,6 @@ import com.master.understanding.diagram.createUnderstandingDiagram
 import com.master.understanding.diagram.bindGraphState
 import com.master.understanding.diagram.graphBrowseState
 import com.master.understanding.diagram.saveGraphViewState
-import com.master.understanding.diagram.rootDiagramCluster
 import com.master.understanding.ide.GraphLayerKey
 import com.master.understanding.ide.UnderstandingService
 import com.master.understanding.ide.PanelPage
@@ -183,8 +182,7 @@ private fun RecordView(
     var choices by remember(record.id, record.revision) { mutableStateOf<List<com.master.understanding.model.GraphEdge>>(emptyList()) }
     val current = remember(pathRevision, record.id, record.revision) { explorer.currentNodeId }
     val diagram = remember(record.id, record.revision) {
-        runCatching { createUnderstandingDiagram(record, graphBrowseState(service, graphKey),
-            clusters = listOf(rootDiagramCluster(record))).apply {
+        runCatching { createUnderstandingDiagram(record, graphBrowseState(service, graphKey)).apply {
             bindGraphState(service, graphKey)
         } }
     }
@@ -199,12 +197,16 @@ private fun RecordView(
         }
         val selection = diagram.getOrNull()?.onNodeSelected { nodeId ->
             val chosen = choices.firstOrNull { it.to == nodeId }
-            if (choices.isNotEmpty() && chosen == null) return@onNodeSelected
+            if (chosen == null && nodeId == explorer.currentNodeId) return@onNodeSelected
+            val previousNodeId = explorer.currentNodeId
+            val previousPath = explorer.path
             val moved = if (chosen != null) explorer.choose(chosen.id) is StepResult.Moved else explorer.jumpTo(nodeId)
             if (moved) {
                 choices = emptyList()
-                pathRevision++
-                persistPath(service, record, explorer)
+                if (previousNodeId != explorer.currentNodeId || previousPath != explorer.path) {
+                    pathRevision++
+                    persistPath(service, record, explorer)
+                }
                 service.select(record, nodeId, navigateSource = diagram.getOrNull()?.navigationPinned != true)
             }
         }
@@ -213,15 +215,27 @@ private fun RecordView(
             service.copyNodeContext(record, nodeId)
             diagram.getOrNull()?.showCopied(nodeId)
         }
-        val addNote = diagram.getOrNull()?.onAddNodeNote { service.addNodeNote(record, it) }
-        val viewNote = diagram.getOrNull()?.onNoteBadgeClicked { nodeId, component, point ->
-            service.showNodeNotes(record, nodeId, component, point)
+        val content = diagram.getOrNull()?.bindContentActions(service, { SourceNode(record, it) },
+            { null }, titleRecord = record)
+        val clusterSelection = diagram.getOrNull()?.onClusterSelected { nodeId ->
+            if (nodeId == explorer.currentNodeId) return@onClusterSelected
+            if (!explorer.jumpTo(nodeId)) return@onClusterSelected
+            choices = emptyList()
+            pathRevision++
+            persistPath(service, record, explorer)
+            service.select(record, nodeId, navigateSource = diagram.getOrNull()?.navigationPinned != true)
         }
-        val editTitle = diagram.getOrNull()?.onClusterTitleEdit { service.editRecordTitle(record.id) }
         val synchronization = service.onSelectionChanged { recordId, nodeId ->
             if (recordId == record.id) {
                 nodeId?.let {
-                    if (it != explorer.currentNodeId && explorer.jumpTo(it)) {
+                    val previousNodeId = explorer.currentNodeId
+                    val previousPath = explorer.path
+                    val browse = graphBrowseState(service, graphKey)
+                    val restored = browse?.takeIf { state -> state.nodeId == it }
+                        ?.let { state -> explorer.restorePath(state.staticPath, it) }
+                        ?: explorer.jumpTo(it)
+                    if (!restored || previousNodeId != explorer.currentNodeId || previousPath != explorer.path) {
+                        choices = emptyList()
                         pathRevision++
                         persistPath(service, record, explorer)
                     }
@@ -233,9 +247,8 @@ private fun RecordView(
             selection?.close()
             questionSelection?.close()
             copySelection?.close()
-            addNote?.close()
-            viewNote?.close()
-            editTitle?.close()
+            content?.close()
+            clusterSelection?.close()
             synchronization.close()
             diagram.getOrNull()?.let { builder ->
                 persistView(service, record, builder, explorer)
@@ -304,7 +317,10 @@ private fun persistPath(service: UnderstandingService, record: UnderstandingReco
     }
     if (!service.repository.readOnly) {
         val previous = service.repository.getBrowseState(record.id)
-        service.repository.saveBrowseState((previous ?: BrowseState(record.id)).copy(staticPath = explorer.path))
+        service.repository.saveBrowseState((previous ?: BrowseState(record.id)).copy(
+            nodeId = explorer.currentNodeId,
+            staticPath = explorer.path,
+        ))
     }
 }
 

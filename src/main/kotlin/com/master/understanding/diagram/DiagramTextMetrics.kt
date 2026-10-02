@@ -35,15 +35,16 @@ internal object DiagramTextMetrics {
             } finally { graphics.dispose() }
         }
 
-    fun nodeSize(label: String, question: Boolean): Pair<Double, Double> {
+    fun nodeSize(label: String, question: Boolean, branch: Boolean = false): Pair<Double, Double> {
         val font = font()
         val graphics = image.get().createGraphics()
         try {
             graphics.font = font
             val metrics = graphics.fontMetrics
             val longest = label.split('\n').maxOfOrNull(metrics::stringWidth) ?: 0
-            val width = if (question) 330 else (longest + 28).coerceIn(180, 260)
-            val count = lines(label, width - 24, font).size.coerceIn(1, 3)
+            val inset = DiagramNodeSemantics.textInset(font, branch)
+            val width = if (question) 330 else (longest + 28 + inset).coerceIn(180, 260)
+            val count = lines(label, width - 24 - inset, font).size.coerceIn(1, 3)
             return width.toDouble() to (count * metrics.height + 28).coerceAtLeast(56).toDouble()
         } finally { graphics.dispose() }
     }

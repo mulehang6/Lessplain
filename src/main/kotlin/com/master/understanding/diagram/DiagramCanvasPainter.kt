@@ -32,6 +32,9 @@ internal data class DiagramPaintState(
     val animateFlow: Boolean,
     val flowPhase: Float,
     val controlHeight: Int,
+    val titleState: DiagramTitleState = DiagramTitleState(),
+    val branchIds: Set<String> = emptySet(),
+    val draftNoteNodes: Set<String> = emptySet(),
 )
 
 /** Paints the canvas from a snapshot; input and navigation remain in the diagram view. */
@@ -61,7 +64,7 @@ internal object DiagramCanvasPainter {
                 g.color = clusterBorder
                 g.stroke = BasicStroke(2f)
                 g.drawRoundRect(b.x.toInt(), b.y.toInt(), b.width.toInt(), b.height.toInt(), 18, 18)
-                DiagramClusterText.paint(g, cluster)
+                DiagramClusterText.paint(g, cluster, state.titleState)
                 val panel = state.examplePanels.firstOrNull { it.clusterId == cluster.id }
                 if (panel != null && cluster.exampleBounds != null) {
                     DiagramExamplePainter.paint(g, cluster.exampleBounds, panel, state.currentNodeId)
@@ -71,7 +74,7 @@ internal object DiagramCanvasPainter {
                 state.flowPhase, visible)
             DiagramNodePainter.paint(g, state.layout, state.currentNodeId, state.hoveredNodeId,
                 state.questionCounts, state.pendingNoteCounts, state.startIds, state.endIds, state.choiceTargets,
-                state.choicePhase, state.copiedNodeId, visible)
+                state.choicePhase, state.copiedNodeId, visible, state.branchIds, state.draftNoteNodes)
             if (state.choiceTargets.isNotEmpty()) {
                 val overlay = graphics.create() as Graphics2D
                 try {
@@ -88,6 +91,7 @@ internal object DiagramCanvasPainter {
     private fun paintActionTooltip(graphics: Graphics, state: DiagramPaintState) {
         val id = state.hoveredNodeId ?: return
         val action = state.hoveredAction ?: return
+        if (action == DiagramNodeAction.NOTE && (state.pendingNoteCounts[id] ?: 0) > 0) return
         val bounds = state.layout.nodes[id]?.bounds ?: return
         val actionBounds = when (action) {
             DiagramNodeAction.COPY -> DiagramNodePainter.copyBounds(bounds)
@@ -97,7 +101,11 @@ internal object DiagramCanvasPainter {
         val label = when (action) {
             DiagramNodeAction.COPY -> "复制"
             DiagramNodeAction.QUESTIONS -> "查看 ${state.questionCounts[id] ?: 0} 个追问"
-            DiagramNodeAction.NOTE -> "查看待答注释"
+            DiagramNodeAction.NOTE -> when {
+                (state.pendingNoteCounts[id] ?: 0) > 0 -> "查看待答注释"
+                id in state.draftNoteNodes -> "继续编辑注释"
+                else -> "添加注释"
+            }
         }
         val g = graphics.create() as Graphics2D
         try {

@@ -50,17 +50,17 @@ class UnderstandingCoreTest {
         assertTrue(prepared.payload.contains(prepared.question.id))
         assertTrue(prepared.payload.contains(source.token))
 
-        val rootRecord = core.present(1, "create-a", "主问题", graph, "root")
+        val rootRecord = core.present(3, "create-a", "主问题", graph, "root")
         val graphContext = core.captureContext(rootRecord.id, "start", source.anchor)
         val childQuestion = core.prepareQuestion("这条分支为什么存在？", graphContext.token)
-        val child = core.present(1, "create-child", childQuestion.question.text, graph, "child", questionId = childQuestion.question.id)
+        val child = core.present(3, "create-child", childQuestion.question.text, graph, "child", questionId = childQuestion.question.id)
         assertEquals(rootRecord.id, child.parentId)
         assertEquals(rootRecord.id, repository.getQuestion(childQuestion.question.id).ownerRecordId)
         assertEquals(childQuestion.question.id, repository.questionsForRecord(rootRecord.id).single().id)
         assertEquals(child.id, repository.recordForQuestion(childQuestion.question.id)?.id)
-        assertEquals(child.id, core.present(1, "create-child", childQuestion.question.text, graph, "child", questionId = childQuestion.question.id).id)
+        assertEquals(child.id, core.present(3, "create-child", childQuestion.question.text, graph, "child", questionId = childQuestion.question.id).id)
         assertFailsWith<UnderstandingInputException> {
-            core.present(1, "create-child", childQuestion.question.text, graph, "child",
+            core.present(3, "create-child", childQuestion.question.text, graph, "child",
                 questionId = childQuestion.question.id, displayTitle = "不同标题")
         }
 
@@ -84,11 +84,36 @@ class UnderstandingCoreTest {
     }
 
     @Test
+    fun `captured node context truncates or clears a route to match its node`() {
+        UnderstandingRepository(root).use { repository ->
+            val core = UnderstandingCore(repository)
+            val routeGraph = UnderstandingGraph(
+                nodes = listOf(GraphNode("a", "A"), GraphNode("b", "B"), GraphNode("c", "C"), GraphNode("d", "D")),
+                edges = listOf(
+                    GraphEdge("ab", "a", "b", "control_flow"),
+                    GraphEdge("bc", "b", "c", "data_flow"),
+                    GraphEdge("cd", "c", "d", "call"),
+                ),
+            )
+            val record = core.present(3, "context-route", "路由上下文", routeGraph, "root")
+
+            val earlierNode = core.captureContext(record.id, "b", staticPath = listOf("ab", "bc"))
+            assertEquals(listOf("ab"), earlierNode.staticPath)
+
+            val offRouteNode = core.captureContext(record.id, "d", staticPath = listOf("ab", "bc"))
+            assertEquals(emptyList(), offRouteNode.staticPath)
+
+            val nodeOnly = core.captureContext(record.id, "c")
+            assertEquals(emptyList(), nodeOnly.staticPath)
+        }
+    }
+
+    @Test
     fun `invalid references and second writer fail explicitly`() {
         UnderstandingRepository(root).use { first ->
             val core = UnderstandingCore(first)
             assertFailsWith<UnderstandingInputException> {
-                core.present(1, "no-source", "问题", graph, "child")
+                core.present(3, "no-source", "问题", graph, "child")
             }
             assertFailsWith<UnderstandingInputException> { core.context("missing") }
             UnderstandingRepository(root).use { second ->
@@ -106,16 +131,16 @@ class UnderstandingCoreTest {
     fun `present from copied node context creates a visible child question`() {
         UnderstandingRepository(root).use { repository ->
             val core = UnderstandingCore(repository)
-            val parent = core.present(1, "parent", "主图", graph, "root")
+            val parent = core.present(3, "parent", "主图", graph, "root")
             val context = core.captureContext(parent.id, "start")
-            val child = core.present(1, "copied-node-answer", "这一行做什么？", graph,
+            val child = core.present(3, "copied-node-answer", "这一行做什么？", graph,
                 "child", contextToken = context.token)
             assertEquals(parent.id, child.parentId)
             val savedQuestion = repository.questionsForRecord(parent.id).single()
             assertEquals(child.questionId, savedQuestion.id)
             assertEquals("start", repository.getContext(savedQuestion.contextToken).nodeId)
             assertEquals(child.id, repository.recordForQuestion(savedQuestion.id)?.id)
-            assertEquals(child.id, core.present(1, "copied-node-answer", "这一行做什么？", graph,
+            assertEquals(child.id, core.present(3, "copied-node-answer", "这一行做什么？", graph,
                 "child", contextToken = context.token).id)
         }
     }
@@ -147,10 +172,9 @@ class UnderstandingCoreTest {
         assertEquals(StepResult.Moved("lookup"), explorer.next())
         assertTrue(explorer.next() is StepResult.Choose)
         assertTrue(explorer.jumpTo("ok"))
-        assertEquals(listOf("call-login", "found"), explorer.path)
+        assertEquals(emptyList(), explorer.path)
         assertEquals("ok", explorer.currentNodeId)
-        assertTrue(explorer.back())
-        assertEquals("lookup", explorer.currentNodeId)
+        assertFalse(explorer.back())
         assertEquals("ok", StaticExplorer(flow, savedNodeId = "ok").currentNodeId)
     }
 
@@ -184,6 +208,13 @@ class UnderstandingCoreTest {
             ),
         )
         val explorer = StaticExplorer(twoQuestions, savedNodeId = "result")
+        assertEquals(emptyList(), explorer.path)
+        assertEquals("result", explorer.currentNodeId)
+        assertEquals(StepResult.End, explorer.next())
+        assertTrue(explorer.jumpTo("request"))
+        assertEquals(emptyList(), explorer.path)
+        assertEquals(StepResult.Moved("read"), explorer.next())
+        assertEquals(StepResult.Moved("result"), explorer.next())
         assertEquals(listOf("read-edge", "result-edge"), explorer.path)
         assertTrue(explorer.back())
         assertEquals("read", explorer.currentNodeId)
@@ -231,23 +262,23 @@ class UnderstandingCoreTest {
         assertEquals(StepResult.End, explorer.next())
 
         val restoredAtBranch = StaticExplorer(nested, savedNodeId = "read")
-        assertEquals(listOf("e1"), restoredAtBranch.path)
-        assertTrue(restoredAtBranch.back())
-        assertEquals("request", restoredAtBranch.currentNodeId)
+        assertEquals(emptyList(), restoredAtBranch.path)
+        assertFalse(restoredAtBranch.back())
+        assertEquals("read", restoredAtBranch.currentNodeId)
     }
 
     @Test
     fun `hierarchy includes descendants below the current question and sibling branches`() {
         UnderstandingRepository(root).use { repository ->
             val core = UnderstandingCore(repository)
-            val parent = core.present(1, "hierarchy-root", "主问题", graph, "root")
-            val child = core.present(1, "hierarchy-child", "第一层", graph, "child",
+            val parent = core.present(3, "hierarchy-root", "主问题", graph, "root")
+            val child = core.present(3, "hierarchy-child", "第一层", graph, "child",
                 contextToken = core.captureContext(parent.id, "start").token)
-            val grandchild = core.present(1, "hierarchy-grandchild", "第二层", graph, "child",
+            val grandchild = core.present(3, "hierarchy-grandchild", "第二层", graph, "child",
                 contextToken = core.captureContext(child.id, "yes").token)
-            core.present(1, "hierarchy-great-grandchild", "第三层", graph, "child",
+            core.present(3, "hierarchy-great-grandchild", "第三层", graph, "child",
                 contextToken = core.captureContext(grandchild.id, "no").token)
-            core.present(1, "hierarchy-sibling", "另一分支", graph, "child",
+            core.present(3, "hierarchy-sibling", "另一分支", graph, "child",
                 contextToken = core.captureContext(parent.id, "no").token)
 
             val entries = graphHierarchyEntries(repository, parent.id)

@@ -1,6 +1,7 @@
 package com.master.understanding.diagram
 
 import com.master.understanding.model.UnderstandingGraph
+import com.master.understanding.model.branchNodeIds
 
 /** Measured, toolkit-neutral input prepared before invoking ELK. */
 internal data class DiagramLayoutInput(
@@ -16,8 +17,9 @@ internal data class DiagramLayoutInput(
             clusters: List<DiagramCluster> = emptyList(),
             examplePanels: List<DiagramExamplePanel> = emptyList()): DiagramLayoutInput {
             val questionIndex = graph.edges.isEmpty() && graph.nodes.all { it.kind == "question" }
+            val branches = graph.branchNodeIds()
             return DiagramLayoutInput(graph, direction, clusters, examplePanels,
-                graph.nodes.associate { it.id to DiagramTextMetrics.nodeSize(it.label, questionIndex) },
+                graph.nodes.associate { it.id to DiagramTextMetrics.nodeSize(it.label, questionIndex, it.id in branches) },
                 graph.edges.mapNotNull { edge ->
                     edge.condition?.takeIf(String::isNotBlank)?.let { condition ->
                         edge.id to DiagramTextMetrics.edgeLabelSize(condition)

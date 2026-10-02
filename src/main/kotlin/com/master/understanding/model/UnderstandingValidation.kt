@@ -24,6 +24,9 @@ fun UnderstandingGraph.validate() {
     requireInput(edgeIds.all(String::isNotBlank) && edgeIds.distinct().size == edgeIds.size, "关系 ID 为空或重复")
     requireInput(evidenceIds.all(String::isNotBlank) && evidenceIds.distinct().size == evidenceIds.size, "证据 ID 为空或重复")
     nodes.forEach { node ->
+        requireInput(node.flowRoles.all { it in setOf("start", "end") }, "节点 ${node.id} 起止角色无效")
+        requireInput(node.endOutcome == null || node.endOutcome in setOf("success", "failure"), "节点 ${node.id} 结束结果无效")
+        requireInput(node.endOutcome == null || "end" in node.flowRoles, "节点 ${node.id} 结束结果需要 end 角色")
         requireInput(node.label.isNotBlank(), "节点 ${node.id} 缺少标签")
         node.anchor?.validate()
         requireInput(node.evidenceIds.all(evidenceIds::contains), "节点 ${node.id} 引用未知证据")

@@ -4,6 +4,7 @@ import com.intellij.openapi.Disposable
 import com.master.understanding.core.StaticExplorer
 import com.master.understanding.model.BrowseState
 import com.master.understanding.model.UnderstandingRecord
+import com.master.understanding.model.branchNodeIds
 import com.master.understanding.ide.GraphNodePosition
 import com.master.understanding.ide.GraphLayoutPreference
 import java.awt.Dimension
@@ -17,8 +18,6 @@ import java.awt.geom.Rectangle2D
 import javax.swing.JComponent
 import javax.swing.JPanel
 import javax.swing.Timer
-import javax.swing.JMenuItem
-import javax.swing.JPopupMenu
 import javax.swing.ToolTipManager
 import kotlin.math.max
 import kotlin.math.min
@@ -40,6 +39,7 @@ internal class UnderstandingDiagram(
     private val layoutCoordinator = DiagramLayoutCoordinator(layoutComputer, ::onLayoutResult)
     internal var layoutReady = false
         private set
+    internal val layoutBusy: Boolean get() = layoutCoordinator.busy
     internal var layoutFailure: String? = null
         private set
     internal var activeDirection = LayoutDirection.VERTICAL
@@ -60,14 +60,14 @@ internal class UnderstandingDiagram(
     internal val titleCallbacks = mutableSetOf<(String) -> Unit>()
     internal var questionCounts = emptyMap<String, Int>()
     internal var pendingNoteCounts = emptyMap<String, Int>()
-    private val startIds = record.graph.nodes.filter { node ->
-        node.kind != "placeholder" && record.graph.edges.none { it.to == node.id }
-    }.mapTo(mutableSetOf()) { it.id }
-    private val endIds = record.graph.nodes.filter { node ->
-        node.kind != "placeholder" && record.graph.edges.none { it.from == node.id }
-    }.mapTo(mutableSetOf()) { it.id }
+    internal var draftNoteNodes = emptySet<String>()
+    internal val nodeIds = record.graph.nodes.mapTo(hashSetOf()) { it.id }
+    internal val branchIds = record.graph.branchNodeIds()
+    internal val startIds = record.graph.nodes.filter { "start" in it.flowRoles }.mapTo(hashSetOf()) { it.id }
+    internal val endIds = record.graph.nodes.filter { "end" in it.flowRoles }.mapTo(hashSetOf()) { it.id }
     internal var hoveredNodeId: String? = null
     internal var hoveredAction: DiagramNodeAction? = null
+    internal val overlays = DiagramOverlayInteraction(this)
     internal var selectedNodeId = initialState?.nodeId ?: record.graph.nodes.firstOrNull()?.id
     internal var currentNodeId = selectedNodeId
     internal var routeEdgeIds = emptySet<String>()
@@ -90,6 +90,8 @@ internal class UnderstandingDiagram(
     private var viewportChanged: (() -> Unit)? = null
     private var stateSubscription: AutoCloseable? = null
 
+    internal val header = DiagramHeader(if (clusterSpecs.isEmpty()) record.displayTitle ?: record.question
+        else "节点追问 · ${record.question}")
     val jComponent: JComponent get() = this
     val center: Point2D.Double get() = Point2D.Double(centerX, centerY)
     var centerX: Double = layout.bounds.centerX
@@ -192,11 +194,14 @@ internal class UnderstandingDiagram(
     }
 
     fun arrangeNodes() {
+        if (!layoutReady) { requestLayout(); return }
         if (nodePositions.isNotEmpty()) {
             setNodePositions(emptyMap())
             nodePositionsChanged?.invoke(emptyMap())
         }
-        requestLayout()
+        layoutFailure = null
+        layoutCoordinator.request(activeDirection)
+        repaint()
     }
 
     fun setLayoutPreference(value: GraphLayoutPreference, persist: Boolean = true) {
@@ -248,6 +253,7 @@ internal class UnderstandingDiagram(
                     ?: currentNodeId?.let(::centerOnNode)
             }
             controls.refreshClusters()
+            applyPendingClusterFocus()
             repaint()
         }.onFailure { failure ->
             layoutFailure = failure.message ?: failure.javaClass.simpleName
@@ -293,6 +299,7 @@ internal class UnderstandingDiagram(
 
     init {
         setLayout(null)
+        add(header)
         add(controls)
         add(controls.sideControls)
         add(controls.previousButton)
@@ -317,10 +324,7 @@ internal class UnderstandingDiagram(
         addComponentListener(object : ComponentAdapter() {
             override fun componentResized(event: ComponentEvent) {
                 if (!initializedViewport && width > 0 && height > 0) initializeViewport()
-                pendingFocusClusterId?.let { id ->
-                    pendingFocusClusterId = null
-                    focusCluster(id, animate = false)
-                }
+                applyPendingClusterFocus()
                 if (autoFollowNode) pendingCenterNodeId?.let { centerOnNode(it) }
             }
         })
@@ -334,6 +338,8 @@ internal class UnderstandingDiagram(
     }
 
     override fun getToolTipText(event: MouseEvent): String? {
+        noteActionAt(event.point)?.let { return if (hasNodeNote(it)) null else "添加注释" }
+        clusterEditAt(event.point)?.let { return "编辑标题" }
         copyActionAt(event.point)?.let { return "复制" }
         questionActionAt(event.point)?.let { return "查看 ${questionCounts.getValue(it)} 个追问" }
         return nodeAt(event.point)?.takeIf { it == hoveredNodeId }?.let { id ->
@@ -357,6 +363,7 @@ internal class UnderstandingDiagram(
 
     override fun doLayout() {
         controls.arrange(width)
+        header.arrange(width, controls.bounds, controls.components.first().height)
         controls.arrangeSide(width, height)
         controls.arrangeSteps(width, height)
         super.doLayout()
@@ -403,16 +410,6 @@ internal class UnderstandingDiagram(
         repaint()
     }
 
-    internal fun showNodeMenu(nodeId: String, point: java.awt.Point) {
-        JPopupMenu().apply {
-            add(JMenuItem("添加注释").apply {
-                isEnabled = addNoteCallbacks.isNotEmpty()
-                addActionListener { addNoteCallbacks.toList().forEach { it(nodeId) } }
-            })
-            show(this@UnderstandingDiagram, point.x, point.y)
-        }
-    }
-
     fun setQuestionCounts(counts: Map<String, Int>) {
         val ids = record.graph.nodes.mapTo(hashSetOf()) { it.id }
         questionCounts = counts.filter { (id, count) -> id in ids && count > 0 }
@@ -434,9 +431,9 @@ internal class UnderstandingDiagram(
 
     internal fun selectUnderstandingNode(nodeId: String, notify: Boolean) {
         if (nodeId !in layout.nodes) return
-        if (notify && choiceTargets.isNotEmpty() && nodeId !in choiceTargets) return
         selectedNodeId = nodeId
         currentNodeId = nodeId
+        overlays.rememberTarget(nodeId)
         if (autoFollowNode) centerOnNode(nodeId)
         if (notify) callbacks.toList().forEach { it(nodeId) }
         repaint()
@@ -448,7 +445,7 @@ internal class UnderstandingDiagram(
             zoom, centerX, centerY, currentNodeId, hoveredNodeId, hoveredAction, questionCounts,
             pendingNoteCounts,
             startIds, endIds, routeEdgeIds, choiceTargets, choicePhase, copiedNodeId,
-            animateFlow, flowPhase, controls.height))
+            animateFlow, flowPhase, controls.height, overlays.titles, branchIds, draftNoteNodes))
         if (!layoutReady || layoutFailure != null) {
             val message = layoutFailure?.let { "布局失败：$it（点击重试）" } ?: "正在排版…"
             graphics.color = foreground
@@ -459,6 +456,8 @@ internal class UnderstandingDiagram(
 
     override fun dispose() {
         disposed = true
+        overlays.close()
+        header.close()
         controls.dispose()
         layoutCoordinator.close()
         flowTimer.stop()
@@ -480,6 +479,7 @@ internal class UnderstandingDiagram(
         copyCallbacks.clear()
         addNoteCallbacks.clear()
         noteCallbacks.clear()
+        draftNoteNodes = emptySet()
         titleCallbacks.clear()
     }
 

@@ -64,27 +64,37 @@ internal fun UnderstandingDiagram.centerOnNode(nodeId: String) {
 internal fun UnderstandingDiagram.focusCluster(id: String, animate: Boolean = true) {
     val cluster = layout.clusters.firstOrNull { it.id == id } ?: return
     if (width <= 0 || height <= 0) return
-    val targetZoom = min((width - 24).toDouble() / cluster.bounds.width,
-        (height - 24).toDouble() / cluster.bounds.height)
-        .coerceIn(UnderstandingDiagram.MIN_ZOOM, UnderstandingDiagram.MAX_ZOOM)
-    zoom = targetZoom
-    val x = cluster.bounds.centerX
-    val y = cluster.bounds.centerY
+    val members = clusterSpecs.firstOrNull { it.id == id }?.nodeIds.orEmpty()
+    val nodeId = overlays.clusterTargets[id]?.takeIf { it in members }
+        ?: currentNodeId?.takeIf { it in members } ?: members.firstOrNull()
+    val target = nodeId?.let { layout.nodes[it]?.bounds } ?: cluster.bounds
+    val x = target.centerX
+    val y = target.centerY
     if (animate) moveCameraTo(x, y) else {
         centerX = x
         centerY = y
         repaint()
         queueViewportSave()
     }
-    selectedNodeId = clusterSpecs.firstOrNull { it.id == id }?.nodeIds?.firstOrNull()
+    selectedNodeId = nodeId
     currentNodeId = selectedNodeId
+    if (nodeId != null) overlays.clusterTargets[id] = nodeId
     if (animate) selectedNodeId?.let { node -> clusterCallbacks.toList().forEach { it(node) } }
     repaint()
 }
 
 internal fun UnderstandingDiagram.requestFocusCluster(id: String) {
-    if (width > 0 && height > 0) focusCluster(id, animate = false)
-    else pendingFocusClusterId = id
+    pendingFocusClusterId = id
+    applyPendingClusterFocus()
+}
+
+/** A requested group survives resize events until asynchronous layout is available. */
+internal fun UnderstandingDiagram.applyPendingClusterFocus() {
+    if (!layoutReady || width <= 0 || height <= 0) return
+    pendingFocusClusterId?.let { id ->
+        pendingFocusClusterId = null
+        focusCluster(id, animate = false)
+    }
 }
 
 internal fun UnderstandingDiagram.moveCameraTo(x: Double, y: Double) {

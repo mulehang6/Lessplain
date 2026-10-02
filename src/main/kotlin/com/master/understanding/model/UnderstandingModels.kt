@@ -1,6 +1,6 @@
 package com.master.understanding.model
 
-const val UNDERSTANDING_SCHEMA_VERSION = 1
+const val UNDERSTANDING_SCHEMA_VERSION = 3
 
 /** A fixed code excerpt. The line is a hint, never its identity. */
 data class SourceAnchor(
@@ -18,6 +18,10 @@ data class GraphNode(
     val kind: String = "step",
     val anchor: SourceAnchor? = null,
     val evidenceIds: List<String> = emptyList(),
+    /** Business boundaries, independent of node category and graph degree. */
+    val flowRoles: List<String> = emptyList(),
+    /** success/failure at this explanation boundary; null leaves the outcome unclassified. */
+    val endOutcome: String? = null,
 )
 
 data class GraphEdge(

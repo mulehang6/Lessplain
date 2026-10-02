@@ -1,6 +1,15 @@
 package com.master.understanding.storage
 
 import com.master.understanding.model.UnderstandingQuestion
+import com.master.understanding.model.requireInput
+
+/** Cancellation keeps referenced context snapshots and cannot remove an answered child graph. */
+fun UnderstandingRepository.cancelPendingQuestion(questionId: String) = write { db ->
+    db.prepareStatement("UPDATE questions SET status='cancelled' WHERE id=? AND status='pending'").use { statement ->
+        statement.setString(1, questionId)
+        requireInput(statement.executeUpdate() == 1, "注释已回答、已取消或不存在，请刷新")
+    }
+}
 
 /** Pending node notes reuse the existing question rows and context snapshots. */
 fun UnderstandingRepository.pendingQuestionsForNode(recordId: String, nodeId: String): List<UnderstandingQuestion> =

@@ -33,7 +33,8 @@ internal fun UnderstandingRepository.reviseRecordGraph(
     requireInput(graph.edges.map { it.id } == current.graph.edges.map { it.id }, "修订须保留关系 ID 与顺序")
     requireInput(graph.edges.map { Triple(it.from, it.to, it.relation) } ==
         current.graph.edges.map { Triple(it.from, it.to, it.relation) }, "修订须保留节点关系")
-    val revised = current.copy(revision = current.revision + 1, graph = graph)
+    val revised = current.copy(revision = current.revision + 1,
+        graph = graph)
     db.prepareStatement(
         "INSERT INTO record_versions(record_id, revision, question_text, answer_text, data, display_title) " +
             "VALUES(?, ?, ?, ?, ?, ?)",
@@ -56,7 +57,7 @@ internal fun UnderstandingRepository.reviseRecordGraph(
 }
 
 /** Title revisions keep the original question and graph untouched. */
-fun UnderstandingRepository.updateDisplayTitle(recordId: String, title: String): UnderstandingRecord {
+fun UnderstandingRepository.updateDisplayTitle(recordId: String, title: String, expectedRevision: Int? = null): UnderstandingRecord {
     val normalized = title.trim()
     if (normalized.isEmpty()) throw UnderstandingInputException("标题不能为空")
     return write { db ->
@@ -70,6 +71,7 @@ fun UnderstandingRepository.updateDisplayTitle(recordId: String, title: String):
                 gson.fromJson(rows.getString(1), UnderstandingRecord::class.java)
             }
         }
+        requireInput(expectedRevision == null || original.revision == expectedRevision, "理解记录版本已变化，请重新读取")
         val updated = original.copy(revision = original.revision + 1, displayTitle = normalized)
         db.prepareStatement(
             "INSERT INTO record_versions(record_id, revision, question_text, answer_text, data, display_title) " +

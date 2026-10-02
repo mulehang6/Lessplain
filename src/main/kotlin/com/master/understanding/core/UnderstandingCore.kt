@@ -29,6 +29,14 @@ class UnderstandingCore(
         if (nodeId != null) {
             requireInput(record != null && record.graph.nodes.any { it.id == nodeId }, "所选节点不属于理解记录")
         }
+        val normalizedPath = if (record == null || nodeId == null) emptyList() else {
+            val routeEnd = staticPath.lastOrNull()?.let { edgeId ->
+                record.graph.edges.firstOrNull { it.id == edgeId }?.to
+            }
+            val explorer = StaticExplorer(record.graph, staticPath, routeEnd ?: nodeId)
+            explorer.jumpTo(nodeId)
+            explorer.path
+        }
         val context = UnderstandingContext(
             token = newId(),
             projectId = repository.projectId,
@@ -36,7 +44,7 @@ class UnderstandingCore(
             recordRevision = record?.revision,
             nodeId = nodeId,
             anchor = anchor,
-            staticPath = staticPath.toList(),
+            staticPath = normalizedPath,
             createdAt = System.currentTimeMillis(),
         )
         repository.putContext(context)
@@ -89,6 +97,7 @@ class UnderstandingCore(
         graph.validate()
         requireInput(graph.nodes.any { it.kind != "placeholder" }, "回答必须包含实际图节点")
         val savedQuestion = questionId?.let(repository::getQuestion)
+        requireInput(savedQuestion?.status != "cancelled", "注释已取消，不能继续回答")
         requireInput(savedQuestion == null || savedQuestion.text == question.trim(), "questionId 与原问题不一致")
         requireInput(savedQuestion == null || placement == "child", "节点注释的回答必须作为子图保存")
         val token = contextToken ?: savedQuestion?.contextToken
@@ -146,7 +155,7 @@ class UnderstandingCore(
     }
 
     private fun validateVersion(value: Int) {
-        if (value != UNDERSTANDING_SCHEMA_VERSION) throw UnderstandingInputException("不支持的 schemaVersion：$value")
+        requireInput(value == UNDERSTANDING_SCHEMA_VERSION, "不支持的 schemaVersion：$value；请使用版本 3")
     }
 
     private fun resolveParent(placement: String, parentId: String?, context: UnderstandingContext?): String? = when (placement) {

@@ -178,18 +178,7 @@ class UnderstandingRepository(
         }
     }
 
-    fun getQuestion(id: String): UnderstandingQuestion = connect().use { db ->
-        db.prepareStatement("SELECT data, owner_record_id, status FROM questions WHERE id=?").use { statement ->
-            statement.setString(1, id)
-            statement.executeQuery().use { rows ->
-                if (!rows.next()) throw UnderstandingInputException("questionId 不存在")
-                gson.fromJson(rows.getString(1), UnderstandingQuestion::class.java).copy(
-                    ownerRecordId = rows.getString(2),
-                    status = rows.getString(3),
-                )
-            }
-        }
-    }
+    fun getQuestion(id: String): UnderstandingQuestion = connect().use { readQuestion(it, id) }
 
     fun request(requestId: String, operation: String, payload: String, block: (Connection) -> String): String {
         if (requestId.isBlank()) throw UnderstandingInputException("requestId 不能为空")
@@ -267,7 +256,7 @@ class UnderstandingRepository(
             statement.executeUpdate()
         }
         record.questionId?.let { id ->
-            db.prepareStatement("UPDATE questions SET status='answered' WHERE id=?").use { statement ->
+            db.prepareStatement("DELETE FROM questions WHERE id=?").use { statement ->
                 statement.setString(1, id)
                 statement.executeUpdate()
             }
@@ -397,43 +386,11 @@ class UnderstandingRepository(
         result
     }
 
-    fun questionsForRecord(recordId: String): List<UnderstandingQuestion> = connect().use { db ->
-        val result = mutableListOf<UnderstandingQuestion>()
-        db.prepareStatement(
-            "SELECT q.data, q.owner_record_id, q.status FROM questions q WHERE q.owner_record_id=? OR EXISTS (" +
-                "SELECT 1 FROM records child JOIN record_versions v " +
-                "ON v.record_id=child.id AND v.revision=child.current_revision " +
-                "WHERE child.parent_id=? AND json_extract(v.data, '$.questionId')=q.id) ORDER BY q.rowid",
-        ).use { statement ->
-            statement.setString(1, recordId)
-            statement.setString(2, recordId)
-            statement.executeQuery().use { rows ->
-                while (rows.next()) {
-                    result += gson.fromJson(rows.getString(1), UnderstandingQuestion::class.java).copy(
-                        ownerRecordId = rows.getString(2),
-                        status = rows.getString(3),
-                    )
-                }
-            }
-        }
-        result
-    }
+    fun questionsForRecord(recordId: String): List<UnderstandingQuestion> =
+        connect().use { readRecordQuestions(it, recordId) }
 
-    fun questionsForContext(contextToken: String): List<UnderstandingQuestion> = connect().use { db ->
-        val result = mutableListOf<UnderstandingQuestion>()
-        db.prepareStatement("SELECT data, owner_record_id, status FROM questions WHERE context_token=? ORDER BY rowid").use { statement ->
-            statement.setString(1, contextToken)
-            statement.executeQuery().use { rows ->
-                while (rows.next()) {
-                    result += gson.fromJson(rows.getString(1), UnderstandingQuestion::class.java).copy(
-                        ownerRecordId = rows.getString(2),
-                        status = rows.getString(3),
-                    )
-                }
-            }
-        }
-        result
-    }
+    fun questionsForContext(contextToken: String): List<UnderstandingQuestion> =
+        connect().use { readContextQuestions(it, contextToken) }
 
     fun recentQuestions(query: String = "", limit: Int = 100): List<UnderstandingQuestion> = connect().use { db ->
         val result = mutableListOf<UnderstandingQuestion>()

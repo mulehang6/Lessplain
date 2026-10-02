@@ -76,8 +76,25 @@ internal fun UnderstandingDiagram.questionActionAt(point: Point): String? {
 
 internal fun UnderstandingDiagram.noteActionAt(point: Point): String? {
     val world = screenToWorld(point)
-    val id = hoveredNodeId?.takeIf { (pendingNoteCounts[it] ?: 0) > 0 } ?: return null
-    return id.takeIf { layout.nodes[it]?.bounds?.let { bounds ->
-        DiagramNodePainter.noteBounds(bounds).contains(world)
-    } == true }
+    return layout.nodes.values.firstOrNull { placed ->
+        (hasNodeNote(placed.node.id) || placed.node.id == hoveredNodeId) &&
+            DiagramNodePainter.noteBounds(placed.bounds).contains(world)
+    }?.node?.id
+}
+
+/** Place note previews below the painted badge, leaving it available for click-to-pin. */
+internal fun UnderstandingDiagram.notePopupAnchor(point: Point): Point {
+    val node = noteActionAt(point)?.let(layout.nodes::get) ?: return Point(point)
+    val bounds = DiagramNodePainter.noteBounds(node.bounds)
+    return Point(
+        (width / 2.0 + (bounds.x - centerX) * zoom).toInt(),
+        (height / 2.0 + (bounds.maxY - centerY) * zoom).toInt() + 6,
+    )
+}
+
+internal fun UnderstandingDiagram.clusterEditAt(point: Point): String? {
+    val world = screenToWorld(point)
+    return layout.clusters.firstOrNull {
+        it.id == overlays.titles.hovered && DiagramClusterText.editBounds(it).contains(world)
+    }?.id
 }

@@ -17,6 +17,7 @@ internal object DiagramNodePainter {
     private val textColor = JBColor(Color(0x111827), Color(0xF2F4F7))
     private val actionFill = JBColor(Color(0xEEF4FF), Color(0x254663))
     private val actionBorder = JBColor(Color(0x2563EB), Color(0x72B7FF))
+    private val startFill = JBColor(Color(0xDCEBFF), Color(0x25476C))
 
     fun copyBounds(node: Rectangle2D.Double): Rectangle2D.Double =
         Rectangle2D.Double(node.x + 8, node.maxY + 8, 28.0, 28.0)
@@ -40,6 +41,8 @@ internal object DiagramNodePainter {
         choicePhase: Float = 0f,
         copiedNodeId: String? = null,
         visible: Rectangle2D? = null,
+        branchIds: Set<String> = emptySet(),
+        draftNoteNodes: Set<String> = emptySet(),
     ) {
         g.font = UIManager.getFont("Label.font") ?: g.font
         layout.nodes.values.forEach { placed ->
@@ -48,7 +51,7 @@ internal object DiagramNodePainter {
             if (visible != null && !visible.intersects(bounds.x - 24, bounds.y - 24,
                     bounds.width + 48, bounds.height + 68)) return@forEach
             val current = id == focused
-            if (current) {
+            if (current || id == hovered) {
                 g.color = focusHalo
                 g.stroke = BasicStroke(4f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
                 g.drawRoundRect(bounds.x.toInt() - 2, bounds.y.toInt() - 2,
@@ -61,17 +64,22 @@ internal object DiagramNodePainter {
                 g.drawRoundRect(bounds.x.toInt() - 3, bounds.y.toInt() - 3,
                     bounds.width.toInt() + 6, bounds.height.toInt() + 6, 18, 18)
             }
-            g.color = nodeFill
+            g.color = when (id) { in startIds -> startFill
+                in endIds -> DiagramNodeSemantics.endFill(placed.node.endOutcome); else -> nodeFill }
             g.fillRoundRect(bounds.x.toInt(), bounds.y.toInt(), bounds.width.toInt(), bounds.height.toInt(), 10, 10)
-            g.color = if (current || id == hovered || id in choiceTargets) focusBorder else nodeBorder
+            g.color = when { id in endIds -> DiagramNodeSemantics.endBorder(placed.node.endOutcome); id in startIds -> focusBorder
+                current || id == hovered || id in choiceTargets -> focusBorder; else -> nodeBorder }
             g.stroke = BasicStroke(if (current) 2f else 1f)
             g.drawRoundRect(bounds.x.toInt(), bounds.y.toInt(), bounds.width.toInt(), bounds.height.toInt(), 10, 10)
             g.color = textColor
-            paintLabel(g, placed)
+            paintLabel(g, placed, id in branchIds)
             if (id == hovered || id == copiedNodeId) {
                 paintAction(g, copyBounds(bounds), if (id == copiedNodeId) "✓" else "⧉")
                 if (id == hovered && (questionCounts[id] ?: 0) > 0) paintAction(g, questionBounds(bounds), "?")
-                if (id == hovered && (pendingNoteCounts[id] ?: 0) > 0) paintAction(g, noteBounds(bounds), "note")
+            }
+            val hasNote = (pendingNoteCounts[id] ?: 0) > 0 || id in draftNoteNodes
+            if (hasNote || id == hovered) {
+                paintAction(g, noteBounds(bounds), if (hasNote) "note" else "+")
             }
         }
     }
@@ -96,9 +104,10 @@ internal object DiagramNodePainter {
             (bounds.centerY + metrics.ascent / 2.0 - 2).toFloat())
     }
 
-    private fun paintLabel(g: Graphics2D, placed: PlacedNode) {
+    private fun paintLabel(g: Graphics2D, placed: PlacedNode, branch: Boolean) {
         val metrics = g.fontMetrics
-        val maxWidth = placed.bounds.width.toInt() - 24
+        val inset = DiagramNodeSemantics.textInset(g.font, branch)
+        val maxWidth = placed.bounds.width.toInt() - 24 - inset
         val lines = DiagramTextMetrics.lines(placed.node.label, maxWidth, g.font)
         val visible = lines.take(3).toMutableList()
         if (lines.size > 3 && visible.isNotEmpty()) {
@@ -107,8 +116,10 @@ internal object DiagramNodePainter {
             visible[visible.lastIndex] = "$last…"
         }
         val startY = placed.bounds.y + 14 + metrics.ascent
+        if (branch) DiagramNodeSemantics.paintBranch(g,
+            DiagramNodeSemantics.iconBounds(placed.bounds, g.font, metrics.ascent, metrics.descent))
         visible.forEachIndexed { index, text ->
-            g.drawString(text, (placed.bounds.x + 12).toFloat(), (startY + index * metrics.height).toFloat())
+            g.drawString(text, (placed.bounds.x + 12 + inset).toFloat(), (startY + index * metrics.height).toFloat())
         }
     }
 }

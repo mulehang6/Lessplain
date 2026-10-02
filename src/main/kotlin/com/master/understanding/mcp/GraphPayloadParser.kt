@@ -14,6 +14,7 @@ import com.master.understanding.model.UnderstandingInputException
 
 internal fun parseGraphPayload(json: String): UnderstandingGraph {
     val root = parseObject(json, "graph")
+    if (root.has("clusters")) throw UnderstandingInputException("版本 3 不支持语义分组 clusters")
     return UnderstandingGraph(
         nodes = root.requiredArray("nodes").map { entry ->
             val item = entry.asObject("node")
@@ -24,6 +25,12 @@ internal fun parseGraphPayload(json: String): UnderstandingGraph {
                 kind = item.optionalString("kind") ?: "step",
                 anchor = item.optionalObject("anchor")?.toAnchor(),
                 evidenceIds = item.optionalStrings("evidenceIds"),
+                flowRoles = item.optionalStrings("flowRoles").distinct().also { roles ->
+                    if (roles.any { it != "start" && it != "end" }) {
+                        throw UnderstandingInputException("flowRoles 只允许 start 和 end")
+                    }
+                },
+                endOutcome = item.optionalStrictString("endOutcome"),
             )
         },
         edges = root.requiredArray("edges").map { entry ->
@@ -86,6 +93,11 @@ private fun JsonObject.requiredString(name: String): String = optionalString(nam
     ?: throw UnderstandingInputException("缺少 $name")
 
 private fun JsonObject.optionalString(name: String): String? = get(name)?.takeUnless(JsonElement::isJsonNull)?.asString
+
+private fun JsonObject.optionalStrictString(name: String): String? = get(name)?.takeUnless(JsonElement::isJsonNull)?.let {
+    if (!it.isJsonPrimitive || !it.asJsonPrimitive.isString) throw UnderstandingInputException("$name 必须是字符串")
+    it.asString
+}
 
 private fun JsonObject.requiredObject(name: String): JsonObject = get(name)?.asObject(name)
     ?: throw UnderstandingInputException("缺少 $name")
