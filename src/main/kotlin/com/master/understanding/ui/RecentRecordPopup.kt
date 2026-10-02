@@ -1,80 +1,76 @@
 package com.master.understanding.ui
 
-import com.intellij.ui.JBColor
+import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.unit.dp
 import com.master.understanding.ide.UnderstandingService
-import com.master.understanding.model.UnderstandingRecord
-import java.awt.BorderLayout
-import java.awt.Color
 import java.awt.Component
 import java.awt.Dimension
-import java.awt.event.KeyAdapter
-import java.awt.event.KeyEvent
-import java.awt.event.MouseAdapter
+import java.awt.EventQueue
+import java.awt.Point
+import java.awt.event.HierarchyEvent
+import java.awt.event.HierarchyListener
 import java.awt.event.MouseEvent
-import java.awt.event.MouseMotionAdapter
-import javax.swing.BorderFactory
-import javax.swing.JLabel
-import javax.swing.JList
-import javax.swing.JPanel
-import javax.swing.JPopupMenu
-import javax.swing.ListCellRenderer
-import javax.swing.ListSelectionModel
+import java.util.WeakHashMap
+import javax.swing.SwingUtilities
+import org.jetbrains.jewel.foundation.theme.JewelTheme
+import org.jetbrains.jewel.ui.component.Text
 
-/** Recent records use the same compact single-line states as the history list. */
+private val recentPopups = WeakHashMap<Component, ThemedCanvasPopup>()
+
+/** Shares Jewel record rows with history; one trigger click always closes an already-open popup. */
 internal fun showRecentRecordPopup(service: UnderstandingService, anchor: Component) {
+    recentPopups.remove(anchor)?.let { it.close(); return }
     val records = service.repository.recentRootRecords("", 6)
-    val popup = JPopupMenu()
-    if (records.isEmpty()) {
-        popup.add(JLabel("暂无记录").apply { border = BorderFactory.createEmptyBorder(8, 14, 8, 14) })
-        popup.show(anchor, 0, anchor.height)
-        return
+    var popup: ThemedCanvasPopup? = null
+    val visibility = HierarchyListener { event ->
+        if (event.changeFlags and HierarchyEvent.SHOWING_CHANGED.toLong() != 0L && !anchor.isShowing) popup?.close()
     }
-    val list = JList(records.toTypedArray()).apply {
-        selectionMode = ListSelectionModel.SINGLE_SELECTION
-        visibleRowCount = records.size
-        fixedCellHeight = 38
-        preferredSize = Dimension(340, records.size * fixedCellHeight)
-        var hoveredIndex = -1
-        cellRenderer = ListCellRenderer<UnderstandingRecord> { _, value, index, selected, _ ->
-            val active = service.activeRecordId == value.id || selected
-            val fill = when {
-                active -> JBColor(Color(0xC9DBFF), Color(0x294477))
-                index == hoveredIndex -> JBColor(Color(0xEEF0F3), Color(0x303237))
-                else -> JBColor(Color.WHITE, Color(0x1E1F22))
-            }
-            JPanel(BorderLayout()).apply {
-                background = fill
-                border = BorderFactory.createEmptyBorder(0, 12, 0, 12)
-                add(JLabel(value.displayTitle ?: value.question).apply {
-                    foreground = JBColor.foreground()
-                }, BorderLayout.CENTER)
-                accessibleContext.accessibleName = value.displayTitle ?: value.question
+    anchor.addHierarchyListener(visibility)
+    popup = ThemedCanvasPopup(anchor, Point(0, anchor.height), Dimension(360, maxOf(1, records.size) * 40 + 16),
+        onClosed = { recentPopups.remove(anchor); anchor.removeHierarchyListener(visibility) },
+        mayCancel = {
+            val source = (EventQueue.getCurrentEvent() as? MouseEvent)?.source as? Component
+            source == null || (source !== anchor && !SwingUtilities.isDescendingFrom(source, anchor))
+        }) {
+        var selected by remember { mutableIntStateOf(records.indexOfFirst { it.id == service.activeRecordId }.coerceAtLeast(0)) }
+        val focus = remember { FocusRequester() }
+        fun choose(index: Int) {
+            records.getOrNull(index)?.let(service::showRoot)
+            popup?.close()
+        }
+        Column(Modifier.fillMaxSize().background(JewelTheme.globalColors.panelBackground).padding(8.dp)
+            .onPreviewKeyEvent {
+                if (it.type != KeyEventType.KeyDown || records.isEmpty()) false else when (it.key) {
+                    Key.DirectionDown -> { selected = (selected + 1) % records.size; true }
+                    Key.DirectionUp -> { selected = (selected - 1 + records.size) % records.size; true }
+                    Key.Enter -> { choose(selected); true }
+                    else -> false
+                }
+            }.focusRequester(focus).focusable(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            if (records.isEmpty()) Text("暂无记录")
+            records.forEachIndexed { index, record ->
+                RecordCandidateRow(record, index == selected, onClick = { choose(index) })
             }
         }
-        addMouseMotionListener(object : MouseMotionAdapter() {
-            override fun mouseMoved(event: MouseEvent) {
-                val index = locationToIndex(event.point)
-                if (hoveredIndex != index) { hoveredIndex = index; repaint() }
-            }
-        })
-        addMouseListener(object : MouseAdapter() {
-            override fun mouseExited(event: MouseEvent) { hoveredIndex = -1; repaint() }
-            override fun mouseClicked(event: MouseEvent) {
-                if (event.button == MouseEvent.BUTTON1) {
-                    records.getOrNull(locationToIndex(event.point))?.let { service.showRoot(it) }
-                    popup.isVisible = false
-                }
-            }
-        })
-        addKeyListener(object : KeyAdapter() {
-            override fun keyPressed(event: KeyEvent) {
-                if (event.keyCode == KeyEvent.VK_ENTER) {
-                    selectedValue?.let(service::showRoot)
-                    popup.isVisible = false
-                }
-            }
-        })
+        LaunchedEffect(Unit) { focus.requestFocus() }
     }
-    popup.add(list)
-    popup.show(anchor, 0, anchor.height)
+    recentPopups[anchor] = popup
 }
