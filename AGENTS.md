@@ -34,14 +34,14 @@
 
 ## Master Understanding：IDEA MCP 连接说明
 
-本项目开发时会同时出现两条内置 IDEA MCP 连接，下表区分主开发 IDE 与插件验收 IDE。Index 是另一能力服务，不能仅凭名称假定它连接同一个 IDE。调用前先确认目标 IDE 已打开对应项目；内置传 `projectPath`，Index 传 `project_path`，不得为探测连接而自动打开工程或启动 IDE。
+本项目开发时会同时出现两条内置 IDEA MCP 连接，下表区分主开发 IDE 与插件验收 IDE。调用前先确认目标 IDE 已打开对应项目，始终传入其绝对 `projectPath`；不得为探测连接而自动打开工程或启动 IDE。停用 Index MCP，不作为源码分析或失败回退。
 
 | 连接名          | 连接对象                                                                                           | 主要用途                                                     | 工具入口                            |
 |-----------------|----------------------------------------------------------------------------------------------------|--------------------------------------------------------------|-------------------------------------|
-| `idea`          | 日常开发使用的 IDEA，当前打开包含本插件工程的工作区                                                | 插件源码的内置基础搜索、项目模型及运行配置                   | `execute_tool` 路由器               |
+| `idea`          | 日常开发使用的 IDEA，当前打开包含本插件工程的工作区                                                | 查找插件源码、分析符号、检查修改后的文件及构建配置                   | `execute_tool` 路由器               |
 | `idea_dev_2026` | 由 `Master Understanding IDE` 启动的开发 IDE，加载本插件；其中打开的项目是验收对象，可能随测试改变 | 调用插件自身的 MCP 工具，检查开发 IDE 中的运行行为和测试项目 | `execute_tool` 路由器               |
 
-两条内置连接通过各自的 `execute_tool` 路由器调用。将 `get_understanding_context` 或 `present_understanding` 及参数放入 `command`，把插件验收 IDE 当前打开的项目路径放在外层 `projectPath`；不要将插件工程路径误传给验收 IDE。本插件目前只有这两个 MCP 工具。本工程 Kotlin 源码的能力选择遵循 `ide-mcp`：内置基础搜索使用 `idea`；类型、语义操作与诊断优先使用已确认连接本工程的 Index 能力，失败时按等价回退规则处理。普通磁盘读取、文本编辑、新增及命令执行使用本机工具；`idea_dev_2026` 用于插件自身工具及验收对象，不能作为开发源码分析的替代连接。
+两条内置连接通过各自的 `execute_tool` 路由器调用。将 `get_understanding_context` 或 `present_understanding` 及参数放入 `command`，把插件验收 IDE 当前打开的项目路径放在外层 `projectPath`；不要将插件工程路径误传给验收 IDE。本插件目前只有这两个 MCP 工具。本工程 Kotlin 源码分析遵循 `idea-mcp-priority`：优先使用 `idea` 的项目搜索、符号分析、语义操作和诊断能力；内置能力不可用或合理修正后仍失败时，用等价的自身工具处理并说明覆盖限制。普通磁盘读取、文本编辑、新增及命令执行使用本机工具；`idea_dev_2026` 用于插件自身工具及验收对象，不能作为开发源码分析的替代连接。
 
 在 `Agent-dev` 工作区启动插件时，选唯一的 `Master Understanding IDE` 运行配置；不要选同名旧配置 `Run IDE with Plugin`，它属于 `walkthrough-plugin`，会把没有 Gradle 构建文件的工作区根目录传给 Gradle。若单独打开 `master-understanding`，使用 `Master Understanding IDE (standalone)`。两个配置的 Gradle 工程目录都必须指向本插件的 `settings.gradle.kts` 所在目录。
 
