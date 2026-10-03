@@ -34,10 +34,10 @@ class UnderstandingToolset : McpToolset {
     @McpTool(name = "present_understanding")
     @McpDescription("保存或修订代码理解图。必须有实际图节点，不接受纯文字回答；节点和关系标签保持简短，不提交坐标。")
     suspend fun presentUnderstanding(
-        @McpDescription("协议版本，当前只接受 3。") schemaVersion: Int,
+        @McpDescription("协议版本：4；兼容不带 clusters 的版本 3。") schemaVersion: Int,
         @McpDescription("此次写入的唯一请求 ID；相同内容重试返回原结果。") requestId: String,
         @McpDescription("问题原文。") question: String,
-        @McpDescription("JSON 对象，含 nodes、edges、evidence，不支持 clusters。节点 flowRoles 可含 start、end 或两者；endOutcome 可选 success/failure，必须具有 end 角色，省略表示未分类。失败包括业务拒绝与异常。起止角色与结果按源码语义标注；分支图标由插件按不同的可浏览后继数自动计算，不提交 decision。关系类型为 control_flow、call、data_flow、dependency 或 structure。") graph: String,
+        @McpDescription("JSON 对象，含 nodes、edges、evidence。版本 4 的根图可选单层 clusters=[{id,title,nodeIds}]，完整且互斥地覆盖节点，不提交坐标；子追问一问一组。修订时 clusters 省略/null 保留、[] 清空。节点 flowRoles 可含 start/end；endOutcome 可选 success/failure 且需要 end。业务角色按源码标注；分支图标由可浏览后继自动计算。关系类型 control_flow、call、data_flow、dependency、structure；控制流分支需 condition。") graph: String,
         @McpDescription("归属：root、child、sibling、explicit 或 revise。revise 更新原记录的图。") placement: String,
         @McpDescription("可选的简短显示标题；原始问题另行保留。") displayTitle: String = "",
         @McpDescription("固定来源 token；问题已复制时可由 questionId 取得。") contextToken: String = "",
@@ -47,16 +47,16 @@ class UnderstandingToolset : McpToolset {
         @McpDescription("placement=revise 时必填，原记录的当前版本。") expectedRevision: Int = 0,
     ): String = runTool {
         val service = service()
-        val parsed = parseGraphPayload(graph)
+        val parsed = parseGraphSubmission(graph, schemaVersion)
         val record = if (placement == "revise") {
             if (contextToken.isNotBlank() || questionId.isNotBlank() || parentId.isNotBlank() || displayTitle.isNotBlank()) {
                 mcpFail("修订会保留原记录的来源、归属和标题")
             }
-            service.core.revise(schemaVersion, requestId, question, parsed, reviseRecordId, expectedRevision)
+            service.core.revise(schemaVersion, requestId, question, parsed.graph, reviseRecordId, expectedRevision, parsed.clusterUpdate)
         } else {
             if (reviseRecordId.isNotBlank() || expectedRevision != 0) mcpFail("只有 revise 归属可指定修订参数")
             service.core.present(
-                schemaVersion, requestId, question, parsed, placement,
+                schemaVersion, requestId, question, parsed.graph, placement,
                 contextToken.takeIf(String::isNotBlank), questionId.takeIf(String::isNotBlank),
                 parentId.takeIf(String::isNotBlank), displayTitle.takeIf(String::isNotBlank),
             )

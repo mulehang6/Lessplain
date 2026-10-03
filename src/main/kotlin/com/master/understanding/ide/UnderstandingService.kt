@@ -248,6 +248,7 @@ class UnderstandingService(private val project: Project) : Disposable {
         nodeId: String? = null,
         navigateSource: Boolean = true,
         staticPath: List<String>? = null,
+        navigationState: com.master.understanding.model.RouteNavigationState? = null,
     ) {
         val recordChanged = activeRecordId != record.id
         val previousNodeId = activeNodeId
@@ -261,31 +262,35 @@ class UnderstandingService(private val project: Project) : Disposable {
         val restored = nodeId ?: graphBrowse?.nodeId ?: repositoryBrowse?.nodeId
         val validNode = restored?.takeIf { id -> record.graph.nodes.any { it.id == id } }
         val explorer = if (staticPath != null && validNode != null) {
-            StaticExplorer(record.graph, staticPath, validNode)
+            StaticExplorer(record.graph, staticPath, validNode, navigationState)
         } else {
-            StaticExplorer(record.graph, previousBrowse?.staticPath.orEmpty(), previousBrowse?.nodeId)
+            StaticExplorer(record.graph, previousBrowse?.staticPath.orEmpty(), previousBrowse?.nodeId,
+                previousBrowse?.navigationState)
         }
         if (validNode != null) {
-            if (staticPath == null) explorer.jumpTo(validNode)
+            if (staticPath == null) explorer.synchronizeNode(validNode)
         } else if (nodeId != null || previousBrowse?.nodeId != null) {
             explorer.restorePath(emptyList(), null)
         }
         val selectedPath = explorer.path
-        val browseChanged = previousBrowse?.nodeId != validNode || previousBrowse?.staticPath.orEmpty() != selectedPath
+        val selectedNavigation = explorer.navigationState
+        val browseChanged = previousBrowse?.nodeId != validNode || previousBrowse?.staticPath.orEmpty() != selectedPath ||
+            previousBrowse?.navigationState != selectedNavigation
         val selectionChanged = recordChanged || previousNodeId != validNode || previousRevision != record.revision ||
             (activeRecordId == record.id && previousStaticPath != selectedPath)
 
         if (nodeId != null || browseChanged) {
             graphStates.update(key) { state ->
                 val browse = state.browse ?: repositoryBrowse ?: BrowseState(record.id)
-                state.copy(browse = browse.copy(nodeId = validNode, staticPath = selectedPath))
+                state.copy(browse = browse.copy(nodeId = validNode, staticPath = selectedPath, navigationState = selectedNavigation))
             }
         }
         if (!repository.readOnly && (nodeId != null || repositoryBrowse?.nodeId != validNode ||
-                repositoryBrowse?.staticPath.orEmpty() != selectedPath)) {
+                repositoryBrowse?.staticPath.orEmpty() != selectedPath || repositoryBrowse?.navigationState != selectedNavigation)) {
             repository.saveBrowseState((repositoryBrowse ?: BrowseState(record.id)).copy(
                 nodeId = validNode,
                 staticPath = selectedPath,
+                navigationState = selectedNavigation,
             ))
         }
 
@@ -297,6 +302,7 @@ class UnderstandingService(private val project: Project) : Disposable {
         if (!selectionUnchanged) sourceLocationMessage = null
         if (recordChanged || previousStaticPath != selectedPath) notifyChanged()
         if (selectionChanged) {
+            sourceNavigation.cancelChoices()
             selectionListeners.forEach { listener ->
                 if (SwingUtilities.isEventDispatchThread()) listener(record.id, validNode)
                 else SwingUtilities.invokeLater { listener(record.id, validNode) }
@@ -322,9 +328,9 @@ class UnderstandingService(private val project: Project) : Disposable {
                     runCatching {
                         val explorer = sourceNavigation.explorer(record, validNode)
                         val navigation = SourceInlayNavigation(
-                            canPrevious = explorer.path.isNotEmpty(),
-                            canNext = explorer.availableEdges().isNotEmpty(),
-                            previous = { sourceNavigation.previous(record.id, validNode) },
+                            canPrevious = explorer.canPrevious,
+                            canNext = explorer.canNext,
+                            previous = { component, point -> sourceNavigation.previous(record.id, validNode, component, point) },
                             next = { component, point -> sourceNavigation.next(record.id, validNode, component, point) },
                         )
                         val located = sourceHints.show(anchor, node.label, navigation)
@@ -364,7 +370,9 @@ class UnderstandingService(private val project: Project) : Disposable {
         val node = record?.graph?.nodes?.firstOrNull { it.id == activeNodeId }
         val source = node?.anchor ?: captureEditorAnchor(project)
         val staticPath = record?.let {
-            (graphStates.get(GraphLayerKey(it.id)).browse ?: repository.getBrowseState(it.id))?.staticPath.orEmpty()
+            val browse = graphStates.get(GraphLayerKey(it.id)).browse ?: repository.getBrowseState(it.id)
+            StaticExplorer(it.graph, browse?.staticPath.orEmpty(), browse?.nodeId, browse?.navigationState)
+                .apply { node?.id?.let(::synchronizeNode) }.path
         }.orEmpty()
         return core.captureContext(record?.id, node?.id, source, staticPath)
     }
@@ -426,10 +434,11 @@ class UnderstandingService(private val project: Project) : Disposable {
         val node = record.graph.nodes.firstOrNull { it.id == nodeId }
             ?: throw IllegalArgumentException("节点不属于理解记录")
         val anchor = node.anchor ?: record.graph.evidence.firstOrNull { it.id in node.evidenceIds }?.anchor
-        val staticPath = (graphStates.get(GraphLayerKey(record.id)).browse ?: repository.getBrowseState(record.id))
-            ?.staticPath.orEmpty()
+        val browse = graphStates.get(GraphLayerKey(record.id)).browse ?: repository.getBrowseState(record.id)
+        val route = StaticExplorer(record.graph, browse?.staticPath.orEmpty(), browse?.nodeId, browse?.navigationState)
+        route.synchronizeNode(nodeId)
         val context = core.captureContext(record.id, nodeId, anchor,
-            staticPath)
+            route.path)
         val payload = Gson().toJson(mapOf(
             "protocolVersion" to UNDERSTANDING_SCHEMA_VERSION,
             "contextToken" to context.token,
@@ -466,7 +475,9 @@ class UnderstandingService(private val project: Project) : Disposable {
         KeyboardFocusManager.getCurrentKeyboardFocusManager()
             .removePropertyChangeListener("focusOwner", focusListener)
         sourceScrollAnimation.dispose()
+        sourceNavigation.close()
         sourceHints.dispose()
+        sourceNavigation.close()
         listeners.clear()
         selectionListeners.clear()
         repository.close()

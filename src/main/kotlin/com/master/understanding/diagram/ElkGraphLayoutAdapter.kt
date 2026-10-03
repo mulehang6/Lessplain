@@ -23,7 +23,7 @@ internal object ElkGraphLayoutAdapter {
     fun layout(graph: UnderstandingGraph, direction: LayoutDirection): UnderstandingGraphLayout =
         layout(DiagramLayoutInput.prepare(graph, direction))
 
-    fun layout(input: DiagramLayoutInput): UnderstandingGraphLayout {
+    fun layout(input: DiagramLayoutInput, separateLanes: Boolean = false): UnderstandingGraphLayout {
         val graph = input.graph
         val direction = input.direction
         val mainline = mainlineEdgeIds(graph)
@@ -56,24 +56,27 @@ internal object ElkGraphLayoutAdapter {
             val elk = elkNodes.getValue(node.id)
             node.id to PlacedNode(node, Rectangle2D.Double(elk.x, elk.y, elk.width, elk.height))
         }
-        val placedEdges = repairEdgeRoutes(placedNodes, elkEdges.map { (edge, elk) -> placedEdge(edge, elk) }, mainline)
+        val placedEdges = repairEdgeRoutes(placedNodes, elkEdges.map { (edge, elk) -> placedEdge(edge, elk) }, mainline,
+            laneGap = if (separateLanes) DIAGRAM_LANE_GAP else 8.0, minimumSharedRun = if (separateLanes) 0.01 else 12.0)
         return UnderstandingGraphLayout(placedNodes, placedEdges, graphBounds(placedNodes.values, placedEdges))
     }
 
     internal fun connect(edge: GraphEdge, source: ElkNode, target: ElkNode,
         direction: LayoutDirection, labelSize: Pair<Double, Double>?,
-        preferStraight: Boolean = false): ElkEdge {
+        preferStraight: Boolean = false, sourceOrder: Int? = null, targetOrder: Int? = null): ElkEdge {
         val sourcePort = ElkGraphUtil.createPort(source).apply {
             identifier = "${edge.id}:out"
             setDimensions(0.0, 0.0)
             setProperty(CoreOptions.PORT_SIDE,
                 if (direction == LayoutDirection.VERTICAL) PortSide.SOUTH else PortSide.EAST)
+            sourceOrder?.let { setProperty(CoreOptions.PORT_INDEX, it) }
         }
         val targetPort = ElkGraphUtil.createPort(target).apply {
             identifier = "${edge.id}:in"
             setDimensions(0.0, 0.0)
             setProperty(CoreOptions.PORT_SIDE,
                 if (direction == LayoutDirection.VERTICAL) PortSide.NORTH else PortSide.WEST)
+            targetOrder?.let { setProperty(CoreOptions.PORT_INDEX, it) }
         }
         return ElkGraphUtil.createSimpleEdge(sourcePort, targetPort).apply {
             identifier = edge.id

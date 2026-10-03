@@ -11,6 +11,7 @@ internal class LocalEdgeRouter(
     orderedEdges: List<PlacedEdge>,
     private val extras: List<Rectangle2D>,
     private val edgeObstacles: Map<String, List<Rectangle2D>> = emptyMap(),
+    private val fixedPorts: Map<String, DiagramEdgePorts> = emptyMap(),
 ) {
     private val outgoing = orderedEdges.groupBy { it.edge.from }
     private val incoming = orderedEdges.groupBy { it.edge.to }
@@ -35,15 +36,15 @@ internal class LocalEdgeRouter(
         }
         for ((sourceSide, targetSide) in sidePairs(original)) {
             for (variant in listOf(0.0, 12.0, -12.0, 24.0, -24.0)) {
-                for (points in candidates(original, variant, sourceSide, targetSide)) {
+                for (points in candidates(original, variant, sourceSide, targetSide, obstacles)) {
                     consider(points)?.let { return it }
                 }
             }
         }
-        if (edgeObstacles[original.edge.id].orEmpty().isNotEmpty()) {
+        if (edgeObstacles[original.edge.id].orEmpty().isNotEmpty() || original.edge.id in fixedPorts) {
             for ((sourceSide, targetSide) in sidePairs(original)) {
                 for (variant in listOf(0.0, 12.0, -12.0, 24.0, -24.0)) {
-                    val shell = candidates(original, variant, sourceSide, targetSide).first()
+                    val shell = candidates(original, variant, sourceSide, targetSide, obstacles).first()
                     val boxes = nodes.values.map { it.bounds } + extras + edgeObstacles[original.edge.id].orEmpty()
                     val corridor = routeOrthogonalCorridor(shell[1], shell[shell.lastIndex - 1],
                         original.edge.id, boxes, obstacles) ?: continue
@@ -61,40 +62,37 @@ internal class LocalEdgeRouter(
 
     private fun lengthCost(edge: PlacedEdge): Double = edge.segments.sumOf { it.length } + edge.segments.size * 8
 
-    private enum class Side(val dx: Int, val dy: Int) {
-        NORTH(0, -1), EAST(1, 0), SOUTH(0, 1), WEST(-1, 0);
-        fun opposite(): Side = entries[(ordinal + 2) % 4]
-    }
-
-    private fun sidePairs(edge: PlacedEdge): List<Pair<Side, Side>> {
+    private fun sidePairs(edge: PlacedEdge): List<Pair<RoutingSide, RoutingSide>> {
+        fixedPorts[edge.edge.id]?.let { return listOf(it.source.side to it.target.side) }
         val source = nodes.getValue(edge.edge.from).bounds
         val target = nodes.getValue(edge.edge.to).bounds
         val self = edge.edge.from == edge.edge.to
-        val primary = if (self) Side.EAST else if (abs(target.centerY - source.centerY) >=
+        val primary = if (self) RoutingSide.EAST else if (abs(target.centerY - source.centerY) >=
             abs(target.centerX - source.centerX)) {
-            if (target.centerY >= source.centerY) Side.SOUTH else Side.NORTH
-        } else if (target.centerX >= source.centerX) Side.EAST else Side.WEST
-        val targetSide = if (self) Side.NORTH else primary.opposite()
-        val sources = listOf(primary) + Side.entries.filter { it != primary }
-        val targets = listOf(targetSide) + Side.entries.filter { it != targetSide }
+            if (target.centerY >= source.centerY) RoutingSide.SOUTH else RoutingSide.NORTH
+        } else if (target.centerX >= source.centerX) RoutingSide.EAST else RoutingSide.WEST
+        val targetSide = if (self) RoutingSide.NORTH else primary.opposite()
+        val sources = listOf(primary) + RoutingSide.entries.filter { it != primary }
+        val targets = listOf(targetSide) + RoutingSide.entries.filter { it != targetSide }
         return sources.flatMap { from -> targets.filter { !self || it != from }.map { from to it } }
     }
 
-    private fun port(bounds: Rectangle2D, side: Side, group: List<PlacedEdge>, edge: PlacedEdge,
+    private fun port(bounds: Rectangle2D, side: RoutingSide, group: List<PlacedEdge>, edge: PlacedEdge,
         variant: Double): Point2D.Double {
         val offset = portOffset(group, edge, if (side.dx == 0) bounds.width else bounds.height, variant)
         return if (side.dx == 0) Point2D.Double(bounds.centerX + offset, if (side.dy < 0) bounds.minY else bounds.maxY)
         else Point2D.Double(if (side.dx < 0) bounds.minX else bounds.maxX, bounds.centerY + offset)
     }
 
-    private fun candidates(edge: PlacedEdge, variant: Double, sourceSide: Side,
-        targetSide: Side): Sequence<List<Point2D.Double>> = sequence {
+    private fun candidates(edge: PlacedEdge, variant: Double, sourceSide: RoutingSide,
+        targetSide: RoutingSide, obstacles: EdgeRoutingObstacles): Sequence<List<Point2D.Double>> = sequence {
         val source = nodes.getValue(edge.edge.from).bounds
         val target = nodes.getValue(edge.edge.to).bounds
         val self = edge.edge.from == edge.edge.to
         val vertical = sourceSide.dx == 0
-        val first = port(source, sourceSide, outgoing.getValue(edge.edge.from), edge, variant)
-        val last = port(target, targetSide, incoming.getValue(edge.edge.to), edge, variant)
+        val fixed = fixedPorts[edge.edge.id]
+        val first = fixed?.source?.point ?: port(source, sourceSide, outgoing.getValue(edge.edge.from), edge, variant)
+        val last = fixed?.target?.point ?: port(target, targetSide, incoming.getValue(edge.edge.to), edge, variant)
         // Distinct departure/arrival lanes can require bends at different distances from a shared node.
         val stub = (if (self) 24 else 18) + abs(variant)
         val start = Point2D.Double(first.x + sourceSide.dx * stub, first.y + sourceSide.dy * stub)
@@ -110,6 +108,7 @@ internal class LocalEdgeRouter(
             val all = (listOf(midpoint + variant, a - 24, a + 24, b - 24, b + 24) +
                 boxes.flatMap { if (horizontal) listOf(it.minY - 24, it.maxY + 24)
                     else listOf(it.minX - 24, it.maxX + 24) } +
+                obstacles.occupiedChannels(edge.edge.id, horizontal) +
                 edge.segments.flatMap { if (horizontal) listOf(it.y1 - 12, it.y1 + 12)
                     else listOf(it.x1 - 12, it.x1 + 12) }).distinct().sorted()
             return (all.sortedBy { abs(it - midpoint) }.take(24) + listOf(all.first(), all.last())).distinct()

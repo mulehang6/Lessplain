@@ -5,6 +5,8 @@ import com.master.understanding.model.UnderstandingGraph
 import com.master.understanding.model.UnderstandingQuestion
 import com.master.understanding.model.UnderstandingRecord
 import com.master.understanding.model.requireInput
+import com.master.understanding.model.ClusterUpdate
+import com.master.understanding.model.validate
 import java.sql.Connection
 
 internal data class DeletedUnderstanding(val recordIds: Set<String>, val questionIds: Set<String>)
@@ -16,6 +18,7 @@ internal fun UnderstandingRepository.reviseRecordGraph(
     expectedRevision: Int,
     question: String,
     graph: UnderstandingGraph,
+    clusterUpdate: ClusterUpdate,
 ): UnderstandingRecord {
     val current = db.prepareStatement(
         "SELECT v.data FROM records r JOIN record_versions v ON v.record_id=r.id " +
@@ -24,17 +27,23 @@ internal fun UnderstandingRepository.reviseRecordGraph(
         statement.setString(1, recordId)
         statement.executeQuery().use { rows ->
             if (!rows.next()) throw UnderstandingInputException("理解记录不存在")
-            gson.fromJson(rows.getString(1), UnderstandingRecord::class.java)
+            gson.readUnderstandingRecord(rows.getString(1))
         }
     }
     requireInput(current.revision == expectedRevision, "理解记录版本已变化，请重新读取")
     requireInput(current.question == question, "修订不能更改原问题")
+    val merged = graph.copy(clusters = when (clusterUpdate) {
+        ClusterUpdate.Keep -> current.graph.clusters
+        is ClusterUpdate.Replace -> clusterUpdate.clusters
+    })
+    requireInput(current.parentId == null || merged.clusters.isEmpty(), "只有根理解图可以提交 clusters")
+    merged.validate()
     requireInput(graph.nodes.map { it.id } == current.graph.nodes.map { it.id }, "修订须保留节点 ID 与顺序")
     requireInput(graph.edges.map { it.id } == current.graph.edges.map { it.id }, "修订须保留关系 ID 与顺序")
     requireInput(graph.edges.map { Triple(it.from, it.to, it.relation) } ==
         current.graph.edges.map { Triple(it.from, it.to, it.relation) }, "修订须保留节点关系")
     val revised = current.copy(revision = current.revision + 1,
-        graph = graph)
+        graph = merged)
     db.prepareStatement(
         "INSERT INTO record_versions(record_id, revision, question_text, answer_text, data, display_title) " +
             "VALUES(?, ?, ?, ?, ?, ?)",
@@ -68,7 +77,7 @@ fun UnderstandingRepository.updateDisplayTitle(recordId: String, title: String, 
             statement.setString(1, recordId)
             statement.executeQuery().use { rows ->
                 if (!rows.next()) throw UnderstandingInputException("理解记录不存在")
-                gson.fromJson(rows.getString(1), UnderstandingRecord::class.java)
+                gson.readUnderstandingRecord(rows.getString(1))
             }
         }
         requireInput(expectedRevision == null || original.revision == expectedRevision, "理解记录版本已变化，请重新读取")

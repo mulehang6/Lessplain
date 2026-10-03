@@ -7,7 +7,16 @@ import javax.swing.KeyStroke
 
 /** Hover actions have an equivalent path when the canvas has keyboard focus. */
 internal object DiagramKeyboardActions {
-    fun install(component: JComponent, onMove: (Int) -> Unit, onCopy: () -> Unit, onQuestions: () -> Unit) {
+    fun move(diagram: UnderstandingDiagram, delta: Int) {
+        if (diagram.routeNavigation?.moveCandidate(delta) == true) return
+        val ids = diagram.layout.nodes.keys.toList()
+        if (ids.isEmpty()) return
+        val index = ids.indexOf(diagram.currentNodeId).coerceAtLeast(0)
+        diagram.selectUnderstandingNode(ids[(index + delta + ids.size) % ids.size], notify = true)
+    }
+
+    fun install(component: JComponent, onMove: (Int) -> Unit, onCopy: () -> Unit, onQuestions: () -> Unit,
+        onCancel: () -> Unit = {}) {
         val inputs = component.getInputMap(JComponent.WHEN_FOCUSED)
         inputs.put(KeyStroke.getKeyStroke("RIGHT"), "next-node")
         inputs.put(KeyStroke.getKeyStroke("DOWN"), "next-node")
@@ -15,10 +24,12 @@ internal object DiagramKeyboardActions {
         inputs.put(KeyStroke.getKeyStroke("UP"), "previous-node")
         inputs.put(KeyStroke.getKeyStroke("control C"), "copy-node")
         inputs.put(KeyStroke.getKeyStroke("ENTER"), "open-questions")
+        inputs.put(KeyStroke.getKeyStroke("ESCAPE"), "cancel-route")
         component.actionMap.put("next-node", action { onMove(1) })
         component.actionMap.put("previous-node", action { onMove(-1) })
         component.actionMap.put("copy-node", action(onCopy))
         component.actionMap.put("open-questions", action(onQuestions))
+        component.actionMap.put("cancel-route", action(onCancel))
     }
 
     private fun action(run: () -> Unit): AbstractAction = object : AbstractAction() {

@@ -17,6 +17,7 @@ fun SourceAnchor.validate() {
 fun UnderstandingGraph.validate() {
     requireInput(nodes.isNotEmpty(), "图至少需要一个节点")
     requireInput(nodes.size <= 1000 && edges.size <= 3000, "图超过本批容量上限")
+    validateClusters()
     val nodeIds = nodes.map { it.id }
     val edgeIds = edges.map { it.id }
     val evidenceIds = evidence.map { it.id }

@@ -77,7 +77,11 @@ internal class DiagramMouseInteraction(private val diagram: UnderstandingDiagram
             }
             else if (copyNode != null) diagram.copyCallbacks.toList().forEach { it(copyNode) }
             else if (questionNode != null) diagram.questionCallbacks.toList().forEach { it(questionNode) }
-            else diagram.nodeAt(event.point)?.let { diagram.selectUnderstandingNode(it, notify = true) }
+            else {
+                val node = diagram.nodeAt(event.point)
+                if (node != null) diagram.selectUnderstandingNode(node, notify = true)
+                else diagram.routeNavigation?.cancel()
+            }
         }
         previousDragPoint = null
         diagram.overlays.released(event.point, dragged)

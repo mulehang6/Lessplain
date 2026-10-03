@@ -8,14 +8,31 @@ import com.google.gson.JsonParser
 import com.master.understanding.model.Evidence
 import com.master.understanding.model.GraphEdge
 import com.master.understanding.model.GraphNode
+import com.master.understanding.model.GraphCluster
+import com.master.understanding.model.ClusterUpdate
+import com.master.understanding.model.UNDERSTANDING_SCHEMA_VERSION
 import com.master.understanding.model.SourceAnchor
 import com.master.understanding.model.UnderstandingGraph
 import com.master.understanding.model.UnderstandingInputException
 
-internal fun parseGraphPayload(json: String): UnderstandingGraph {
+internal data class GraphSubmission(val graph: UnderstandingGraph, val clusterUpdate: ClusterUpdate)
+
+internal fun parseGraphPayload(json: String, schemaVersion: Int = UNDERSTANDING_SCHEMA_VERSION): UnderstandingGraph =
+    parseGraphSubmission(json, schemaVersion).graph
+
+internal fun parseGraphSubmission(json: String, schemaVersion: Int): GraphSubmission {
     val root = parseObject(json, "graph")
-    if (root.has("clusters")) throw UnderstandingInputException("版本 3 不支持语义分组 clusters")
-    return UnderstandingGraph(
+    if (schemaVersion == 3 && root.has("clusters")) throw UnderstandingInputException("版本 3 不支持语义分组 clusters")
+    val update = root.get("clusters")?.takeUnless(JsonElement::isJsonNull)?.let { value ->
+        if (!value.isJsonArray) throw UnderstandingInputException("clusters 必须是数组")
+        ClusterUpdate.Replace(value.asJsonArray.map { entry ->
+            val item = entry.asObject("cluster")
+            item.rejectCoordinates()
+            if (item.has("clusters") || item.has("children")) throw UnderstandingInputException("只支持单层分组")
+            GraphCluster(item.requiredString("id"), item.requiredString("title"), item.optionalStrings("nodeIds"))
+        })
+    } ?: ClusterUpdate.Keep
+    val graph = UnderstandingGraph(
         nodes = root.requiredArray("nodes").map { entry ->
             val item = entry.asObject("node")
             item.rejectCoordinates()
@@ -47,7 +64,9 @@ internal fun parseGraphPayload(json: String): UnderstandingGraph {
             )
         },
         evidence = root.optionalArray("evidence").map { it.asObject("evidence").toEvidence() },
+        clusters = (update as? ClusterUpdate.Replace)?.clusters.orEmpty(),
     )
+    return GraphSubmission(graph, update)
 }
 
 internal fun parseEvidencePayload(json: String): List<Evidence> = try {

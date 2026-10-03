@@ -20,19 +20,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.awt.SwingPanel
 import androidx.compose.ui.unit.dp
-import com.intellij.openapi.application.ApplicationManager
 import com.master.understanding.core.StaticExplorer
-import com.master.understanding.core.StepResult
-import com.master.understanding.diagram.UnderstandingDiagram
 import com.master.understanding.diagram.DiagramHierarchyItem
 import com.master.understanding.diagram.createUnderstandingDiagram
 import com.master.understanding.diagram.bindGraphState
 import com.master.understanding.diagram.graphBrowseState
-import com.master.understanding.diagram.saveGraphViewState
+import com.master.understanding.diagram.bindDiagramSourceNavigation
 import com.master.understanding.ide.GraphLayerKey
 import com.master.understanding.ide.UnderstandingService
 import com.master.understanding.ide.PanelPage
-import com.master.understanding.model.BrowseState
 import com.master.understanding.model.UnderstandingRecord
 import com.master.understanding.storage.pendingQuestionsForNode
 import com.intellij.openapi.util.Disposer
@@ -176,11 +172,9 @@ private fun RecordView(
     }
     val explorer = remember(record.id, record.revision) {
         val state = graphBrowseState(service, graphKey)
-        StaticExplorer(record.graph, state?.staticPath.orEmpty(), service.activeNodeId ?: state?.nodeId)
+        StaticExplorer(record.graph, state?.staticPath.orEmpty(), service.activeNodeId ?: state?.nodeId,
+            state?.navigationState)
     }
-    var pathRevision by remember(record.id, record.revision) { mutableStateOf(0) }
-    var choices by remember(record.id, record.revision) { mutableStateOf<List<com.master.understanding.model.GraphEdge>>(emptyList()) }
-    val current = remember(pathRevision, record.id, record.revision) { explorer.currentNodeId }
     val diagram = remember(record.id, record.revision) {
         runCatching { createUnderstandingDiagram(record, graphBrowseState(service, graphKey)).apply {
             bindGraphState(service, graphKey)
@@ -191,69 +185,21 @@ private fun RecordView(
         onDispose { }
     }
     DisposableEffect(diagram) {
-        diagram.getOrNull()?.onViewportChanged {
-            saveGraphViewState(service, graphKey, diagram.getOrNull() ?: return@onViewportChanged,
-                explorer.path, explorer.currentNodeId)
-        }
-        val selection = diagram.getOrNull()?.onNodeSelected { nodeId ->
-            val chosen = choices.firstOrNull { it.to == nodeId }
-            if (chosen == null && nodeId == explorer.currentNodeId) return@onNodeSelected
-            val previousNodeId = explorer.currentNodeId
-            val previousPath = explorer.path
-            val moved = if (chosen != null) explorer.choose(chosen.id) is StepResult.Moved else explorer.jumpTo(nodeId)
-            if (moved) {
-                choices = emptyList()
-                if (previousNodeId != explorer.currentNodeId || previousPath != explorer.path) {
-                    pathRevision++
-                    persistPath(service, record, explorer)
-                }
-                service.select(record, nodeId, navigateSource = diagram.getOrNull()?.navigationPinned != true)
-            }
-        }
-        val questionSelection = diagram.getOrNull()?.onQuestionBadgeClicked(onQuestions)
-        val copySelection = diagram.getOrNull()?.onCopyNodeContext { nodeId ->
+        val builder = diagram.getOrNull()
+        val navigation = builder?.let { bindDiagramSourceNavigation(service, graphKey, it, explorer, record) }
+        val questionSelection = builder?.onQuestionBadgeClicked(onQuestions)
+        val copySelection = builder?.onCopyNodeContext { nodeId ->
             service.copyNodeContext(record, nodeId)
-            diagram.getOrNull()?.showCopied(nodeId)
+            builder.showCopied(nodeId)
         }
-        val content = diagram.getOrNull()?.bindContentActions(service, { SourceNode(record, it) },
+        val content = builder?.bindContentActions(service, { SourceNode(record, it) },
             { null }, titleRecord = record)
-        val clusterSelection = diagram.getOrNull()?.onClusterSelected { nodeId ->
-            if (nodeId == explorer.currentNodeId) return@onClusterSelected
-            if (!explorer.jumpTo(nodeId)) return@onClusterSelected
-            choices = emptyList()
-            pathRevision++
-            persistPath(service, record, explorer)
-            service.select(record, nodeId, navigateSource = diagram.getOrNull()?.navigationPinned != true)
-        }
-        val synchronization = service.onSelectionChanged { recordId, nodeId ->
-            if (recordId == record.id) {
-                nodeId?.let {
-                    val previousNodeId = explorer.currentNodeId
-                    val previousPath = explorer.path
-                    val browse = graphBrowseState(service, graphKey)
-                    val restored = browse?.takeIf { state -> state.nodeId == it }
-                        ?.let { state -> explorer.restorePath(state.staticPath, it) }
-                        ?: explorer.jumpTo(it)
-                    if (!restored || previousNodeId != explorer.currentNodeId || previousPath != explorer.path) {
-                        choices = emptyList()
-                        pathRevision++
-                        persistPath(service, record, explorer)
-                    }
-                    diagram.getOrNull()?.selectUnderstandingNode(it)
-                }
-            }
-        }
         onDispose {
-            selection?.close()
+            navigation?.close()
             questionSelection?.close()
             copySelection?.close()
             content?.close()
-            clusterSelection?.close()
-            synchronization.close()
-            diagram.getOrNull()?.let { builder ->
-                persistView(service, record, builder, explorer)
-                Disposer.dispose(builder)
-            }
+            builder?.let(Disposer::dispose)
         }
     }
     DisposableEffect(diagram, questionCounts, noteCounts) {
@@ -261,81 +207,11 @@ private fun RecordView(
         diagram.getOrNull()?.setPendingNoteCounts(noteCounts)
         onDispose { }
     }
-    DisposableEffect(diagram, choices) {
-        diagram.getOrNull()?.setChoiceTargets(choices.mapTo(mutableSetOf()) { it.to })
-        onDispose { }
-    }
-    DisposableEffect(diagram, explorer) {
-        diagram.getOrNull()?.setStepActions(
-            previous = {
-                if (explorer.back()) {
-                    choices = emptyList()
-                    pathRevision++
-                    persistPath(service, record, explorer)
-                    service.select(record, explorer.currentNodeId, navigateSource = diagram.getOrNull()?.navigationPinned != true)
-                }
-            },
-            next = {
-                when (val result = explorer.next()) {
-                    is StepResult.Choose -> choices = result.edges
-                    is StepResult.Moved -> {
-                        pathRevision++
-                        choices = emptyList()
-                        persistPath(service, record, explorer)
-                        service.select(record, explorer.currentNodeId, navigateSource = diagram.getOrNull()?.navigationPinned != true)
-                    }
-                    StepResult.End, StepResult.Limit -> Unit
-                    StepResult.InvalidChoice -> Unit
-                }
-            },
-        )
-        onDispose { diagram.getOrNull()?.setStepActions(null, null) }
-    }
-    DisposableEffect(diagram, current, pathRevision) {
-        var active = true
-        diagram.getOrNull()?.let { builder ->
-            builder.setStepAvailability(explorer.path.isNotEmpty(), explorer.availableEdges().isNotEmpty())
-            ApplicationManager.getApplication().invokeLater {
-                if (active) builder.showUnderstandingPath(explorer.path, current, centerNode = pathRevision > 0)
-            }
-        }
-        onDispose { active = false }
-    }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         diagram.onSuccess { builder ->
             key(builder) {
                 SwingPanel(factory = { builder.jComponent }, modifier = Modifier.fillMaxWidth().weight(1f))
             }
         }.onFailure { failure -> Text("图无法加载：${failure.message}") }
-    }
-}
-
-private fun persistPath(service: UnderstandingService, record: UnderstandingRecord, explorer: StaticExplorer) {
-    service.graphStates.update(GraphLayerKey(record.id)) { state ->
-        val browse = state.browse ?: service.repository.getBrowseState(record.id) ?: BrowseState(record.id)
-        state.copy(browse = browse.copy(staticPath = explorer.path, nodeId = explorer.currentNodeId))
-    }
-    if (!service.repository.readOnly) {
-        val previous = service.repository.getBrowseState(record.id)
-        service.repository.saveBrowseState((previous ?: BrowseState(record.id)).copy(
-            nodeId = explorer.currentNodeId,
-            staticPath = explorer.path,
-        ))
-    }
-}
-
-private fun persistView(service: UnderstandingService, record: UnderstandingRecord, builder: UnderstandingDiagram, explorer: StaticExplorer) {
-    saveGraphViewState(service, GraphLayerKey(record.id), builder, explorer.path, explorer.currentNodeId)
-    if (!service.repository.readOnly) {
-        runCatching {
-            val center = builder.center
-            val previous = service.repository.getBrowseState(record.id)
-            service.repository.saveBrowseState((previous ?: BrowseState(record.id)).copy(
-                zoom = builder.zoom,
-                panX = center.x,
-                panY = center.y,
-                hasPan = true,
-            ))
-        }
     }
 }

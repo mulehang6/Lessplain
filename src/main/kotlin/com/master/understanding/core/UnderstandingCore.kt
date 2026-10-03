@@ -2,6 +2,7 @@ package com.master.understanding.core
 
 import com.google.gson.Gson
 import com.master.understanding.model.SourceAnchor
+import com.master.understanding.model.ClusterUpdate
 import com.master.understanding.model.UnderstandingContext
 import com.master.understanding.model.UnderstandingGraph
 import com.master.understanding.model.UnderstandingInputException
@@ -13,6 +14,7 @@ import com.master.understanding.model.validate
 import com.master.understanding.storage.UnderstandingRepository
 import com.master.understanding.storage.newId
 import com.master.understanding.storage.reviseRecordGraph
+import com.master.understanding.storage.readUnderstandingRecord
 
 class UnderstandingCore(
     private val repository: UnderstandingRepository,
@@ -34,7 +36,7 @@ class UnderstandingCore(
                 record.graph.edges.firstOrNull { it.id == edgeId }?.to
             }
             val explorer = StaticExplorer(record.graph, staticPath, routeEnd ?: nodeId)
-            explorer.jumpTo(nodeId)
+            explorer.synchronizeNode(nodeId)
             explorer.path
         }
         val context = UnderstandingContext(
@@ -92,6 +94,7 @@ class UnderstandingCore(
         displayTitle: String? = null,
     ): UnderstandingRecord {
         validateVersion(schemaVersion)
+        requireInput(schemaVersion >= 4 || graph.clusters.isEmpty(), "版本 3 不支持语义分组 clusters")
         requireInput(question.isNotBlank(), "问题不能为空")
         requireInput(displayTitle == null || displayTitle.isNotBlank(), "标题不能为空")
         graph.validate()
@@ -104,7 +107,9 @@ class UnderstandingCore(
         requireInput(savedQuestion == null || savedQuestion.contextToken == token, "questionId 与 contextToken 不一致")
         val context = token?.let(repository::getContext)
         val parent = resolveParent(placement, parentId, context)
-        val payload = gson.toJson(listOf(schemaVersion, question.trim(), graph, placement, token, questionId, parentId, displayTitle?.trim()))
+        requireInput(parent == null || graph.clusters.isEmpty(), "只有根理解图可以提交 clusters")
+        val payload = gson.toJson(listOf(schemaVersion, question.trim(), graphPayload(graph, schemaVersion),
+            placement, token, questionId, parentId, displayTitle?.trim()))
         val json = repository.request(requestId, "present_understanding", payload) { db ->
             val effectiveQuestion = savedQuestion ?: if (placement == "child" && context?.recordId != null) {
                 UnderstandingQuestion(
@@ -131,7 +136,7 @@ class UnderstandingCore(
             repository.insertRecord(db, record)
             gson.toJson(record)
         }
-        return gson.fromJson(json, UnderstandingRecord::class.java)
+        return gson.readUnderstandingRecord(json)
     }
 
     fun revise(
@@ -141,21 +146,30 @@ class UnderstandingCore(
         graph: UnderstandingGraph,
         recordId: String,
         expectedRevision: Int,
+        clusterUpdate: ClusterUpdate = if (graph.clusters.isEmpty()) ClusterUpdate.Keep else ClusterUpdate.Replace(graph.clusters),
     ): UnderstandingRecord {
         validateVersion(schemaVersion)
+        requireInput(schemaVersion >= 4 || graph.clusters.isEmpty(), "版本 3 不支持语义分组 clusters")
+        requireInput(schemaVersion >= 4 || clusterUpdate == ClusterUpdate.Keep, "版本 3 不支持更新 clusters")
         requireInput(question.isNotBlank(), "问题不能为空")
         requireInput(recordId.isNotBlank() && expectedRevision > 0, "修订需要记录 ID 和预期版本")
         graph.validate()
         requireInput(graph.nodes.any { it.kind != "placeholder" }, "回答必须包含实际图节点")
-        val payload = gson.toJson(listOf(schemaVersion, question.trim(), graph, "revise", recordId, expectedRevision))
+        val values = listOf(schemaVersion, question.trim(), graphPayload(graph, schemaVersion), "revise", recordId, expectedRevision)
+        val payload = gson.toJson(if (schemaVersion >= 4) values + clusterUpdate else values)
         val json = repository.request(requestId, "present_understanding", payload) { db ->
-            gson.toJson(repository.reviseRecordGraph(db, recordId, expectedRevision, question.trim(), graph))
+            gson.toJson(repository.reviseRecordGraph(db, recordId, expectedRevision, question.trim(), graph, clusterUpdate))
         }
-        return gson.fromJson(json, UnderstandingRecord::class.java)
+        return gson.readUnderstandingRecord(json)
     }
 
     private fun validateVersion(value: Int) {
-        requireInput(value == UNDERSTANDING_SCHEMA_VERSION, "不支持的 schemaVersion：$value；请使用版本 3")
+        requireInput(value in 3..UNDERSTANDING_SCHEMA_VERSION, "不支持的 schemaVersion：$value；请使用版本 4 或无分组的版本 3")
+    }
+
+    /** Protocol-3 retries must retain the payload hash written before the new graph field existed. */
+    private fun graphPayload(graph: UnderstandingGraph, version: Int) = gson.toJsonTree(graph).asJsonObject.apply {
+        if (version == 3) remove("clusters")
     }
 
     private fun resolveParent(placement: String, parentId: String?, context: UnderstandingContext?): String? = when (placement) {

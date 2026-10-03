@@ -23,10 +23,11 @@ internal data class DiagramClusterContent(
 }
 
 internal fun layoutClusterContent(graph: UnderstandingGraph, group: DiagramCluster,
-    panel: DiagramExamplePanel?, direction: LayoutDirection): DiagramClusterContent {
+    panel: DiagramExamplePanel?, direction: LayoutDirection, separateLanes: Boolean = true): DiagramClusterContent {
     val localGraph = UnderstandingGraph(graph.nodes.filter { it.id in group.nodeIds },
         graph.edges.filter { it.from in group.nodeIds && it.to in group.nodeIds })
-    val layout = ElkGraphLayoutAdapter.layout(localGraph, direction)
+    val input = DiagramLayoutInput.prepare(localGraph, direction)
+    val layout = ElkGraphLayoutAdapter.layout(if (separateLanes) reserveDiagramPorts(input, graph) else input, separateLanes)
     val content = Rectangle2D.Double().apply {
         layout.nodes.values.firstOrNull()?.bounds?.let(::setRect)
         layout.nodes.values.drop(1).forEach { add(it.bounds) }
@@ -49,15 +50,15 @@ internal fun layoutClusterContent(graph: UnderstandingGraph, group: DiagramClust
 
 /** Extend ELK's inter-group corridors to the actual node ports; repair resolves local obstructions. */
 internal fun connectClusterContent(edge: GraphEdge, elk: ElkEdge, nodes: Map<String, PlacedNode>,
-    direction: LayoutDirection): PlacedEdge {
+    direction: LayoutDirection, ports: DiagramEdgePorts? = null): PlacedEdge {
     val corridor = ElkGraphLayoutAdapter.placedEdge(edge, elk)
     val first = elk.sections.first()
     val last = elk.sections.last()
     val source = nodes.getValue(edge.from).bounds
     val target = nodes.getValue(edge.to).bounds
-    val start = if (direction == LayoutDirection.VERTICAL) Point2D.Double(source.centerX, source.maxY)
+    val start = ports?.source?.point ?: if (direction == LayoutDirection.VERTICAL) Point2D.Double(source.centerX, source.maxY)
         else Point2D.Double(source.maxX, source.centerY)
-    val end = if (direction == LayoutDirection.VERTICAL) Point2D.Double(target.centerX, target.minY)
+    val end = ports?.target?.point ?: if (direction == LayoutDirection.VERTICAL) Point2D.Double(target.centerX, target.minY)
         else Point2D.Double(target.minX, target.centerY)
     val exit = Point2D.Double(first.startX, first.startY)
     val entry = Point2D.Double(last.endX, last.endY)

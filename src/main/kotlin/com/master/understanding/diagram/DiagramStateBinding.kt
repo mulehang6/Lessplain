@@ -3,6 +3,7 @@ package com.master.understanding.diagram
 import com.master.understanding.ide.GraphLayerKey
 import com.master.understanding.ide.UnderstandingService
 import com.master.understanding.model.BrowseState
+import com.master.understanding.model.RouteNavigationState
 
 internal fun graphBrowseState(service: UnderstandingService, key: GraphLayerKey): BrowseState? =
     service.graphStates.get(key).browse ?:
@@ -41,10 +42,11 @@ internal fun saveGraphViewState(
     diagram: UnderstandingDiagram,
     path: List<String>,
     nodeId: String?,
+    navigationState: RouteNavigationState? = null,
 ) {
     val center = diagram.center
     service.graphStates.update(key) { previous ->
-        val browse = BrowseState(key.canvasId, nodeId, path, diagram.zoom, center.x, center.y, true)
+        val browse = BrowseState(key.canvasId, nodeId, path, diagram.zoom, center.x, center.y, true, navigationState)
         previous.withViewport(diagram.activeDirection, browse).copy(browse = browse)
     }
 }

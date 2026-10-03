@@ -45,7 +45,7 @@ private fun UnderstandingRepository.answerQuestions(db: Connection, where: Strin
     parameters.forEachIndexed { index, value -> statement.setString(index + 1, value) }
     statement.executeQuery().use { rows -> buildList {
         while (rows.next()) {
-            val record = gson.fromJson(rows.getString(1), UnderstandingRecord::class.java)
+            val record = gson.readUnderstandingRecord(rows.getString(1))
             val token = record.contextToken ?: continue
             add(UnderstandingQuestion(requireNotNull(record.questionId), record.question, token,
                 record.parentId, "answered", record.createdAt))

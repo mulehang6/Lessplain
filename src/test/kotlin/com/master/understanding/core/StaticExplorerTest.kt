@@ -9,7 +9,7 @@ import kotlin.test.assertTrue
 
 class StaticExplorerTest {
     @Test
-    fun `node selection preserves the latest route visit and starts fresh off route`() {
+    fun `direct node selection unfolds upstream while synchronization preserves the latest route visit`() {
         val graph = UnderstandingGraph(
             nodes = listOf(GraphNode("a", "A"), GraphNode("b", "B"), GraphNode("c", "C"), GraphNode("d", "D")),
             edges = listOf(
@@ -26,9 +26,9 @@ class StaticExplorerTest {
         assertEquals(StepResult.Moved("b"), explorer.next())
         assertEquals(listOf("ab", "bc", "cb"), explorer.path)
 
-        assertTrue(explorer.jumpTo("b"))
+        assertTrue(explorer.synchronizeNode("b"))
         assertEquals(listOf("ab", "bc", "cb"), explorer.path)
-        assertTrue(explorer.jumpTo("c"))
+        assertTrue(explorer.synchronizeNode("c"))
         assertEquals(listOf("ab", "bc"), explorer.path)
         assertTrue(explorer.jumpTo("d"))
         assertEquals("d", explorer.currentNodeId)
@@ -117,13 +117,13 @@ class StaticExplorerTest {
 
         assertTrue(explorer.jumpTo("callback_entry"))
         assertEquals(StepResult.Moved("email_parse"), explorer.next())
-        assertTrue(explorer.jumpTo(explorer.currentNodeId))
+        assertTrue(explorer.synchronizeNode(explorer.currentNodeId))
         assertEquals(StepResult.Moved("callback_guard"), explorer.next())
-        assertTrue(explorer.jumpTo(explorer.currentNodeId))
+        assertTrue(explorer.synchronizeNode(explorer.currentNodeId))
         assertEquals(StepResult.Moved("callback_idempotent"), explorer.next())
-        assertTrue(explorer.jumpTo(explorer.currentNodeId))
+        assertTrue(explorer.synchronizeNode(explorer.currentNodeId))
         assertEquals(StepResult.Moved("callback_save"), explorer.next())
-        assertTrue(explorer.jumpTo(explorer.currentNodeId))
+        assertTrue(explorer.synchronizeNode(explorer.currentNodeId))
         assertEquals(
             listOf("callback-email-parse", "email-guard", "guard-idempotent", "idempotent-save"),
             explorer.path,
@@ -135,7 +135,8 @@ class StaticExplorerTest {
         assertEquals("save-publish-retry", explorer.path.last())
         assertEquals("重试发布", graph.edges.single { it.id == explorer.path.last() }.condition)
 
-        assertTrue(explorer.back())
+        assertTrue(explorer.previous() is StepResult.Choose)
+        assertEquals(StepResult.Moved("callback_save"), explorer.choose("save-publish-retry", StepDirection.PREVIOUS))
         assertEquals("callback_save", explorer.currentNodeId)
         assertEquals(
             listOf("callback-email-parse", "email-guard", "guard-idempotent", "idempotent-save"),

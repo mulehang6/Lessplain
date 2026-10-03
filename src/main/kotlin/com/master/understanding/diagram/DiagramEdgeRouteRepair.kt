@@ -11,12 +11,15 @@ internal fun repairEdgeRoutes(
     obstacles: List<Rectangle2D> = emptyList(),
     edgeObstacles: Map<String, List<Rectangle2D>> = emptyMap(),
     stableEdgeIds: Set<String> = emptySet(),
+    laneGap: Double = 8.0,
+    minimumSharedRun: Double = 12.0,
+    fixedPorts: Map<String, DiagramEdgePorts> = emptyMap(),
 ): List<PlacedEdge> {
     if (edges.isEmpty()) return edges
     val ordered = edges.sortedWith(compareBy<PlacedEdge> { it.edge.id !in stableEdgeIds }
         .thenBy { it.edge.id !in mainlineIds }.thenBy { it.edge.id })
     val rank = ordered.mapIndexed { index, edge -> edge.edge.id to index }.toMap()
-    val scene = EdgeRoutingObstacles(nodes.values, obstacles, edgeObstacles)
+    val scene = EdgeRoutingObstacles(nodes.values, obstacles, edgeObstacles, laneGap, minimumSharedRun)
     edges.forEach(scene::add)
     val affected = movedEdgeIds.toMutableSet()
     ordered.forEach { edge ->
@@ -29,7 +32,7 @@ internal fun repairEdgeRoutes(
     }
     if (affected.isEmpty()) return edges
     affected.forEach(scene::remove)
-    val router = LocalEdgeRouter(nodes, ordered, obstacles, edgeObstacles)
+    val router = LocalEdgeRouter(nodes, ordered, obstacles, edgeObstacles, fixedPorts)
     val repaired = hashMapOf<String, PlacedEdge>()
     val byId = ordered.associateBy { it.edge.id }
     val pending = java.util.TreeSet<String>(compareBy { rank.getValue(it) }).apply { addAll(affected) }

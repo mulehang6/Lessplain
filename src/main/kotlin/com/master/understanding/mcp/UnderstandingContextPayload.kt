@@ -1,6 +1,7 @@
 package com.master.understanding.mcp
 
 import com.master.understanding.model.UnderstandingContext
+import com.master.understanding.model.UNDERSTANDING_SCHEMA_VERSION
 import com.master.understanding.storage.UnderstandingRepository
 import com.master.understanding.storage.pendingNoteBatch
 
@@ -11,7 +12,8 @@ internal fun understandingContextPayload(repository: UnderstandingRepository, co
     val questions = (repository.questionsForContext(context.token) +
         (record?.let { repository.questionsForRecord(it.id) } ?: emptyList()))
         .distinctBy { it.id }.filter { it.status != "cancelled" }
-    return mapOf("schemaVersion" to 3, "context" to context, "record" to record, "questions" to questions,
+    return mapOf("schemaVersion" to UNDERSTANDING_SCHEMA_VERSION, "context" to context, "record" to record, "questions" to questions,
         "pendingQuestionId" to questions.singleOrNull { it.status == "pending" && it.contextToken == context.token }?.id,
-        "pendingBatch" to batch, "capabilities" to mapOf("nodeSemantics" to true, "pendingNoteBatch" to true))
+        "pendingBatch" to batch, "capabilities" to mapOf("nodeSemantics" to true, "pendingNoteBatch" to true,
+            "rootClusters" to true, "completeRouteSelection" to true))
 }

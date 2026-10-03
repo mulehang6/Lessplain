@@ -24,7 +24,7 @@ import kotlin.math.min
 
 /** A single graph surface shared by the tool window and the editor. */
 internal class UnderstandingDiagram(
-    private val record: UnderstandingRecord,
+    internal val record: UnderstandingRecord,
     internal val initialState: BrowseState?,
     internal val clusterSpecs: List<DiagramCluster> = emptyList(),
     private val examplePanels: List<DiagramExamplePanel> = emptyList(),
@@ -51,7 +51,7 @@ internal class UnderstandingDiagram(
     private var preferenceChanged: ((GraphLayoutPreference) -> Unit)? = null
     internal var nodePositions = emptyMap<String, GraphNodePosition>()
     private var nodePositionsChanged: ((Map<String, GraphNodePosition>) -> Unit)? = null
-    private val callbacks = mutableSetOf<(String) -> Unit>()
+    internal val callbacks = mutableSetOf<(String) -> Unit>()
     internal val questionCallbacks = mutableSetOf<(String) -> Unit>()
     internal val clusterCallbacks = mutableSetOf<(String) -> Unit>()
     internal val copyCallbacks = mutableSetOf<(String) -> Unit>()
@@ -71,7 +71,7 @@ internal class UnderstandingDiagram(
     internal var selectedNodeId = initialState?.nodeId ?: record.graph.nodes.firstOrNull()?.id
     internal var currentNodeId = selectedNodeId
     internal var routeEdgeIds = emptySet<String>()
-    private var routeNodeIds = emptySet<String>()
+    internal val completeRouteNavigation = DiagramCompleteRouteNavigation(this, record.graph)
     internal var choiceTargets = emptySet<String>()
     private var choicePhase = 0f
     internal var copiedNodeId: String? = null
@@ -90,7 +90,7 @@ internal class UnderstandingDiagram(
     private var viewportChanged: (() -> Unit)? = null
     private var stateSubscription: AutoCloseable? = null
 
-    internal val header = DiagramHeader(if (clusterSpecs.isEmpty()) record.displayTitle ?: record.question
+    internal val header = DiagramHeader(if (record.parentId == null || clusterSpecs.isEmpty()) record.displayTitle ?: record.question
         else "节点追问 · ${record.question}")
     val jComponent: JComponent get() = this
     val center: Point2D.Double get() = Point2D.Double(centerX, centerY)
@@ -145,7 +145,8 @@ internal class UnderstandingDiagram(
     }
     internal val copyTimer = Timer(1800) { copiedNodeId = null; repaint() }.apply { isRepeats = false }
     internal val cameraTimer = Timer(16) { advanceCamera() }
-    private val controls = UnderstandingDiagramControls(this)
+    internal val controls = UnderstandingDiagramControls(this)
+    internal var routeNavigation: DiagramRouteNavigation? = null
     internal val clusters: List<PlacedCluster> get() = layout.clusters
     internal val clusterCount: Int get() = clusterSpecs.size +
         if (record.graph.nodes.any { node -> clusterSpecs.none { node.id in it.nodeIds } }) 1 else 0
@@ -253,6 +254,7 @@ internal class UnderstandingDiagram(
                     ?: currentNodeId?.let(::centerOnNode)
             }
             controls.refreshClusters()
+            if (choiceTargets.isNotEmpty()) setChoiceTargets(choiceTargets)
             applyPendingClusterFocus()
             repaint()
         }.onFailure { failure ->
@@ -276,7 +278,7 @@ internal class UnderstandingDiagram(
     }
 
     fun setChoiceTargets(targets: Set<String>) {
-        choiceTargets = targets.filterTo(mutableSetOf()) { it in layout.nodes }
+        choiceTargets = targets.filterTo(mutableSetOf()) { it in nodeIds }
         updateTimer()
         if (autoFollowNode && choiceTargets.isNotEmpty() && width > 0 && height > 0) {
             val bounds = Rectangle2D.Double()
@@ -304,19 +306,21 @@ internal class UnderstandingDiagram(
         add(controls.sideControls)
         add(controls.previousButton)
         add(controls.nextButton)
+        add(controls.routeButton)
         isOpaque = true
         isFocusable = true
         ToolTipManager.sharedInstance().registerComponent(this)
         preferredSize = Dimension(520, 360)
         getAccessibleContext().accessibleName = "理解图"
         getAccessibleContext().accessibleDescription = "方向键选择节点，Ctrl+C 复制来源，Enter 查看追问"
-        DiagramKeyboardActions.install(this, ::moveSelection,
+        DiagramKeyboardActions.install(this, { DiagramKeyboardActions.move(this, it) },
             onCopy = { currentNodeId?.let { id -> copyCallbacks.toList().forEach { it(id) } } },
-            onQuestions = {
+            onQuestions = questions@ {
+                if (routeNavigation?.confirmCandidate() == true) return@questions
                 currentNodeId?.takeIf { (questionCounts[it] ?: 0) > 0 }?.let { id ->
                     questionCallbacks.toList().forEach { it(id) }
                 }
-            })
+            }, onCancel = { routeNavigation?.cancel() })
         val mouse = DiagramMouseInteraction(this)
         addMouseListener(mouse)
         addMouseMotionListener(mouse)
@@ -329,11 +333,15 @@ internal class UnderstandingDiagram(
             }
         })
         addHierarchyListener { event ->
-            if (event.changeFlags and HierarchyEvent.SHOWING_CHANGED.toLong() != 0L) updateTimer()
+            if (event.changeFlags and HierarchyEvent.SHOWING_CHANGED.toLong() != 0L) {
+                if (!isShowing) routeNavigation?.cancel()
+                updateTimer()
+            }
         }
         if (record.graph.nodes.isNotEmpty()) {
-            val explorer = StaticExplorer(record.graph, initialState?.staticPath.orEmpty(), initialState?.nodeId)
-            showUnderstandingPath(explorer.path, explorer.currentNodeId, centerNode = false)
+            val explorer = StaticExplorer(record.graph, initialState?.staticPath.orEmpty(), initialState?.nodeId,
+                initialState?.navigationState)
+            completeRouteNavigation.showNavigation(explorer.navigationState, explorer.currentNodeId, centerNode = false)
         }
     }
 
@@ -353,13 +361,6 @@ internal class UnderstandingDiagram(
         return true
     }
 
-
-    private fun moveSelection(delta: Int) {
-        val ids = layout.nodes.keys.toList()
-        if (ids.isEmpty()) return
-        val index = ids.indexOf(currentNodeId).coerceAtLeast(0)
-        selectUnderstandingNode(ids[(index + delta + ids.size) % ids.size], notify = true)
-    }
 
     override fun doLayout() {
         controls.arrange(width)
@@ -416,36 +417,14 @@ internal class UnderstandingDiagram(
         repaint()
     }
 
-    fun showUnderstandingPath(pathEdgeIds: List<String>, nodeId: String, centerNode: Boolean) {
-        routeEdgeIds = pathEdgeIds.toSet()
-        routeNodeIds = record.graph.edges.filter { it.id in routeEdgeIds }
-            .flatMap { listOf(it.from, it.to) }.toSet()
-        currentNodeId = nodeId
-        selectedNodeId = nodeId
-        if (centerNode && autoFollowNode) centerOnNode(nodeId)
-        updateTimer()
-        repaint()
-    }
-
-    fun selectUnderstandingNode(nodeId: String) = selectUnderstandingNode(nodeId, notify = false)
-
-    internal fun selectUnderstandingNode(nodeId: String, notify: Boolean) {
-        if (nodeId !in layout.nodes) return
-        selectedNodeId = nodeId
-        currentNodeId = nodeId
-        overlays.rememberTarget(nodeId)
-        if (autoFollowNode) centerOnNode(nodeId)
-        if (notify) callbacks.toList().forEach { it(nodeId) }
-        repaint()
-    }
-
     override fun paintComponent(graphics: Graphics) {
         super.paintComponent(graphics)
         DiagramCanvasPainter.paint(graphics, DiagramPaintState(layout, examplePanels, width, height,
             zoom, centerX, centerY, currentNodeId, hoveredNodeId, hoveredAction, questionCounts,
             pendingNoteCounts,
             startIds, endIds, routeEdgeIds, choiceTargets, choicePhase, copiedNodeId,
-            animateFlow, flowPhase, controls.height, overlays.titles, branchIds, draftNoteNodes))
+            animateFlow, flowPhase, controls.height, overlays.titles, branchIds, draftNoteNodes,
+            completeRouteNavigation.upstreamEdgeIds, completeRouteNavigation.previewEdgeIds))
         if (!layoutReady || layoutFailure != null) {
             val message = layoutFailure?.let { "布局失败：$it（点击重试）" } ?: "正在排版…"
             graphics.color = foreground
@@ -456,9 +435,11 @@ internal class UnderstandingDiagram(
 
     override fun dispose() {
         disposed = true
+        routeNavigation?.close()
         overlays.close()
         header.close()
         controls.dispose()
+        completeRouteNavigation.close()
         layoutCoordinator.close()
         flowTimer.stop()
         choiceTimer.stop()

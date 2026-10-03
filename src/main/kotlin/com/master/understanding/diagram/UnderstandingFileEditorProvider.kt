@@ -17,18 +17,13 @@ import com.intellij.openapi.fileTypes.PlainTextFileType
 import com.master.understanding.ide.UnderstandingService
 import com.master.understanding.ide.GraphLayerKey
 import com.master.understanding.model.UnderstandingRecord
-import com.master.understanding.model.BrowseState
-import com.master.understanding.model.GraphEdge
 import com.master.understanding.core.StaticExplorer
-import com.master.understanding.core.StepResult
 import com.master.understanding.ui.buildQuestionCanvas
 import com.master.understanding.ui.FollowUpLayer
 import com.master.understanding.ui.graphHierarchyEntries
 import com.master.understanding.ui.questionsForNode
 import com.master.understanding.ui.bindContentActions
 import com.master.understanding.ui.SourceNode
-import com.master.understanding.ui.projectCanvasPathToSource
-import com.master.understanding.ui.projectSourcePathToCanvas
 import com.master.understanding.storage.pendingQuestionsForNode
 import java.awt.BorderLayout
 import java.awt.FlowLayout
@@ -86,47 +81,10 @@ private class UnderstandingFileEditor(private val project: Project, private val 
     }
     private val explorer = (questionCanvas?.record ?: record).graph.nodes.firstOrNull()?.let {
         val saved = graphBrowseState(service, graphKey)
-        StaticExplorer((questionCanvas?.record ?: record).graph, saved?.staticPath.orEmpty(), saved?.nodeId)
+        StaticExplorer((questionCanvas?.record ?: record).graph, saved?.staticPath.orEmpty(), saved?.nodeId,
+            saved?.navigationState, scopes = questionCanvas?.sources?.mapValues { it.value.record.id }.orEmpty())
     }
-    private var choices: List<GraphEdge> = emptyList()
-    private val selection = builder.onNodeSelected { nodeId ->
-        val chosen = choices.firstOrNull { it.to == nodeId }
-        val current = explorer ?: return@onNodeSelected
-        if (chosen == null && nodeId == current.currentNodeId) return@onNodeSelected
-        val moved = if (chosen != null) current.choose(chosen.id) is StepResult.Moved else current.jumpTo(nodeId)
-        if (!moved) return@onNodeSelected
-        choices = emptyList()
-        updatePath()
-    }
-    private val sourceSelection = service.onSelectionChanged { recordId, nodeId ->
-        val id = if (questionCanvas == null) nodeId?.takeIf { recordId == record.id }
-            else questionCanvas.sources.entries.firstOrNull { (_, source) ->
-                source.record.id == recordId && source.nodeId == nodeId
-            }?.key
-        val current = explorer
-        if (id != null && current != null) {
-            val previousNodeId = current.currentNodeId
-            val previousPath = current.path
-            val source = questionCanvas?.sources?.get(id)
-            val projectedPath = source?.let {
-                val sourceBrowse = service.graphStates.get(GraphLayerKey(it.record.id)).browse
-                    ?: service.repository.getBrowseState(it.record.id)
-                val sourcePath = sourceBrowse?.takeIf { state -> state.nodeId == it.nodeId }?.staticPath.orEmpty()
-                projectSourcePathToCanvas(questionCanvas, sourcePath, it, id)
-            }
-            val browse = graphBrowseState(service, graphKey)
-            val restored = projectedPath?.let { current.restorePath(it, id) }
-                ?: browse?.takeIf { state -> state.nodeId == id }
-                    ?.let { state -> current.restorePath(state.staticPath, id) }
-                ?: current.jumpTo(id)
-            if (restored && previousNodeId == current.currentNodeId && previousPath == current.path) return@onSelectionChanged
-            choices = emptyList()
-            builder.setChoiceTargets(emptySet())
-            builder.showUnderstandingPath(current.path, id, centerNode = true)
-            updateStepAvailability()
-            saveGraphViewState(service, graphKey, builder, current.path, id)
-        }
-    }
+    private val navigation = bindDiagramSourceNavigation(service, graphKey, builder, explorer, record, questionCanvas)
     private val questionSelection = builder.onQuestionBadgeClicked { nodeId ->
         val source = questionCanvas?.sources?.get(nodeId)
             ?: if (questionCanvas == null) SourceNode(record, nodeId) else null
@@ -134,21 +92,6 @@ private class UnderstandingFileEditor(private val project: Project, private val 
             service.select(it.record, it.nodeId, navigateSource = false)
             openRecordInEditor(project, it.record, it.nodeId, replace = virtualFile)
         }
-    }
-    private val clusterSelection = builder.onClusterSelected { nodeId ->
-        val current = explorer ?: return@onClusterSelected
-        if (nodeId == current.currentNodeId || !current.jumpTo(nodeId)) return@onClusterSelected
-        choices = emptyList()
-        builder.setChoiceTargets(emptySet())
-        builder.showUnderstandingPath(current.path, nodeId, centerNode = false)
-        saveGraphViewState(service, graphKey, builder, current.path, current.currentNodeId)
-        questionCanvas?.sources?.get(nodeId)?.let {
-            val canvas = questionCanvas
-            service.select(it.record, it.nodeId, navigateSource = !builder.navigationPinned,
-                staticPath = projectCanvasPathToSource(canvas, current.path, it))
-        }
-        if (questionCanvas == null) service.select(record, nodeId, navigateSource = !builder.navigationPinned)
-        updateStepAvailability()
     }
     private val copySelection = builder.onCopyNodeContext { nodeId ->
         val source = questionCanvas?.sources?.get(nodeId)
@@ -160,7 +103,13 @@ private class UnderstandingFileEditor(private val project: Project, private val 
         questionCanvas?.sources?.get(nodeId) ?: if (questionCanvas == null) SourceNode(record, nodeId) else null
     }, { id -> questionCanvas?.clusterSources?.get(id) }, titleRecord = record.takeIf { questionCanvas == null })
 
-    private val changed = service.onChanged { updateQuestionCounts() }
+    private val changed = service.onChanged {
+        val records = questionCanvas?.sources?.values?.map { it.record }.orEmpty() + record
+        if (records.any { snapshot ->
+            runCatching { service.repository.getRecord(snapshot.id).revision != snapshot.revision }.getOrDefault(true)
+        }) navigation.close()
+        updateQuestionCounts()
+    }
     private val backButton = JButton("‹ 返回").apply {
         setToolTipText(HtmlChunk.text("返回上一级理解图"))
         addActionListener {
@@ -203,50 +152,14 @@ private class UnderstandingFileEditor(private val project: Project, private val 
                 }
             }
         }
-        builder.onViewportChanged {
-            saveGraphViewState(service, graphKey, builder, explorer?.path.orEmpty(), explorer?.currentNodeId)
-        }
         refreshHeader()
         updateQuestionCounts()
-        builder.setStepActions(
-            previous = explorer?.let { current -> { if (current.back()) updatePath() } },
-            next = explorer?.let { current -> {
-                when (val result = current.next()) {
-                    is StepResult.Choose -> {
-                        choices = result.edges
-                        builder.setChoiceTargets(choices.mapTo(mutableSetOf()) { it.to })
-                    }
-                    is StepResult.Moved -> updatePath()
-                    else -> Unit
-                }
-            } },
-        )
-        updateStepAvailability()
     }
 
     private fun refreshHeader() {
         if (virtualFile.parentFile == null) panel.remove(header) else panel.add(header, BorderLayout.NORTH)
         panel.revalidate()
         panel.repaint()
-    }
-
-    private fun updatePath() {
-        val current = explorer ?: return
-        choices = emptyList()
-        builder.setChoiceTargets(emptySet())
-        builder.showUnderstandingPath(current.path, current.currentNodeId, centerNode = true)
-        updateStepAvailability()
-        saveGraphViewState(service, graphKey, builder, current.path, current.currentNodeId)
-        val source = questionCanvas?.sources?.get(current.currentNodeId)
-        if (source != null) service.select(source.record, source.nodeId, navigateSource = !builder.navigationPinned,
-            staticPath = projectCanvasPathToSource(questionCanvas, current.path, source))
-        else if (questionCanvas == null) service.select(record, current.currentNodeId,
-            navigateSource = !builder.navigationPinned)
-    }
-
-    private fun updateStepAvailability() {
-        builder.setStepAvailability(explorer?.path?.isNotEmpty() == true,
-            explorer?.availableEdges()?.isNotEmpty() == true)
     }
 
     private fun updateQuestionCounts() {
@@ -286,27 +199,11 @@ private class UnderstandingFileEditor(private val project: Project, private val 
     override fun removePropertyChangeListener(listener: PropertyChangeListener) = changes.removePropertyChangeListener(listener)
     override fun dispose() {
         disposed = true
-        saveGraphViewState(service, graphKey, builder, explorer?.path.orEmpty(), explorer?.currentNodeId)
-        selection.close()
-        sourceSelection.close()
+        navigation.close()
         questionSelection.close()
-        clusterSelection.close()
         copySelection.close()
         content.close()
         changed.close()
-        builder.setStepActions(null, null)
-        if (questionCanvas == null && !service.repository.readOnly) {
-            runCatching {
-                val center = builder.center
-                val previous = service.repository.getBrowseState(record.id)
-                service.repository.saveBrowseState((previous ?: BrowseState(record.id)).copy(
-                    zoom = builder.zoom,
-                    panX = center.x,
-                    panY = center.y,
-                    hasPan = true,
-                ))
-            }
-        }
         Disposer.dispose(builder)
         panel.removeAll()
     }

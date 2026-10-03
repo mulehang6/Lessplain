@@ -35,6 +35,8 @@ internal data class DiagramPaintState(
     val titleState: DiagramTitleState = DiagramTitleState(),
     val branchIds: Set<String> = emptySet(),
     val draftNoteNodes: Set<String> = emptySet(),
+    val upstreamEdgeIds: Set<String> = emptySet(),
+    val previewEdgeIds: Set<String>? = null,
 )
 
 /** Paints the canvas from a snapshot; input and navigation remain in the diagram view. */
@@ -71,7 +73,8 @@ internal object DiagramCanvasPainter {
                 }
             }
             DiagramEdgePainter.paint(g, state.layout.edges, state.routeEdgeIds, state.animateFlow,
-                state.flowPhase, visible)
+                state.flowPhase, visible, state.upstreamEdgeIds, state.previewEdgeIds,
+                state.layout.crossings, state.layout.clusters)
             DiagramNodePainter.paint(g, state.layout, state.currentNodeId, state.hoveredNodeId,
                 state.questionCounts, state.pendingNoteCounts, state.startIds, state.endIds, state.choiceTargets,
                 state.choicePhase, state.copiedNodeId, visible, state.branchIds, state.draftNoteNodes)

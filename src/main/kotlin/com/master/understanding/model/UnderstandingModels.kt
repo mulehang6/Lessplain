@@ -1,6 +1,6 @@
 package com.master.understanding.model
 
-const val UNDERSTANDING_SCHEMA_VERSION = 3
+const val UNDERSTANDING_SCHEMA_VERSION = 4
 
 /** A fixed code excerpt. The line is a hint, never its identity. */
 data class SourceAnchor(
@@ -46,6 +46,7 @@ data class UnderstandingGraph(
     val nodes: List<GraphNode>,
     val edges: List<GraphEdge>,
     val evidence: List<Evidence> = emptyList(),
+    val clusters: List<GraphCluster> = emptyList(),
 )
 
 data class UnderstandingContext(
@@ -98,4 +99,11 @@ data class BrowseState(
     val panX: Double = 0.0,
     val panY: Double = 0.0,
     val hasPan: Boolean = false,
+    val navigationState: RouteNavigationState? = null,
+)
+
+/** The unresolved upstream prefix and the explicitly selected forward suffix of a reading route. */
+data class RouteNavigationState(
+    val prefixNodeId: String,
+    val selectedEdgeIds: List<String> = emptyList(),
 )

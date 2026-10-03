@@ -16,10 +16,10 @@ internal data class RoutingSegment(val x1: Double, val y1: Double, val x2: Doubl
     )
 
     /** Long parallel runs closer than eight graph pixels cannot be followed independently. */
-    fun sharedRun(other: RoutingSegment): Double = when {
-        abs(y1 - y2) < 0.01 && abs(other.y1 - other.y2) < 0.01 && abs(y1 - other.y1) < 8 ->
+    fun sharedRun(other: RoutingSegment, gap: Double = 8.0): Double = when {
+        abs(y1 - y2) < 0.01 && abs(other.y1 - other.y2) < 0.01 && abs(y1 - other.y1) < gap - 0.01 ->
             max(0.0, min(max(x1, x2), max(other.x1, other.x2)) - max(min(x1, x2), min(other.x1, other.x2)))
-        abs(x1 - x2) < 0.01 && abs(other.x1 - other.x2) < 0.01 && abs(x1 - other.x1) < 8 ->
+        abs(x1 - x2) < 0.01 && abs(other.x1 - other.x2) < 0.01 && abs(x1 - other.x1) < gap - 0.01 ->
             max(0.0, min(max(y1, y2), max(other.y1, other.y2)) - max(min(y1, y2), min(other.y1, other.y2)))
         else -> 0.0
     }
@@ -87,6 +87,8 @@ internal class EdgeRoutingObstacles(
     nodes: Collection<PlacedNode>,
     private val extras: List<Rectangle2D>,
     private val edgeObstacles: Map<String, List<Rectangle2D>> = emptyMap(),
+    private val laneGap: Double = 8.0,
+    private val minimumSharedRun: Double = 12.0,
 ) {
     private val nodeIndex = RoutingSpatialIndex<PlacedNode>().apply {
         nodes.forEach { add(it.bounds, it) }
@@ -121,8 +123,8 @@ internal class EdgeRoutingObstacles(
     /** Only actual collisions return IDs; an isolated crossing is not a routing defect. */
     fun conflicts(edge: PlacedEdge): Set<String> = buildSet {
         edge.segments.forEach { segment ->
-            edgeIndex.query(segment.bounds).filter { it.edgeId != edge.edge.id }.forEach { obstacle ->
-                if (obstacle.segment?.let { segment.sharedRun(it) > 12 } == true ||
+            edgeIndex.query(queryBounds(segment)).filter { it.edgeId != edge.edge.id }.forEach { obstacle ->
+                if (obstacle.segment?.let { segment.sharedRun(it, laneGap) > minimumSharedRun } == true ||
                     obstacle.label && segment.crosses(obstacle.bounds)) add(obstacle.edgeId)
             }
         }
@@ -160,8 +162,8 @@ internal class EdgeRoutingObstacles(
     fun corridorCost(segment: RoutingSegment, edgeId: String): Double {
         if (nodeIndex.query(segment.bounds).any { segment.crosses(interior(it.bounds)) } ||
             (extras + edgeObstacles[edgeId].orEmpty()).any(segment::crosses)) return Double.POSITIVE_INFINITY
-        return edgeIndex.query(segment.bounds).filter { it.edgeId != edgeId }.sumOf { obstacle ->
-            if (obstacle.segment?.let { segment.sharedRun(it) > 0 } ?: segment.crosses(obstacle.bounds))
+        return edgeIndex.query(queryBounds(segment)).filter { it.edgeId != edgeId }.sumOf { obstacle ->
+            if (obstacle.segment?.let { segment.sharedRun(it, laneGap) > 0.01 } ?: segment.crosses(obstacle.bounds))
                 100_000.0 else 0.0
         }
     }
@@ -182,4 +184,8 @@ internal class EdgeRoutingObstacles(
     private fun interior(bounds: Rectangle2D): Rectangle2D = Rectangle2D.Double(
         bounds.x + 0.5, bounds.y + 0.5, max(0.0, bounds.width - 1), max(0.0, bounds.height - 1),
     )
+
+    private fun queryBounds(segment: RoutingSegment): Rectangle2D = segment.bounds.let {
+        Rectangle2D.Double(it.x - laneGap, it.y - laneGap, it.width + laneGap * 2, it.height + laneGap * 2)
+    }
 }

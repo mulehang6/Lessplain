@@ -31,7 +31,9 @@ internal data class UnderstandingGraphLayout(
     val edges: List<PlacedEdge>,
     val bounds: Rectangle2D.Double,
     val clusters: List<PlacedCluster> = emptyList(),
-)
+) {
+    val crossings: List<DiagramCrossing> by lazy { diagramCrossings(edges) }
+}
 
 internal data class DiagramCluster(
     val id: String,
@@ -55,7 +57,8 @@ internal fun layoutUnderstandingClusters(
     clusters: List<DiagramCluster>,
     examplePanels: List<DiagramExamplePanel> = emptyList(),
     direction: LayoutDirection = LayoutDirection.VERTICAL,
-): UnderstandingGraphLayout = ElkClusterLayoutAdapter.layout(graph, clusters, examplePanels, direction)
+    routingVersion: ClusterRoutingVersion = ClusterRoutingVersion.SEPARATE_LANES,
+): UnderstandingGraphLayout = ElkClusterLayoutAdapter.layout(graph, clusters, examplePanels, direction, routingVersion)
 
 /** Layout entry point for a standalone graph. */
 internal fun layoutUnderstandingGraph(graph: UnderstandingGraph): UnderstandingGraphLayout =

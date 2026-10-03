@@ -292,7 +292,7 @@ class UnderstandingRepository(
             statement.setString(1, id)
             statement.executeQuery().use { rows ->
                 if (!rows.next()) throw UnderstandingInputException("理解记录不存在")
-                gson.fromJson(rows.getString(1), UnderstandingRecord::class.java)
+                gson.readUnderstandingRecord(rows.getString(1))
             }
         }
     }
@@ -312,7 +312,7 @@ class UnderstandingRepository(
             statement.setString(4, pattern)
             statement.setInt(5, limit.coerceIn(1, 500))
             statement.executeQuery().use { rows ->
-                while (rows.next()) result += gson.fromJson(rows.getString(1), UnderstandingRecord::class.java)
+                while (rows.next()) result += gson.readUnderstandingRecord(rows.getString(1))
             }
         }
         result
@@ -340,7 +340,7 @@ class UnderstandingRepository(
             (2..4).forEach { statement.setString(it, pattern) }
             statement.setInt(5, limit.coerceIn(1, 500))
             statement.executeQuery().use { rows ->
-                while (rows.next()) result += gson.fromJson(rows.getString(1), UnderstandingRecord::class.java)
+                while (rows.next()) result += gson.readUnderstandingRecord(rows.getString(1))
             }
         }
         result
@@ -354,7 +354,7 @@ class UnderstandingRepository(
         ).use { statement ->
             statement.setString(1, questionId)
             statement.executeQuery().use { rows ->
-                if (rows.next()) gson.fromJson(rows.getString(1), UnderstandingRecord::class.java) else null
+                if (rows.next()) gson.readUnderstandingRecord(rows.getString(1)) else null
             }
         }
     }
@@ -430,7 +430,9 @@ class UnderstandingRepository(
         db.prepareStatement("SELECT data FROM browse_state WHERE record_id=?").use { statement ->
             statement.setString(1, recordId)
             statement.executeQuery().use { rows ->
-                if (rows.next()) gson.fromJson(rows.getString(1), BrowseState::class.java) else null
+                if (rows.next()) runCatching {
+                    decodeBrowseState(com.google.gson.JsonParser.parseString(rows.getString(1)), recordId, gson)
+                }.getOrNull() else null
             }
         }
     }

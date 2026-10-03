@@ -174,7 +174,8 @@ class UnderstandingCoreTest {
         assertTrue(explorer.jumpTo("ok"))
         assertEquals(emptyList(), explorer.path)
         assertEquals("ok", explorer.currentNodeId)
-        assertFalse(explorer.back())
+        assertTrue(explorer.back())
+        assertEquals("lookup", explorer.currentNodeId)
         assertEquals("ok", StaticExplorer(flow, savedNodeId = "ok").currentNodeId)
     }
 
@@ -263,8 +264,8 @@ class UnderstandingCoreTest {
 
         val restoredAtBranch = StaticExplorer(nested, savedNodeId = "read")
         assertEquals(emptyList(), restoredAtBranch.path)
-        assertFalse(restoredAtBranch.back())
-        assertEquals("read", restoredAtBranch.currentNodeId)
+        assertTrue(restoredAtBranch.back())
+        assertEquals("request", restoredAtBranch.currentNodeId)
     }
 
     @Test

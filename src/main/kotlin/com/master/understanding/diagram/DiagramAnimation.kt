@@ -22,7 +22,8 @@ internal fun UnderstandingDiagram.repaintGraphArea(bounds: Rectangle2D) {
 /** Animation timers respond to visibility, user preference, and reduced motion. */
 internal fun UnderstandingDiagram.updateTimer() {
     val reducedMotion = java.lang.Boolean.getBoolean("master.understanding.reduceMotion")
-    if (!disposed && !reducedMotion && animateFlow && isShowing && routeEdgeIds.isNotEmpty())
+    if (!disposed && !reducedMotion && animateFlow && isShowing && routeEdgeIds.isNotEmpty() &&
+        completeRouteNavigation.previewEdgeIds == null)
         flowTimer.start() else flowTimer.stop()
     if (!disposed && !reducedMotion && isShowing && choiceTargets.isNotEmpty())
         choiceTimer.start() else choiceTimer.stop()

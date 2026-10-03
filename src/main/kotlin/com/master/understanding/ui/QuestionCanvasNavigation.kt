@@ -1,6 +1,17 @@
 package com.master.understanding.ui
 
+import com.master.understanding.ide.UnderstandingService
+import com.master.understanding.model.UnderstandingRecord
 import com.master.understanding.core.StaticExplorer
+import com.master.understanding.model.BrowseState
+import com.master.understanding.model.RouteNavigationState
+
+/** A prefixed canvas remains valid only while every contributing record keeps its revision. */
+internal fun QuestionCanvas.isCurrent(service: UnderstandingService, owner: UnderstandingRecord): Boolean =
+    (sources.values.map { it.record } + owner).distinctBy { it.id }.all { snapshot ->
+        runCatching { service.repository.getRecord(snapshot.id).revision == snapshot.revision }.getOrDefault(false)
+    }
+
 
 /** Projects a combined-canvas route only when every edge belongs to the selected source record. */
 internal fun projectCanvasPathToSource(
@@ -35,4 +46,35 @@ internal fun projectSourcePathToCanvas(
     }
     val restored = StaticExplorer(canvas.record.graph, canvasPath, canvasNodeId)
     return canvasPath.takeIf { restored.path == canvasPath }
+}
+
+/** Keeps the unresolved prefix in its source record's namespace, independently of highlighted edge unions. */
+internal fun projectCanvasNavigationToSource(
+    canvas: QuestionCanvas,
+    navigation: RouteNavigationState,
+    source: SourceNode,
+): RouteNavigationState? {
+    val prefix = canvas.sources[navigation.prefixNodeId]?.takeIf { it.record.id == source.record.id } ?: return null
+    val path = projectCanvasPathToSource(canvas, navigation.selectedEdgeIds, source) ?: return null
+    return RouteNavigationState(prefix.nodeId, path)
+}
+
+/** Maps a saved source route into the canvas, preserving the unresolved upstream prefix on source feedback. */
+internal fun projectSourceBrowseToCanvas(
+    canvas: QuestionCanvas,
+    browse: BrowseState,
+    source: SourceNode,
+    canvasNodeId: String,
+): BrowseState? {
+    if (browse.recordId != source.record.id || browse.nodeId != source.nodeId) return null
+    val path = projectSourcePathToCanvas(canvas, browse.staticPath, source, canvasNodeId) ?: return null
+    val navigation = browse.navigationState?.let { saved ->
+        val prefix = canvas.sources.entries.singleOrNull { (_, node) ->
+            node.record.id == source.record.id && node.nodeId == saved.prefixNodeId
+        }?.key ?: return null
+        val restored = StaticExplorer(source.record.graph, browse.staticPath, source.nodeId, saved)
+        if (restored.navigationState != saved) return null
+        RouteNavigationState(prefix, path)
+    }
+    return browse.copy(recordId = canvas.record.id, nodeId = canvasNodeId, staticPath = path, navigationState = navigation)
 }

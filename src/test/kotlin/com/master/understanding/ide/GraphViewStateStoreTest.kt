@@ -1,6 +1,7 @@
 package com.master.understanding.ide
 
 import com.master.understanding.model.BrowseState
+import com.master.understanding.model.RouteNavigationState
 import com.master.understanding.diagram.LayoutDirection
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -8,6 +9,24 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class GraphViewStateStoreTest {
+    @Test
+    fun `navigation prefix round trips while missing or corrupt optional fields retain the selected node`() {
+        val values = mutableMapOf<String, String>()
+        val key = GraphLayerKey("route")
+        val store = GraphViewStateStore(values::get) { name, value -> values[name] = value }
+        val browse = BrowseState("route", "e", listOf("de"), navigationState = RouteNavigationState("d", listOf("de")))
+        store.update(key) { it.copy(browse = browse) }
+        assertEquals(browse, store.get(key).browse)
+        values[key.propertyName()] = """{"browse":{"recordId":"route","nodeId":"d","future":true}}"""
+        assertEquals(BrowseState("route", "d"), store.get(key).browse)
+        values[key.propertyName()] = """{"browse":{"recordId":"route","nodeId":"d",
+            "staticPath":"invalid","navigationState":"invalid"}}"""
+        val corrupt = store.get(key).browse
+        assertEquals("d", corrupt?.nodeId)
+        assertEquals(emptyList(), corrupt?.staticPath)
+        assertEquals(RouteNavigationState(""), corrupt?.navigationState)
+    }
+
     @Test
     fun `legacy coordinates migrate to vertical while each direction keeps its own viewport`() {
         val values = mutableMapOf<String, String>()

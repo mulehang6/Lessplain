@@ -5,6 +5,7 @@ import com.google.gson.JsonParser
 import com.intellij.ide.util.PropertiesComponent
 import com.intellij.openapi.project.Project
 import com.master.understanding.model.BrowseState
+import com.master.understanding.storage.decodeBrowseState
 import com.master.understanding.diagram.LayoutDirection
 import java.nio.charset.StandardCharsets
 import java.util.Base64
@@ -57,6 +58,8 @@ internal class GraphViewStateStore(
     private val read: (String) -> String?,
     private val write: (String, String) -> Unit,
 ) {
+    val navigationSessions = CanvasNavigationSessions()
+
     constructor(project: Project) : this(
         read = { name -> PropertiesComponent.getInstance(project).getValue(name) },
         write = { name, value -> PropertiesComponent.getInstance(project).setValue(name, value) },
@@ -68,18 +71,21 @@ internal class GraphViewStateStore(
     fun get(key: GraphLayerKey): GraphViewState = read(key.propertyName())?.let { json ->
         runCatching {
             val source = JsonParser.parseString(json).asJsonObject
-            val state = gson.fromJson(json, GraphViewState::class.java)
+            val browse = decodeBrowseState(source.remove("browse"), key.canvasId, gson)
+            val vertical = decodeBrowseState(source.remove("verticalViewport"), key.canvasId, gson)
+            val horizontal = decodeBrowseState(source.remove("horizontalViewport"), key.canvasId, gson)
+            val state = gson.fromJson(source, GraphViewState::class.java)
             val legacy = !source.has("stateVersion")
             GraphViewState(
                 navigationPinned = state.navigationPinned,
                 autoFollowNode = source.get("autoFollowNode")?.asBoolean ?: true,
                 flowEnabled = source.get("flowEnabled")?.asBoolean ?: true,
-                browse = state.browse,
+                browse = browse,
                 nodePositions = orDefault(state.nodePositions, emptyMap()),
                 layoutPreference = if (legacy) GraphLayoutPreference.AUTO
                     else orDefault(state.layoutPreference, GraphLayoutPreference.AUTO),
-                verticalViewport = if (legacy) state.browse else state.verticalViewport,
-                horizontalViewport = if (legacy) null else state.horizontalViewport,
+                verticalViewport = if (legacy) browse else vertical,
+                horizontalViewport = if (legacy) null else horizontal,
                 verticalPositions = if (legacy) orDefault(state.nodePositions, emptyMap())
                     else orDefault(state.verticalPositions, emptyMap()),
                 horizontalPositions = if (legacy) emptyMap()

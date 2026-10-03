@@ -32,7 +32,7 @@ fun UnderstandingRepository.pendingNoteBatch(scopeRecordId: String): PendingNote
                 while (rows.next()) {
                     val question = gson.fromJson(rows.getString(1), UnderstandingQuestion::class.java)
                     val context = gson.fromJson(rows.getString(2), UnderstandingContext::class.java)
-                    val record = gson.fromJson(rows.getString(3), UnderstandingRecord::class.java).copy(answer = "")
+                    val record = gson.readUnderstandingRecord(rows.getString(3)).copy(answer = "")
                     items += PendingNoteItem(question.id, question.text, context)
                     records[record.id] = record
                 }

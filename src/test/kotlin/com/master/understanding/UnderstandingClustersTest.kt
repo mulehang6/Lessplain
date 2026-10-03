@@ -1,6 +1,7 @@
 package com.master.understanding
 
 import com.google.gson.Gson
+import com.google.gson.JsonParser
 import com.master.understanding.core.UnderstandingCore
 import com.master.understanding.mcp.parseGraphPayload
 import com.master.understanding.model.GraphEdge
@@ -17,16 +18,16 @@ import java.nio.file.Path
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
-/** Protocol 3 retires public grouping while preserving explicit business boundaries. */
+/** Protocol 3 remains supported without the new root-group field. */
 class UnderstandingClustersTest {
     @TempDir lateinit var root: Path
     private val plain = UnderstandingGraph(listOf(GraphNode("a", "开始"), GraphNode("b", "结束")),
         listOf(GraphEdge("ab", "a", "b", "data_flow")))
 
     @Test fun `all retired cluster representations are rejected`() {
-        val json = Gson().toJson(plain)
+        val json = JsonParser.parseString(Gson().toJson(plain)).asJsonObject.apply { remove("clusters") }.toString()
         for (value in listOf("null", "[]", "[{\"id\":\"old\",\"title\":\"旧分组\",\"nodeIds\":[\"a\",\"b\"]}]")) {
-            assertFailsWith<UnderstandingInputException> { parseGraphPayload(json.dropLast(1) + ",\"clusters\":$value}") }
+            assertFailsWith<UnderstandingInputException> { parseGraphPayload(json.dropLast(1) + ",\"clusters\":$value}", 3) }
         }
         assertEquals(plain, parseGraphPayload(json))
     }
@@ -38,7 +39,7 @@ class UnderstandingClustersTest {
         assertEquals(graph, parseGraphPayload(Gson().toJson(graph)))
         UnderstandingRepository(root).use { repository ->
             val core = UnderstandingCore(repository)
-            for (version in listOf(1, 2, 4)) assertFailsWith<UnderstandingInputException> {
+            for (version in listOf(1, 2, 5)) assertFailsWith<UnderstandingInputException> {
                 core.present(version, "wrong-$version", "流程", graph, "root")
             }
             val record = core.present(3, "new", "流程", graph, "root")

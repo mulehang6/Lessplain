@@ -1,8 +1,11 @@
 package com.master.understanding.ui
 
 import com.master.understanding.diagram.DiagramCluster
+import com.master.understanding.core.StaticExplorer
 import com.master.understanding.model.GraphEdge
 import com.master.understanding.model.GraphNode
+import com.master.understanding.model.BrowseState
+import com.master.understanding.model.RouteNavigationState
 import com.master.understanding.model.UnderstandingGraph
 import com.master.understanding.model.UnderstandingRecord
 import org.junit.jupiter.api.Test
@@ -10,6 +13,37 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 class QuestionCanvasNavigationTest {
+    @Test
+    fun `ambiguous upstream prefix survives a canvas source round trip after moving forward`() {
+        val sourceRecord = sourceRecord("merge", "q", listOf("a", "b", "c", "d", "e"), listOf(
+            "ab" to ("a" to "b"), "ac" to ("a" to "c"), "bd" to ("b" to "d"),
+            "cd" to ("c" to "d"), "de" to ("d" to "e"),
+        ))
+        val prefix = "qq_"
+        val canvas = QuestionCanvas(
+            sourceRecord.copy(id = "canvas", graph = UnderstandingGraph(
+                sourceRecord.graph.nodes.map { it.copy(id = prefix + it.id) },
+                sourceRecord.graph.edges.map { it.copy(id = prefix + it.id, from = prefix + it.from, to = prefix + it.to) },
+            )), emptyList(), sourceRecord.graph.nodes.associate { prefix + it.id to SourceNode(sourceRecord, it.id) },
+            emptyMap(), emptyList(), edgeSources = sourceRecord.graph.edges.associate {
+                prefix + it.id to CanvasSourceEdge(sourceRecord, it.id)
+            },
+        )
+        val explorer = StaticExplorer(canvas.record.graph, savedNodeId = prefix + "d")
+        explorer.next()
+        val source = SourceNode(sourceRecord, "e")
+        val sourceNavigation = requireNotNull(projectCanvasNavigationToSource(canvas, explorer.navigationState, source))
+        assertEquals(RouteNavigationState("d", listOf("de")), sourceNavigation)
+        val browse = BrowseState(sourceRecord.id, "e", listOf("de"), navigationState = sourceNavigation)
+        val restoredBrowse = requireNotNull(projectSourceBrowseToCanvas(canvas, browse, source, prefix + "e"))
+        val restored = StaticExplorer(canvas.record.graph, restoredBrowse.staticPath, restoredBrowse.nodeId,
+            restoredBrowse.navigationState)
+        assertEquals(explorer.navigationState, restored.navigationState)
+        assertEquals(setOf("ab", "ac", "bd", "cd", "de").mapTo(linkedSetOf()) { prefix + it }, restored.highlightedEdgeIds)
+        val unrelated = SourceNode(sourceRecord.copy(id = "unrelated"), "e")
+        assertNull(projectCanvasNavigationToSource(canvas, explorer.navigationState, unrelated))
+    }
+
     @Test
     fun `routes round trip within each child and reject edges from another child`() {
         val first = sourceRecord("first", "note-a", listOf("a-start", "a-parse", "a-save"),
@@ -54,6 +88,13 @@ class QuestionCanvasNavigationTest {
             listOf(firstPrefix + "a-read", secondPrefix + "b-read"), secondSource))
         assertNull(projectSourcePathToCanvas(canvas, listOf("a-read", "b-write"), firstSource,
             firstPrefix + "a-parse"))
+        val explorer = StaticExplorer(canvas.record.graph, scopes = canvas.sources.mapValues { it.value.record.id })
+        explorer.selectNode(secondPrefix + "b-save")
+        assertEquals(listOf("b-read", "b-write"),
+            projectCanvasPathToSource(canvas, explorer.path, SourceNode(second, "b-save")))
+        explorer.selectNode(firstPrefix + "a-save")
+        assertEquals(listOf("a-read", "a-write"),
+            projectCanvasPathToSource(canvas, explorer.path, SourceNode(first, "a-save")))
     }
 
     private fun sourceRecord(

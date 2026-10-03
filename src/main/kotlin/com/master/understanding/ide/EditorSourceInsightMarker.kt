@@ -79,7 +79,7 @@ internal class EditorSourceInsightMarker(
             when (inlay?.let { renderer.buttonAt(it, event.point) }) {
                 SourceInlayButton.PREVIOUS -> if (navigation.canPrevious) {
                     event.consume()
-                    navigation.previous()
+                    navigation.previous(editor.contentComponent, event.point)
                 }
                 SourceInlayButton.NEXT -> if (navigation.canNext) {
                     event.consume()

@@ -29,9 +29,9 @@ internal fun UnderstandingDiagram.bindContentActions(
             }
             setDraftNoteNodes(localNodes)
         },
-        onClusterTitleEdit { id -> clusterSource(id)?.let {
+        if (titleRecord?.graph?.clusters.isNullOrEmpty()) onClusterTitleEdit { id -> clusterSource(id)?.let {
             actions.editRecordTitle(it.record.id, this, overlays.anchor)
-        } },
+        } } else AutoCloseable { },
     )
     return AutoCloseable { subscriptions.forEach(AutoCloseable::close) }
 }

@@ -97,6 +97,6 @@ internal class SourceInsightMarker(private val project: Project, parent: Disposa
 internal data class SourceInlayNavigation(
     val canPrevious: Boolean,
     val canNext: Boolean,
-    val previous: () -> Unit,
+    val previous: (Component, Point) -> Unit,
     val next: (Component, Point) -> Unit,
 )

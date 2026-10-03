@@ -5,6 +5,7 @@ import java.awt.event.MouseEvent
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.test.assertSame
 import org.junit.jupiter.api.Test
 import javax.swing.SwingUtilities
 
@@ -50,15 +51,21 @@ class EditorSourceInsightMarkerTest {
             val resizeCount = fixture.component.componentListeners.size
             var previous = 0
             var next = 0
+            var previousPoint: Point? = null
             val marker = EditorSourceInsightMarker(fixture.editor, 0, fixture.text.length,
                 "很长的代码提示".repeat(60), SourceInlayNavigation(canPrevious = true, canNext = true,
-                    previous = { previous++ }, next = { _, _ -> next++ }))
+                    previous = { component, point ->
+                        assertSame(fixture.component, component)
+                        previousPoint = point
+                        previous++
+                    }, next = { _, _ -> next++ }))
             try {
                 assertEquals(mouseCount + 1, fixture.component.mouseListeners.size)
                 val hint = fixture.renderer.hintBounds(fixture.inlay)
                 click(fixture, Point(hint.maxX.toInt() - 33, hint.y + 10))
                 click(fixture, Point(hint.maxX.toInt() - 10, hint.y + 10))
                 assertEquals(1, previous)
+                assertEquals(Point(hint.maxX.toInt() - 33, hint.y + 10), previousPoint)
                 assertEquals(1, next)
                 val secondLine = hint.y + fixture.component.getFontMetrics(TEST_FONT).height + 4
                 val expandX = (hint.x until hint.maxX.toInt()).first {
@@ -97,7 +104,7 @@ class EditorSourceInsightMarkerTest {
     }
 
     private fun navigation() = SourceInlayNavigation(canPrevious = true, canNext = true,
-        previous = {}, next = { _, _ -> })
+        previous = { _, _ -> }, next = { _, _ -> })
 
     private fun move(fixture: SourceMarkerTestEditor, point: Point) = fixture.component.dispatchEvent(
         MouseEvent(fixture.component, MouseEvent.MOUSE_MOVED, 0, 0, point.x, point.y, 0, false),

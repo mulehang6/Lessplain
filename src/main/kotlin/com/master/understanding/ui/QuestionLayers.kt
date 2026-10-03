@@ -18,10 +18,9 @@ import com.master.understanding.diagram.createUnderstandingDiagram
 import com.master.understanding.diagram.bindGraphState
 import com.master.understanding.diagram.graphBrowseState
 import com.master.understanding.diagram.requestFocusCluster
-import com.master.understanding.diagram.saveGraphViewState
+import com.master.understanding.diagram.bindDiagramSourceNavigation
 import com.master.understanding.ide.GraphLayerKey
 import com.master.understanding.core.StaticExplorer
-import com.master.understanding.core.StepResult
 import com.master.understanding.ide.UnderstandingService
 import com.master.understanding.model.GraphNode
 import com.master.understanding.model.GraphEdge
@@ -97,81 +96,10 @@ internal fun QuestionIndexView(
     DisposableEffect(diagram, canvas) {
         val saved = graphBrowseState(service, graphKey)
         val explorer = canvas.record.graph.nodes.firstOrNull()?.let {
-            StaticExplorer(canvas.record.graph, saved?.staticPath.orEmpty(), saved?.nodeId)
+            StaticExplorer(canvas.record.graph, saved?.staticPath.orEmpty(), saved?.nodeId, saved?.navigationState,
+                scopes = canvas.sources.mapValues { it.value.record.id })
         }
-        diagram.onViewportChanged {
-            saveGraphViewState(service, graphKey, diagram, explorer?.path.orEmpty(), explorer?.currentNodeId)
-        }
-        var choices = emptyList<GraphEdge>()
-        fun updatePath() {
-            val current = explorer ?: return
-            diagram.setChoiceTargets(choices.mapTo(mutableSetOf()) { it.to })
-            diagram.showUnderstandingPath(current.path, current.currentNodeId, centerNode = true)
-            diagram.setStepAvailability(current.path.isNotEmpty(), current.availableEdges().isNotEmpty())
-            saveGraphViewState(service, graphKey, diagram, current.path, current.currentNodeId)
-            canvas.sources[current.currentNodeId]?.let {
-                service.select(it.record, it.nodeId, navigateSource = !diagram.navigationPinned,
-                    staticPath = projectCanvasPathToSource(canvas, current.path, it))
-            }
-        }
-        diagram.setStepActions(
-            previous = explorer?.let { current ->
-                { if (current.back()) { choices = emptyList(); updatePath() } }
-            },
-            next = explorer?.let { current ->
-                {
-                    when (val result = current.next()) {
-                        is StepResult.Choose -> { choices = result.edges; diagram.setChoiceTargets(choices.mapTo(mutableSetOf()) { it.to }) }
-                        is StepResult.Moved -> { choices = emptyList(); updatePath() }
-                        else -> Unit
-                    }
-                }
-            },
-        )
-        diagram.setStepAvailability(explorer?.path?.isNotEmpty() == true,
-            explorer?.availableEdges()?.isNotEmpty() == true)
-        val selection = diagram.onNodeSelected { id ->
-            val current = explorer
-            if (current != null) {
-                val chosen = choices.firstOrNull { it.to == id }
-                if (chosen == null && id == current.currentNodeId) return@onNodeSelected
-                val moved = if (chosen != null) current.choose(chosen.id) is StepResult.Moved else current.jumpTo(id)
-                if (moved) {
-                    choices = emptyList()
-                    updatePath()
-                }
-            } else canvas.sources[id]?.let {
-                service.select(it.record, it.nodeId, navigateSource = !diagram.navigationPinned)
-            }
-        }
-        val sourceSelection = service.onSelectionChanged { recordId, nodeId ->
-            val id = canvas.sources.entries.firstOrNull { (_, source) ->
-                source.record.id == recordId && source.nodeId == nodeId
-            }?.key
-            val current = explorer
-            if (id != null && current != null) {
-                val previousNodeId = current.currentNodeId
-                val previousPath = current.path
-                val source = canvas.sources.getValue(id)
-                val sourceBrowse = service.graphStates.get(GraphLayerKey(source.record.id)).browse
-                    ?: service.repository.getBrowseState(source.record.id)
-                val sourcePath = sourceBrowse?.takeIf { it.nodeId == source.nodeId }?.staticPath.orEmpty()
-                val projectedPath = projectSourcePathToCanvas(canvas, sourcePath, source, id)
-                val browse = graphBrowseState(service, graphKey)
-                val restored = projectedPath?.let { current.restorePath(it, id) }
-                    ?: browse?.takeIf { state -> state.nodeId == id }
-                        ?.let { state -> current.restorePath(state.staticPath, id) }
-                    ?: current.jumpTo(id)
-                if (restored && previousNodeId == current.currentNodeId && previousPath == current.path) {
-                    return@onSelectionChanged
-                }
-                choices = emptyList()
-                diagram.setChoiceTargets(emptySet())
-                diagram.showUnderstandingPath(current.path, id, centerNode = true)
-                diagram.setStepAvailability(current.path.isNotEmpty(), current.availableEdges().isNotEmpty())
-                saveGraphViewState(service, graphKey, diagram, current.path, id)
-            }
-        }
+        val navigation = bindDiagramSourceNavigation(service, graphKey, diagram, explorer, record, canvas)
         val copy = diagram.onCopyNodeContext { id ->
             canvas.sources[id]?.let {
                 service.copyNodeContext(it.record, it.nodeId)
@@ -184,28 +112,11 @@ internal fun QuestionIndexView(
                 onChildQuestions(it.record, it.nodeId)
             }
         }
-        val clusterSelection = diagram.onClusterSelected { id ->
-            val current = explorer ?: return@onClusterSelected
-            if (id == current.currentNodeId || !current.jumpTo(id)) return@onClusterSelected
-            choices = emptyList()
-            diagram.setChoiceTargets(emptySet())
-            diagram.showUnderstandingPath(current.path, id, centerNode = false)
-            diagram.setStepAvailability(current.path.isNotEmpty(), current.availableEdges().isNotEmpty())
-            saveGraphViewState(service, graphKey, diagram, current.path, current.currentNodeId)
-            canvas.sources[id]?.let { source ->
-                service.select(source.record, source.nodeId, navigateSource = !diagram.navigationPinned,
-                    staticPath = projectCanvasPathToSource(canvas, current.path, source))
-            }
-        }
         onDispose {
-            saveGraphViewState(service, graphKey, diagram, explorer?.path.orEmpty(), explorer?.currentNodeId)
-            selection.close()
-            sourceSelection.close()
+            navigation.close()
             copy.close()
             content.close()
             questionSelection.close()
-            clusterSelection.close()
-            diagram.setStepActions(null, null)
             Disposer.dispose(diagram)
         }
     }
