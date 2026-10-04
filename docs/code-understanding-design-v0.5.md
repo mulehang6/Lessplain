@@ -2,7 +2,7 @@
 
 本文是唯一主设计文档。React 只验证交互，不代表真实 IDE、Agent 或 Debugger 行为。`..` 已开始原生插件实现；当前实现及未验证项见根目录 README，不把代码编译通过视为完成交互验收。
 
-早期技术建议和选型记录见 [实施草案](implementation-draft.md)；当前实现状态以根目录 README 为准。
+早期技术建议和选型记录见 [实施草案](agents/implementation-draft.md)；当前实现状态以根目录 README 为准。
 
 ## 1. 目标与原则
 

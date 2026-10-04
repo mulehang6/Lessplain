@@ -43,7 +43,7 @@
 
 两条内置连接通过各自的 `execute_tool` 路由器调用。将 `get_understanding_context` 或 `present_understanding` 及参数放入 `command`，把插件验收 IDE 当前打开的项目路径放在外层 `projectPath`；不要将插件工程路径误传给验收 IDE。本插件目前只有这两个 MCP 工具。本工程 Kotlin 源码分析遵循 `idea-mcp-priority`：优先使用 `idea` 的项目搜索、符号分析、语义操作和诊断能力；内置能力不可用或合理修正后仍失败时，用等价的自身工具处理并说明覆盖限制。普通磁盘读取、文本编辑、新增及命令执行使用本机工具；`idea_dev_2026` 用于插件自身工具及验收对象，不能作为开发源码分析的替代连接。
 
-在 `Agent-dev` 工作区启动插件时，选唯一的 `Master Understanding IDE` 运行配置；不要选同名旧配置 `Run IDE with Plugin`，它属于 `walkthrough-plugin`，会把没有 Gradle 构建文件的工作区根目录传给 Gradle。若单独打开 `master-understanding`，使用 `Master Understanding IDE (standalone)`。两个配置的 Gradle 工程目录都必须指向本插件的 `settings.gradle.kts` 所在目录。
+开发默认打开父级 `Agent-dev` 工程。仓库内 `Master Understanding IDE`、`Master Understanding Tests` 和 `Master Understanding Verifications` 三份运行配置的 Gradle 路径都是 `$PROJECT_DIR$/master-understanding`，这是父工程下的预期设置，不为单独打开插件目录而修改。启动插件时选唯一的 `Master Understanding IDE`；不要选旧配置 `Run IDE with Plugin`，它属于 `walkthrough-plugin`，会把没有 Gradle 构建文件的工作区根目录传给 Gradle。单独打开 `master-understanding` 时，使用本目录的 Gradle 命令，或另建 Gradle 工程目录指向本插件 `settings.gradle.kts` 所在目录的配置。
 
 开发 IDE 重新启动后，旧的 stdio MCP 连接可能失效。MCP 重连只恢复通信，不会把新构建的插件代码加载进仍在运行的 IDE。自动化工作不要为验证而启动开发 IDE 或截图；需要时等待用户明确要求。
 

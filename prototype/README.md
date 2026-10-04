@@ -4,7 +4,7 @@ React + TypeScript + Vite 原型，围绕问题树、源码、关系图与历史
 
 本目录只保留交互原型，真实插件已在上级工程中开发。完整方案见 [主设计文档](../docs/code-understanding-design-v0.5.md)，当前插件状态见 [根目录 README](../README.md)，产品与协作原则见 [AGENTS.md](AGENTS.md)。原型中的演示方式不直接作为插件设计。
 
-早期技术建议与选型过程见 [实施草案](../docs/implementation-draft.md)。原生 Diagram 已完成评估，当前插件使用自绘图。
+早期技术建议与选型过程见 [实施草案](../docs/agents/implementation-draft.md)。原生 Diagram 已完成评估，当前插件使用自绘图。
 
 规划包含同一工具窗口内的独立历史页、全部问答的分组保存与搜索、图打开到编辑器、静态分支选路，以及 diff 理解和就地追问；这些尚未在当前原型实现。具体差距见主设计文档末尾。
 

@@ -8,7 +8,7 @@
 
 **Agent 提交理解图 → 看图与定位源码 → 复制节点来源 → 用户提出追问 → 回答归回原处 → 重启恢复。**
 
-开始前读取工程及上级的 `../../AGENTS.md`，以及 `docs` 下的 `code-understanding-design-v0.5.md`、`context.md`、`implementation-draft.md`。产品要求以主设计文档为准，本批实施范围以本计划为准。
+开始前读取工程及上级的 `../../AGENTS.md`，以及 `docs` 下的 `code-understanding-design-v0.5.md`、`context.md`、`agents/implementation-draft.md`。产品要求以主设计文档为准，本批实施范围以本计划为准。
 
 本批不实现真实 Trace、完整 Diff 理解、全局项目分析和目录说明。覆盖整个项目的全局图仍属于首个完整版本，本批不能被宣称为完整产品。不继续扩建 React 原型。
 

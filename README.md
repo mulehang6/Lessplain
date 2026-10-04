@@ -26,7 +26,9 @@ IntelliJ IDEA 2026.1 起兼容的插件；以 2026.1.5 编译，开发实例使�
 .\gradlew.bat verifyPlugin --offline
 ```
 
-安装包生成在 `build/distributions/`。在 IntelliJ IDEA 2026.1 或更新版本的 Settings → Plugins → Install Plugin from Disk 中选择 ZIP。插件依赖 IDE 自带的 MCP Server 和 Compose，不依赖 Diagrams。在 `Agent-dev` 工作区中选择 `Master Understanding IDE` 启动开发实例；若单独打开本目录，选择 `Master Understanding IDE (standalone)`。两项配置都执行本目录的 `runIdeLatest`，目前运行 2026.2.3。原有 `runIde` 仍运行 2026.1.5，供最低兼容版本复查；`sinceBuild=261` 保持不变，`verifyPlugin` 检查两个版本。若从终端运行 Gradle 命令，先进入本目录。自动化构建不会启动长期 IDE 进程。
+安装包生成在 `build/distributions/`。在 IntelliJ IDEA 2026.1 或更新版本的 Settings → Plugins → Install Plugin from Disk 中选择 ZIP。插件依赖 IDE 自带的 MCP Server 和 Compose，不依赖 Diagrams。
+
+开发默认在 IDEA 中打开父级 `Agent-dev` 工程。仓库内 `Master Understanding IDE`、`Master Understanding Tests` 和 `Master Understanding Verifications` 三份运行配置均以父工程为前提，Gradle 路径为 `$PROJECT_DIR$/master-understanding`，保留这个设置。单独打开本目录时，使用上面的命令行任务，或自行创建 Gradle 路径指向本目录的运行配置。开发配置执行 `runIdeLatest`，目前运行 2026.2.3；`runIde` 仍运行 2026.1.5，供最低兼容版本复查。`sinceBuild=261` 保持不变，`verifyPlugin` 检查两个版本。从终端运行 Gradle 命令前先进入本目录；自动化构建不会启动长期 IDE 进程。
 
 ## 使用流程
 
@@ -46,13 +48,15 @@ IntelliJ IDEA 2026.1 起兼容的插件；以 2026.1.5 编译，开发实例使�
 
 ## 验收状态
 
-全部上游高亮与双向导航已整合到主项目的 `feat/incoming-path-main-integration` 分支，沿用主项目开发 IDE 配置，并保留多 cluster、完整路线选择、按需补全及源码导航会话。当前行为和验收结果见 [路径导航交接](docs/incoming-path-highlighting-handoff.md)，下面各批次数量属于对应历史版本。
+本轮全库审查修复见 [修复交接](docs/agents/code-review-fixes-handoff.md)：源码歧义定位、画布视口同步、零尺寸布局重试、定位失败提示和 Windows 路径校验已修复，250 项测试、打包及两个 IDE 版本的兼容检查通过；实际界面仍需安装新版验收。
 
-最新探索路径、结构分支标记、动态注释编辑和暂存草稿入口见 [探索与注释交接](docs/exploration-note-edit-handoff.md)。完整 160 项测试、打包与技能校验通过，IDEA 2026.1.5 和 2026.2.3 均兼容；安装包校验值见交接记录。实际中文 IME、移动后输入框变化、草稿续写和工具窗口、编辑器、源码提示之间的路线同步仍需用户安装新版验收。现有缺陷注释保留。
+全部上游高亮与双向导航已整合到主项目的 `feat/incoming-path-main-integration` 分支，沿用主项目开发 IDE 配置，并保留多 cluster、完整路线选择、按需补全及源码导航会话。当前行为和验收结果见 [路径导航交接](docs/agents/incoming-path-highlighting-handoff.md)，下面各批次数量属于对应历史版本。
 
-待答注释批量读取与保存后移除见 [批量注释交接](docs/pending-note-batch-handoff.md)。完整 140 项测试与技能校验通过；安装新版后需复验批量上下文、注释消失及追问导航。旧插件须重新加载才能返回新增能力标识，MCP 重连不替代更新。
+最新探索路径、结构分支标记、动态注释编辑和暂存草稿入口见 [探索与注释交接](docs/agents/exploration-note-edit-handoff.md)。完整 160 项测试、打包与技能校验通过，IDEA 2026.1.5 和 2026.2.3 均兼容；安装包校验值见交接记录。实际中文 IME、移动后输入框变化、草稿续写和工具窗口、编辑器、源码提示之间的路线同步仍需用户安装新版验收。现有缺陷注释保留。
 
-最新删除确认、UI 字体、方向保持和节点语义的实现与验证见 [本轮交接](docs/node-semantics-dialog-handoff.md)，内嵌标题见 [标题交接](docs/embedded-title-handoff.md)。两个性能基准与技能校验已通过；实际中文 IME、明暗主题、字体变化和弹窗焦点仍需用户安装新版验收。用户再次清空旧数据后，文章发布和付费文章两张协议 3 样例已带新节点语义通过 MCP 重新创建，源码锚点、返回身份和持久化内容均已核对。此前创建状态见 [单图交接](docs/single-canvas-ime-handoff.md)。
+待答注释批量读取与保存后移除见 [批量注释交接](docs/agents/pending-note-batch-handoff.md)。完整 140 项测试与技能校验通过；安装新版后需复验批量上下文、注释消失及追问导航。旧插件须重新加载才能返回新增能力标识，MCP 重连不替代更新。
+
+最新删除确认、UI 字体、方向保持和节点语义的实现与验证见 [本轮交接](docs/agents/node-semantics-dialog-handoff.md)，内嵌标题见 [标题交接](docs/agents/embedded-title-handoff.md)。两个性能基准与技能校验已通过；实际中文 IME、明暗主题、字体变化和弹窗焦点仍需用户安装新版验收。用户再次清空旧数据后，文章发布和付费文章两张协议 3 样例已带新节点语义通过 MCP 重新创建，源码锚点、返回身份和持久化内容均已核对。此前创建状态见 [单图交接](docs/agents/single-canvas-ime-handoff.md)。
 
 自动化测试覆盖请求去重、固定来源、追问归属、顶层历史搜索、非法引用、分支选路、重启读取、只读第二实例与迁移失败保留原数据；图测试覆盖分层、共享画布、悬停点击、视口、流动线、窄宽度控件、节点及示例属性框的拖拽与恢复自动布局。视图状态测试覆盖不同历史及追问层之间的隔离和重新读取，包括手动位置。`test compileKotlin` 已通过；`verifyPlugin --offline` 判定 IU 2026.1.5 与 2026.2.3 均兼容。Verifier 仍列出既有的 deprecated 和 experimental API 使用，没有兼容性错误。图表交互仍需在新构建的开发 IDE 中目视复验。
 
