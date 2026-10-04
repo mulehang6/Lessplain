@@ -49,16 +49,20 @@ internal fun matchAnchorText(anchor: SourceAnchor, content: String, symbolAt: (I
             starts.getOrNull(line - 1)
         }
     }
-    if (versionMatches && expectedOffset != null) {
-        val lineEnd = content.indexOf('\n', expectedOffset).takeIf { it >= 0 } ?: content.length
-        val match = content.indexOf(anchor.text, expectedOffset)
-        if (match in expectedOffset..lineEnd) return LocatedSource(LocationStatus.EXACT, EvidenceStatus.UNCHANGED, match)
-    }
     val matches = mutableListOf<Int>()
     var index = content.indexOf(anchor.text)
     while (index >= 0) {
         matches += index
         index = content.indexOf(anchor.text, index + 1)
+    }
+    if (versionMatches && expectedOffset != null) {
+        val lineEnd = content.indexOf('\n', expectedOffset).takeIf { it >= 0 } ?: content.length
+        val onHintLine = matches.filter { it in expectedOffset..lineEnd }
+        if (onHintLine.size > 1) return LocatedSource(LocationStatus.AMBIGUOUS, EvidenceStatus.UNKNOWN)
+        if (onHintLine.size == 1) {
+            val match = onHintLine.single()
+            return LocatedSource(LocationStatus.EXACT, EvidenceStatus.UNCHANGED, match)
+        }
     }
     if (matches.isEmpty()) return LocatedSource(LocationStatus.UNRESOLVED, EvidenceStatus.CHANGED)
     if (matches.size > 1) return LocatedSource(LocationStatus.AMBIGUOUS, EvidenceStatus.UNKNOWN)

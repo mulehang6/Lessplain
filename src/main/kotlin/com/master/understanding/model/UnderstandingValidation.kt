@@ -8,7 +8,8 @@ internal fun requireInput(value: Boolean, message: String) {
 
 fun SourceAnchor.validate() {
     requireInput(path.isNotBlank(), "锚点缺少项目相对路径")
-    requireInput(!path.startsWith('/') && !path.contains(':') && path.split('/', '\\').none { it == ".." }, "锚点路径必须位于项目内")
+    requireInput(!path.startsWith('/') && !path.startsWith('\\') && !path.contains(':') &&
+        path.split('/', '\\').none { it == ".." }, "锚点路径必须位于项目内")
     requireInput(text.isNotBlank(), "锚点缺少源码文本")
     requireInput(version.isNotBlank(), "锚点缺少固定版本")
     requireInput(lineHint == null || lineHint > 0, "锚点行号必须大于零")
