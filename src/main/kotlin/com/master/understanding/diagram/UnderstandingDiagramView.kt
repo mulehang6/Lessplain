@@ -71,8 +71,11 @@ internal class UnderstandingDiagram(
     internal var selectedNodeId = initialState?.nodeId ?: record.graph.nodes.firstOrNull()?.id
     internal var currentNodeId = selectedNodeId
     internal var routeEdgeIds = emptySet<String>()
-    internal val completeRouteNavigation = DiagramCompleteRouteNavigation(this, record.graph)
+    internal val pathHighlights = DiagramPathHighlights(this, record.graph)
+    /** Every highlighted edge uses the same flow rendering and repaint eligibility. */
+    internal val highlightedEdgeIds: Set<String> get() = routeEdgeIds + pathHighlights.upstreamEdgeIds
     internal var choiceTargets = emptySet<String>()
+    internal val routeChoice = DiagramRouteChoiceState()
     private var choicePhase = 0f
     internal var copiedNodeId: String? = null
     private var previousStep: (() -> Unit)? = null
@@ -341,11 +344,15 @@ internal class UnderstandingDiagram(
         if (record.graph.nodes.isNotEmpty()) {
             val explorer = StaticExplorer(record.graph, initialState?.staticPath.orEmpty(), initialState?.nodeId,
                 initialState?.navigationState)
-            completeRouteNavigation.showNavigation(explorer.navigationState, explorer.currentNodeId, centerNode = false)
+            pathHighlights.showNavigation(explorer.navigationState, explorer.currentNodeId, centerNode = false)
         }
     }
 
     override fun getToolTipText(event: MouseEvent): String? {
+        candidateEdgeAt(event.point)?.let { id ->
+            val edge = record.graph.edges.first { it.id == id }
+            return edge.condition?.takeIf(String::isNotBlank) ?: edge.relation
+        }
         noteActionAt(event.point)?.let { return if (hasNodeNote(it)) null else "添加注释" }
         clusterEditAt(event.point)?.let { return "编辑标题" }
         copyActionAt(event.point)?.let { return "复制" }
@@ -422,9 +429,9 @@ internal class UnderstandingDiagram(
         DiagramCanvasPainter.paint(graphics, DiagramPaintState(layout, examplePanels, width, height,
             zoom, centerX, centerY, currentNodeId, hoveredNodeId, hoveredAction, questionCounts,
             pendingNoteCounts,
-            startIds, endIds, routeEdgeIds, choiceTargets, choicePhase, copiedNodeId,
+            startIds, endIds, highlightedEdgeIds, choiceTargets, choicePhase, copiedNodeId,
             animateFlow, flowPhase, controls.height, overlays.titles, branchIds, draftNoteNodes,
-            completeRouteNavigation.upstreamEdgeIds, completeRouteNavigation.previewEdgeIds))
+            routeChoice.edgeIds, routeChoice.focusedEdgeId, routeChoice.focusedNodeId))
         if (!layoutReady || layoutFailure != null) {
             val message = layoutFailure?.let { "布局失败：$it（点击重试）" } ?: "正在排版…"
             graphics.color = foreground
@@ -439,7 +446,6 @@ internal class UnderstandingDiagram(
         overlays.close()
         header.close()
         controls.dispose()
-        completeRouteNavigation.close()
         layoutCoordinator.close()
         flowTimer.stop()
         choiceTimer.stop()

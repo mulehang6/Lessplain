@@ -332,6 +332,7 @@ class UnderstandingService(private val project: Project) : Disposable {
                             canNext = explorer.canNext,
                             previous = { component, point -> sourceNavigation.previous(record.id, validNode, component, point) },
                             next = { component, point -> sourceNavigation.next(record.id, validNode, component, point) },
+                            cancelChoices = { sourceNavigation.cancelChoices(record.id, validNode) },
                         )
                         val located = sourceHints.show(anchor, node.label, navigation)
                         if (navigateSource && nodeId != null && located?.offset != null) {

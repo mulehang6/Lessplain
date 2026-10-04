@@ -43,6 +43,7 @@ internal object DiagramNodePainter {
         visible: Rectangle2D? = null,
         branchIds: Set<String> = emptySet(),
         draftNoteNodes: Set<String> = emptySet(),
+        focusedChoice: String? = null,
     ) {
         g.font = UIManager.getFont("Label.font") ?: g.font
         layout.nodes.values.forEach { placed ->
@@ -51,7 +52,7 @@ internal object DiagramNodePainter {
             if (visible != null && !visible.intersects(bounds.x - 24, bounds.y - 24,
                     bounds.width + 48, bounds.height + 68)) return@forEach
             val current = id == focused
-            if (current || id == hovered) {
+            if (current || id == hovered || id == focusedChoice) {
                 g.color = focusHalo
                 g.stroke = BasicStroke(4f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
                 g.drawRoundRect(bounds.x.toInt() - 2, bounds.y.toInt() - 2,
@@ -69,7 +70,7 @@ internal object DiagramNodePainter {
             g.fillRoundRect(bounds.x.toInt(), bounds.y.toInt(), bounds.width.toInt(), bounds.height.toInt(), 10, 10)
             g.color = when { id in endIds -> DiagramNodeSemantics.endBorder(placed.node.endOutcome); id in startIds -> focusBorder
                 current || id == hovered || id in choiceTargets -> focusBorder; else -> nodeBorder }
-            g.stroke = BasicStroke(if (current) 2f else 1f)
+            g.stroke = BasicStroke(if (id == focusedChoice) 3f else if (current) 2f else 1f)
             g.drawRoundRect(bounds.x.toInt(), bounds.y.toInt(), bounds.width.toInt(), bounds.height.toInt(), 10, 10)
             g.color = textColor
             paintLabel(g, placed, id in branchIds)

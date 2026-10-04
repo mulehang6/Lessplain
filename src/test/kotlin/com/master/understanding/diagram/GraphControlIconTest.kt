@@ -6,17 +6,19 @@ import javax.swing.JButton
 import javax.swing.UIManager
 import org.junit.jupiter.api.Test
 import kotlin.test.assertTrue
+import kotlin.test.assertEquals
 
 class GraphControlIconTest {
     @Test
-    fun `fit and arrange remain distinct visible and bounded in themes and scales`() {
+    fun `controls remain distinct visible and bounded in themes and scales`() {
         val button = JButton()
         val old = UIManager.getColor("Button.foreground")
         try {
             for (color in listOf(Color(0x252525), Color(0xDFE1E5))) {
                 UIManager.put("Button.foreground", color)
                 for (scale in listOf(1.0, 1.25, 1.5, 2.0)) {
-                    val pixels = listOf(GraphControlIconKind.FIT, GraphControlIconKind.ARRANGE).map { kind ->
+                    val pixels = listOf(GraphControlIconKind.FIT, GraphControlIconKind.ARRANGE,
+                        GraphControlIconKind.COMPLETE_ROUTE, GraphControlIconKind.CANCEL_ROUTE).map { kind ->
                         val image = BufferedImage(48, 48, BufferedImage.TYPE_INT_ARGB)
                         val g = image.createGraphics()
                         try {
@@ -42,7 +44,7 @@ class GraphControlIconTest {
                             kotlin.math.abs(ink.map { it.blue }.sorted()[middle] - color.blue) <= 2)
                         painted
                     }
-                    assertTrue(pixels[0] != pixels[1], "显示全图和整理节点必须可辨认")
+                    assertEquals(pixels.size, pixels.toSet().size, "按钮图标必须可辨认")
                 }
             }
         } finally {

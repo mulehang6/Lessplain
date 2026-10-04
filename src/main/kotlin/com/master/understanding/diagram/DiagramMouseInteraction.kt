@@ -79,7 +79,9 @@ internal class DiagramMouseInteraction(private val diagram: UnderstandingDiagram
             else if (questionNode != null) diagram.questionCallbacks.toList().forEach { it(questionNode) }
             else {
                 val node = diagram.nodeAt(event.point)
-                if (node != null) diagram.selectUnderstandingNode(node, notify = true)
+                val edge = diagram.candidateEdgeAt(event.point)
+                if (edge != null) diagram.routeNavigation?.selectCandidateEdge(edge)
+                else if (node != null) diagram.selectUnderstandingNode(node, notify = true)
                 else diagram.routeNavigation?.cancel()
             }
         }
@@ -107,6 +109,9 @@ internal class DiagramMouseInteraction(private val diagram: UnderstandingDiagram
         val hover = diagram.hoverNodeAt(event.point)
         val oldHover = diagram.hoveredNodeId
         val oldAction = diagram.hoveredAction
+        val edge = diagram.candidateEdgeAt(event.point)
+        if (edge != null) diagram.routeNavigation?.previewEdge(edge)
+        else if (hover in diagram.choiceTargets) diagram.routeNavigation?.previewCandidateNode(hover)
         diagram.hoveredNodeId = hover
         diagram.hoveredAction = when {
             diagram.copyActionAt(event.point) != null -> DiagramNodeAction.COPY
@@ -116,7 +121,7 @@ internal class DiagramMouseInteraction(private val diagram: UnderstandingDiagram
         }
         diagram.overlays.moved(event.point)
         if (oldHover != hover || oldAction != diagram.hoveredAction) diagram.repaint()
-        diagram.cursor = if (hover != null || diagram.hoveredAction != null || diagram.examplePanelAt(event.point) != null ||
+        diagram.cursor = if (edge != null || hover != null || diagram.hoveredAction != null || diagram.examplePanelAt(event.point) != null ||
             diagram.clusterTitleAt(event.point) != null) Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
         else Cursor.getDefaultCursor()
     }

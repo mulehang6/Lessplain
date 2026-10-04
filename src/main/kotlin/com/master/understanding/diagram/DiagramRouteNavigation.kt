@@ -4,10 +4,11 @@ import com.master.understanding.core.StaticExplorer
 import com.master.understanding.core.StepDirection
 import com.master.understanding.core.StepResult
 import com.master.understanding.model.BrowseState
+import com.master.understanding.model.GraphEdge
 import com.master.understanding.model.UnderstandingGraph
+import java.awt.Component
 import java.awt.Point
 import java.awt.geom.Point2D
-import javax.swing.JPopupMenu
 
 /** Owns ordinary directional choices and explicit completion while publishing one shared route snapshot. */
 internal class DiagramRouteNavigation(
@@ -15,26 +16,21 @@ internal class DiagramRouteNavigation(
     private val graph: UnderstandingGraph,
     val explorer: StaticExplorer,
     private val onMoved: (StaticExplorer) -> Unit,
-    private val choices: RouteChoicePresenter = swingRouteChoicePresenter,
+    private val choices: RouteChoicePresenter = ideRouteChoicePresenter,
     private val isCurrent: (String) -> Boolean = { true },
 ) : AutoCloseable {
     constructor(
         diagram: UnderstandingDiagram,
         explorer: StaticExplorer,
         commit: () -> Unit,
-        presentChoices: (JPopupMenu) -> Unit = { menu ->
-            if (diagram.isShowing) menu.show(diagram, diagram.width / 2, diagram.height / 2)
-        },
         isCurrent: () -> Boolean = { true },
-    ) : this(diagram, diagram.record.graph, explorer, { commit() },
-        RouteChoicePresenter { graph, direction, edges, _, _, finished ->
-            RouteChoicePopup(graph, direction, edges, finished).apply { presentChoices(menu) }
-        }, { isCurrent() })
+    ) : this(diagram, diagram.record.graph, explorer, { commit() }, isCurrent = { isCurrent() })
 
     private var generation = 0L
     private var popup: AutoCloseable? = null
+    private var sourceAnchor: Pair<Component, Point>? = null
     private var closed = false
-    private var pendingEdges = emptyList<com.master.understanding.model.GraphEdge>()
+    private var pendingEdges = emptyList<GraphEdge>()
     private var pendingDirection = StepDirection.NEXT
     private var completing = false
     private var cursor = 0
@@ -45,24 +41,17 @@ internal class DiagramRouteNavigation(
     var onActivated: () -> Unit = {}
     private val selection = diagram.onNodeSelected(::focus)
     private val clusterSelection = diagram.onClusterSelected { select(it, centerNode = false) }
-    private val completeSelection = diagram.onCompleteRouteSelected { route, target ->
-        if (ready(target)) {
-            cancelChoice()
-            if (explorer.selectCompletePath(route.edgeIds, target)) commit()
-        }
-    }
 
     init {
         diagram.routeNavigation = this
-        diagram.completeRouteNavigation.configureScopes(explorer.routeScopes)
-        diagram.completeRouteNavigation.canConfirm = { ready(explorer.currentNodeId) }
+        diagram.pathHighlights.configureScopes(explorer.routeScopes)
         diagram.setStepActions(previous = { step(StepDirection.PREVIOUS) }, next = { step(StepDirection.NEXT) })
         render(centerNode = false)
     }
 
     fun focus(nodeId: String) = select(nodeId, centerNode = true)
 
-    /** A graph click always replaces pending choices with the clicked node's full upstream view. */
+    /** Direct focus unfolds the upstream view; candidate clicks are resolved before this entry. */
     fun select(nodeId: String) = focus(nodeId)
 
     private fun select(nodeId: String, centerNode: Boolean) {
@@ -81,6 +70,13 @@ internal class DiagramRouteNavigation(
         handle(if (direction == StepDirection.PREVIOUS) explorer.previous() else explorer.next(), direction, false)
     }
 
+    /** Source controls present the current choice at their caption, even when the graph is already busy. */
+    fun stepFromSource(backward: Boolean, component: Component, point: Point) {
+        if (!ready(explorer.currentNodeId)) return
+        if (!hasChoice) step(if (backward) StepDirection.PREVIOUS else StepDirection.NEXT)
+        if (hasChoice) presentPendingChoices(component, point)
+    }
+
     /** The existing completion button remains an explicit operation with its own staged incoming choices. */
     fun complete(reselectNode: String? = null) {
         if (!ready(explorer.currentNodeId)) return
@@ -95,8 +91,10 @@ internal class DiagramRouteNavigation(
             is StepResult.Moved -> {
                 clearChoice()
                 savedCenter = null
+                sourceAnchor = null
                 commit()
             }
+
             is StepResult.Choose -> showChoices(result, direction, completion)
             else -> cancelChoice()
         }
@@ -115,11 +113,24 @@ internal class DiagramRouteNavigation(
         diagram.setChoiceTargets(result.edges.mapTo(linkedSetOf()) {
             if (direction == StepDirection.NEXT) it.to else it.from
         })
+        diagram.routeChoice.setCandidates(result.edges, direction)
+        previewEdge(result.edges.first().id)
         render(centerNode = false)
+        sourceAnchor?.let { (component, point) -> presentPendingChoices(component, point) }
+    }
+
+    private fun presentPendingChoices(component: Component, point: Point) {
+        generation++
+        popup?.close()
+        popup = null
+        sourceAnchor = component to Point(point)
         val request = generation
         val snapshot = explorer.navigationState
-        val handle = choices.show(graph, direction, result.edges, diagram.jComponent,
-            Point(if (direction == StepDirection.PREVIOUS) 12 else 48, (diagram.height - 48).coerceAtLeast(0)),
+        val handle = choices.show(
+            graph, pendingDirection, pendingEdges, component, Point(point),
+            preview = { edgeId ->
+                if (!closed && request == generation && ready(explorer.currentNodeId)) previewEdge(edgeId)
+            },
         ) { edgeId ->
             if (closed || request != generation || explorer.navigationState != snapshot) return@show
             if (!ready(explorer.currentNodeId)) return@show
@@ -136,11 +147,45 @@ internal class DiagramRouteNavigation(
         handle(result, direction, completion)
     }
 
+    /** Candidate nodes confirm only a unique relationship; parallel relationships remain explicit. */
+    fun selectCandidate(nodeId: String): Boolean {
+        if (!hasChoice || nodeId !in diagram.choiceTargets) return false
+        if (!ready(explorer.currentNodeId)) return true
+        val matches = pendingEdges.filter { targetOf(it) == nodeId }
+        if (matches.size == 1) choose(matches.single().id)
+        else previewEdge(matches.first().id)
+        return true
+    }
+
+    fun selectCandidateEdge(edgeId: String): Boolean {
+        if (edgeId !in diagram.routeChoice.edgeIds) return false
+        choose(edgeId)
+        return true
+    }
+
+    fun previewEdge(edgeId: String?) {
+        val edge = pendingEdges.firstOrNull { it.id == edgeId }
+        if (edge != null) cursor = pendingEdges.indexOf(edge)
+        diagram.routeChoice.focusedNodeId = edge?.let(::targetOf)
+        diagram.routeChoice.focusedEdgeId = edge?.id?.takeIf { it in diagram.routeChoice.edgeIds }
+        diagram.repaint()
+    }
+
+    fun previewCandidateNode(nodeId: String?) {
+        val matching = pendingEdges.filter { targetOf(it) == nodeId }
+        val current = matching.firstOrNull { it.id == pendingEdges.getOrNull(cursor)?.id } ?: matching.firstOrNull()
+        previewEdge(current?.id)
+    }
+
+    private fun targetOf(edge: GraphEdge): String =
+        if (pendingDirection == StepDirection.NEXT) edge.to else edge.from
+
     /** External source feedback restores the prefix and suffix without another source-selection callback. */
     fun synchronize(nodeId: String, state: BrowseState?): Boolean {
         if (!ready(nodeId)) return false
         if (nodeId == explorer.currentNodeId && state?.nodeId == nodeId &&
-            (state.navigationState?.let { it == explorer.navigationState } ?: (state.staticPath == explorer.path))) {
+            (state.navigationState?.let { it == explorer.navigationState } ?: (state.staticPath == explorer.path))
+        ) {
             return false
         }
         val previous = explorer.navigationState
@@ -160,20 +205,15 @@ internal class DiagramRouteNavigation(
     fun moveCandidate(delta: Int): Boolean {
         if (!hasChoice) return false
         if (!ready(explorer.currentNodeId)) return true
-        val nodes = pendingEdges.map { if (pendingDirection == StepDirection.NEXT) it.to else it.from }.distinct()
-        cursor = (cursor + delta + nodes.size) % nodes.size
-        diagram.hoveredNodeId = nodes[cursor]
-        diagram.repaint()
+        cursor = (cursor + delta + pendingEdges.size) % pendingEdges.size
+        previewEdge(pendingEdges[cursor].id)
         return true
     }
 
     fun confirmCandidate(): Boolean {
         if (!hasChoice) return false
         if (!ready(explorer.currentNodeId)) return true
-        val nodes = pendingEdges.map { if (pendingDirection == StepDirection.NEXT) it.to else it.from }.distinct()
-        val nodeId = nodes[cursor.coerceIn(nodes.indices)]
-        pendingEdges.singleOrNull { (if (pendingDirection == StepDirection.NEXT) it.to else it.from) == nodeId }
-            ?.let { choose(it.id) }
+        choose(pendingEdges[cursor.coerceIn(pendingEdges.indices)].id)
         return true
     }
 
@@ -186,9 +226,10 @@ internal class DiagramRouteNavigation(
     fun refresh(center: Boolean = false) = render(center)
 
     private fun render(centerNode: Boolean) {
-        diagram.completeRouteNavigation.showNavigation(explorer.navigationState, explorer.currentNodeId, centerNode)
+        diagram.pathHighlights.showNavigation(explorer.navigationState, explorer.currentNodeId, centerNode)
         diagram.setStepAvailability(!hasChoice && explorer.canPrevious, !hasChoice && explorer.canNext)
-        diagram.controls.updateRoute(visible = explorer.canComplete || hasChoice, choosing = hasChoice,
+        diagram.controls.updateRoute(
+            visible = explorer.canComplete || hasChoice, choosing = hasChoice,
             notice = explorer.routeNotice,
         ) { if (hasChoice) cancelChoice() else complete() }
     }
@@ -198,12 +239,14 @@ internal class DiagramRouteNavigation(
         popup?.close()
         popup = null
         pendingEdges = emptyList()
+        diagram.routeChoice.clear()
         diagram.setChoiceTargets(emptySet())
     }
 
     /** Invalidates pending callbacks while retaining the committed navigation snapshot. */
     fun cancelChoice() {
         clearChoice()
+        sourceAnchor = null
         explorer.cancelIncoming()
         savedCenter?.let { center ->
             diagram.cameraTimer.stop()
@@ -232,9 +275,7 @@ internal class DiagramRouteNavigation(
         cancelChoice()
         selection.close()
         clusterSelection.close()
-        completeSelection.close()
         onActivated = {}
-        diagram.completeRouteNavigation.canConfirm = { false }
         diagram.routeNavigation = null
         diagram.setStepActions(null, null)
         diagram.controls.updateRoute(visible = false, choosing = false, notice = null, action = null)

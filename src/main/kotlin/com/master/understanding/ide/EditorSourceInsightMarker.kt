@@ -1,7 +1,10 @@
 package com.master.understanding.ide
 
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.editor.event.DocumentEvent
+import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.editor.markup.HighlighterLayer
 import com.intellij.openapi.editor.markup.HighlighterTargetArea
 import com.intellij.openapi.editor.markup.TextAttributes
@@ -11,6 +14,7 @@ import java.awt.event.ComponentEvent
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import javax.swing.Timer
+import javax.swing.SwingUtilities
 
 /** Owns the editor listeners and reveal timer for one source marker. */
 internal class EditorSourceInsightMarker(
@@ -29,9 +33,18 @@ internal class EditorSourceInsightMarker(
     private var hovered = false
     private val hoverState = SourceHighlightHoverState()
     private var disposed = false
+    private val documentLifetime = Disposer.newDisposable("Understanding source choice listener")
+    private val documentListener = object : DocumentListener {
+        override fun documentChanged(event: DocumentEvent) {
+            if (SwingUtilities.isEventDispatchThread()) navigation.cancelChoices()
+            else SwingUtilities.invokeLater { if (!disposed) navigation.cancelChoices() }
+        }
+    }
     private val highlighter = inlay?.let {
-        editor.markupModel.addRangeHighlighter(start, end, HighlighterLayer.ADDITIONAL_SYNTAX,
-            TextAttributes(), HighlighterTargetArea.EXACT_RANGE).apply {
+        editor.markupModel.addRangeHighlighter(
+            start, end, HighlighterLayer.ADDITIONAL_SYNTAX,
+            TextAttributes(), HighlighterTargetArea.EXACT_RANGE,
+        ).apply {
             customRenderer = SourceSweepRenderer { reveal }
         }
     }
@@ -79,32 +92,41 @@ internal class EditorSourceInsightMarker(
             when (inlay?.let { renderer.buttonAt(it, event.point) }) {
                 SourceInlayButton.PREVIOUS -> if (navigation.canPrevious) {
                     event.consume()
-                    navigation.previous(editor.contentComponent, event.point)
+                    navigation.previous(editor.contentComponent, popupAnchor())
                 }
+
                 SourceInlayButton.NEXT -> if (navigation.canNext) {
                     event.consume()
-                    navigation.next(editor.contentComponent, event.point)
+                    navigation.next(editor.contentComponent, popupAnchor())
                 }
+
                 SourceInlayButton.EXPAND -> {
                     event.consume()
                     renderer.expanded = !renderer.expanded
                     inlay.update()
                 }
+
                 null -> Unit
             }
         }
     }
     private val resize = object : ComponentAdapter() {
-        override fun componentResized(event: ComponentEvent) { if (!disposed) inlay?.update() }
+        override fun componentResized(event: ComponentEvent) {
+            if (!disposed) inlay?.update()
+        }
     }
 
     init {
+        if (inlay != null) editor.document.addDocumentListener(documentListener, documentLifetime)
         if (inlay != null) editor.contentComponent.addMouseMotionListener(mouse)
         if (inlay != null) editor.contentComponent.addMouseListener(mouse)
         if (inlay != null) editor.contentComponent.addComponentListener(resize)
     }
 
     private fun inHint(point: Point): Boolean = inlay?.let { renderer.hintBounds(it).contains(point) } == true
+
+    private fun popupAnchor(): Point = inlay?.let { renderer.hintBounds(it) }
+        ?.let { Point(it.maxX.toInt(), it.y) } ?: Point()
 
     private fun inBlock(point: Point): Boolean = highlighter?.let {
         sourceBlockBounds(editor, it.startOffset, it.endOffset)?.contains(point)
@@ -129,6 +151,8 @@ internal class EditorSourceInsightMarker(
     override fun dispose() {
         if (disposed) return
         disposed = true
+        Disposer.dispose(documentLifetime)
+        navigation.cancelChoices()
         hoverState.dispose()
         timer.stop()
         editor.contentComponent.removeMouseMotionListener(mouse)

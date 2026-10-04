@@ -25,6 +25,7 @@ internal data class DiagramPaintState(
     val pendingNoteCounts: Map<String, Int>,
     val startIds: Set<String>,
     val endIds: Set<String>,
+    /** Upstream and selected path highlights share a single rendering set. */
     val routeEdgeIds: Set<String>,
     val choiceTargets: Set<String>,
     val choicePhase: Float,
@@ -35,8 +36,9 @@ internal data class DiagramPaintState(
     val titleState: DiagramTitleState = DiagramTitleState(),
     val branchIds: Set<String> = emptySet(),
     val draftNoteNodes: Set<String> = emptySet(),
-    val upstreamEdgeIds: Set<String> = emptySet(),
-    val previewEdgeIds: Set<String>? = null,
+    val choiceEdgeIds: Set<String> = emptySet(),
+    val focusedChoiceEdgeId: String? = null,
+    val focusedChoiceNodeId: String? = null,
 )
 
 /** Paints the canvas from a snapshot; input and navigation remain in the diagram view. */
@@ -44,7 +46,6 @@ internal object DiagramCanvasPainter {
     private val background = JBColor(Color(0xFAFBFC), Color(0x1E1F22))
     private val clusterFill = JBColor(Color(0xF5F8FC), Color(0x24272D))
     private val clusterBorder = JBColor(Color(0x9EACC0), Color(0x788494))
-    private val labelColor = JBColor(Color(0x374151), Color(0xC4CBD5))
 
     fun paint(graphics: Graphics, state: DiagramPaintState) {
         val g = graphics.create() as Graphics2D
@@ -73,18 +74,12 @@ internal object DiagramCanvasPainter {
                 }
             }
             DiagramEdgePainter.paint(g, state.layout.edges, state.routeEdgeIds, state.animateFlow,
-                state.flowPhase, visible, state.upstreamEdgeIds, state.previewEdgeIds,
-                state.layout.crossings, state.layout.clusters)
+                state.flowPhase, visible, state.layout.crossings, state.layout.clusters,
+                state.choiceEdgeIds, state.focusedChoiceEdgeId)
             DiagramNodePainter.paint(g, state.layout, state.currentNodeId, state.hoveredNodeId,
                 state.questionCounts, state.pendingNoteCounts, state.startIds, state.endIds, state.choiceTargets,
-                state.choicePhase, state.copiedNodeId, visible, state.branchIds, state.draftNoteNodes)
-            if (state.choiceTargets.isNotEmpty()) {
-                val overlay = graphics.create() as Graphics2D
-                try {
-                    overlay.color = labelColor
-                    overlay.drawString("请选择闪烁的下一步节点", 16, state.controlHeight + 34)
-                } finally { overlay.dispose() }
-            }
+                state.choicePhase, state.copiedNodeId, visible, state.branchIds, state.draftNoteNodes,
+                state.focusedChoiceNodeId)
             paintActionTooltip(graphics, state)
         } finally {
             g.dispose()

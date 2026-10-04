@@ -99,4 +99,5 @@ internal data class SourceInlayNavigation(
     val canNext: Boolean,
     val previous: (Component, Point) -> Unit,
     val next: (Component, Point) -> Unit,
+    val cancelChoices: () -> Unit = {},
 )

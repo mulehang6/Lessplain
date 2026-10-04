@@ -11,6 +11,22 @@ import javax.swing.SwingUtilities
 
 class EditorSourceInsightMarkerTest {
     @Test
+    fun `document changes cancel choices and disposed markers stop receiving changes`() {
+        SwingUtilities.invokeAndWait {
+            val fixture = SourceMarkerTestEditor()
+            var cancelled = 0
+            val marker = EditorSourceInsightMarker(fixture.editor, 0, fixture.text.length, "提示",
+                SourceInlayNavigation(true, true, { _, _ -> }, { _, _ -> }, { cancelled++ }))
+            fixture.changeDocument()
+            assertEquals(1, cancelled)
+            marker.dispose()
+            assertEquals(2, cancelled)
+            fixture.changeDocument()
+            assertEquals(2, cancelled)
+        }
+    }
+
+    @Test
     fun `real marker events retain block highlight and any button press dismisses it`() {
         SwingUtilities.invokeAndWait {
             val fixture = SourceMarkerTestEditor()
@@ -51,6 +67,7 @@ class EditorSourceInsightMarkerTest {
             val resizeCount = fixture.component.componentListeners.size
             var previous = 0
             var next = 0
+            var cancelled = 0
             var previousPoint: Point? = null
             val marker = EditorSourceInsightMarker(fixture.editor, 0, fixture.text.length,
                 "很长的代码提示".repeat(60), SourceInlayNavigation(canPrevious = true, canNext = true,
@@ -58,14 +75,15 @@ class EditorSourceInsightMarkerTest {
                         assertSame(fixture.component, component)
                         previousPoint = point
                         previous++
-                    }, next = { _, _ -> next++ }))
+                    }, next = { _, _ -> next++ }, cancelChoices = { cancelled++ }))
             try {
                 assertEquals(mouseCount + 1, fixture.component.mouseListeners.size)
+                assertEquals(1, fixture.documentListeners.size)
                 val hint = fixture.renderer.hintBounds(fixture.inlay)
                 click(fixture, Point(hint.maxX.toInt() - 33, hint.y + 10))
                 click(fixture, Point(hint.maxX.toInt() - 10, hint.y + 10))
                 assertEquals(1, previous)
-                assertEquals(Point(hint.maxX.toInt() - 33, hint.y + 10), previousPoint)
+                assertEquals(Point(hint.maxX.toInt(), hint.y), previousPoint)
                 assertEquals(1, next)
                 val secondLine = hint.y + fixture.component.getFontMetrics(TEST_FONT).height + 4
                 val expandX = (hint.x until hint.maxX.toInt()).first {
@@ -81,6 +99,8 @@ class EditorSourceInsightMarkerTest {
                 assertTrue(marker.timer.isRunning)
             } finally { marker.dispose() }
             marker.dispose()
+            assertEquals(1, cancelled)
+            assertTrue(fixture.documentListeners.isEmpty())
             assertFalse(marker.timer.isRunning)
             assertTrue(fixture.inlayDisposed)
             assertTrue(fixture.highlighterDisposed)

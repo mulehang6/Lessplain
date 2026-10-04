@@ -205,18 +205,6 @@ class StaticExplorer(
     /** Direct focus shares the same upstream expansion as a graph click. */
     fun focusNode(nodeId: String): Boolean = jumpTo(nodeId)
 
-    /** Accepts only a simple, scoped complete route, leaving the current snapshot intact on failure. */
-    fun selectCompletePath(edgeIds: List<String>, targetNodeId: String): Boolean {
-        if (targetNodeId !in nodeIds) return false
-        val restored = validateSavedPath(edgeIds, targetNodeId) ?: return false
-        if (resolver.incoming(restored.first).isNotEmpty() && !resolver.isEntry(restored.first)) return false
-        val visited = mutableSetOf(restored.first)
-        if (edgeIds.any { !visited.add(requireNotNull(edgesById[it]).to) }) return false
-        restorePath(restored.second, targetNodeId)
-        explicitStart = true
-        return true
-    }
-
     private fun canAppend(edge: GraphEdge): Boolean =
         repeatedVisits(startNodeId, selectedEdges + edge.id) <= MAX_REPEATED_VISITS
 

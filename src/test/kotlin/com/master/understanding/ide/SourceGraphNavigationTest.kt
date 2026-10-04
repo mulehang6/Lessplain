@@ -70,10 +70,10 @@ class SourceGraphNavigationTest {
             var selected = "d"
             var finished: ((String?) -> Unit)? = null
             var requests = 0
-            val presenter = RouteChoicePresenter { _, direction, edges, _, point, callback ->
+            val presenter = RouteChoicePresenter { _, direction, edges, _, point, _, callback ->
                 assertEquals(StepDirection.PREVIOUS, direction)
                 assertEquals(listOf("bd", "cd"), edges.map { it.id })
-                assertEquals(Point(7, 11), point)
+                assertEquals(Point(7, 9), point)
                 requests++
                 finished = callback
                 AutoCloseable { }
@@ -109,7 +109,7 @@ class SourceGraphNavigationTest {
             var finished: ((String?) -> Unit)? = null
             var commits = 0
             val navigation = SourceGraphNavigation(repository, states, { _, node -> node == "d" },
-                { _, _ -> commits++ }, RouteChoicePresenter { _, _, _, _, _, callback ->
+                { _, _ -> commits++ }, RouteChoicePresenter { _, _, _, _, _, _, callback ->
                     finished = callback
                     AutoCloseable { }
                 })
@@ -148,7 +148,7 @@ class SourceGraphNavigationTest {
             val navigation = SourceGraphNavigation(repository, states,
                 isSelected = { id, node -> id == record.id && node == selected },
                 selectNode = { _, node -> selected = node },
-                choices = RouteChoicePresenter { _, direction, edges, _, _, callback ->
+                choices = RouteChoicePresenter { _, direction, edges, _, _, _, callback ->
                     assertEquals(StepDirection.PREVIOUS, direction)
                     assertEquals(listOf("bd", "cd"), edges.map { it.id })
                     requests++

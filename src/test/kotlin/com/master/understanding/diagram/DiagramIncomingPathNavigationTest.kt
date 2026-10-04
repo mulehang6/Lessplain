@@ -33,7 +33,7 @@ class DiagramIncomingPathNavigationTest {
             var commits = 0
             val navigation = DiagramRouteNavigation(
                 diagram, graph, explorer, { commits++ },
-                RouteChoicePresenter { _, direction, edges, _, _, finished ->
+                RouteChoicePresenter { _, direction, edges, _, _, _, finished ->
                     requested += direction
                     assertEquals(
                         if (direction == StepDirection.PREVIOUS) listOf("bd", "cd") else listOf("ab", "ac"),
@@ -43,20 +43,20 @@ class DiagramIncomingPathNavigationTest {
                 })
             try {
                 diagram.selectUnderstandingNode("d", notify = true)
-                assertEquals(setOf("ab", "ac", "bd", "cd"), (diagram.routeEdgeIds + diagram.completeRouteNavigation.upstreamEdgeIds))
-                previous(diagram).doClick(0)
+                assertEquals(setOf("ab", "ac", "bd", "cd"), (diagram.routeEdgeIds + diagram.pathHighlights.upstreamEdgeIds))
+                navigation.stepFromSource(true, diagram, java.awt.Point())
                 assertEquals(setOf("b", "c"), diagram.choiceTargets)
                 callback?.invoke(null)
                 assertEquals("d", explorer.currentNodeId)
                 assertEquals(1, commits)
                 assertTrue(diagram.choiceTargets.isEmpty())
-                previous(diagram).doClick(0)
+                navigation.stepFromSource(true, diagram, java.awt.Point())
                 callback?.invoke("cd")
                 assertEquals("c", diagram.currentNodeId)
-                assertEquals(setOf("ac"), (diagram.routeEdgeIds + diagram.completeRouteNavigation.upstreamEdgeIds))
-                next(diagram).doClick(0)
-                assertEquals(setOf("ac", "cd"), (diagram.routeEdgeIds + diagram.completeRouteNavigation.upstreamEdgeIds))
-                previous(diagram).doClick(0)
+                assertEquals(setOf("ac"), (diagram.routeEdgeIds + diagram.pathHighlights.upstreamEdgeIds))
+                navigation.stepFromSource(false, diagram, java.awt.Point())
+                assertEquals(setOf("ac", "cd"), (diagram.routeEdgeIds + diagram.pathHighlights.upstreamEdgeIds))
+                navigation.stepFromSource(true, diagram, java.awt.Point())
                 assertEquals(listOf(StepDirection.PREVIOUS, StepDirection.PREVIOUS, StepDirection.PREVIOUS), requested)
             } finally {
                 navigation.close()
@@ -71,26 +71,26 @@ class DiagramIncomingPathNavigationTest {
             var commits = 0
             val navigation = DiagramRouteNavigation(
                 diagram, graph, explorer, { commits++ },
-                RouteChoicePresenter { _, _, _, _, _, finished -> callback = finished; AutoCloseable { } })
+                RouteChoicePresenter { _, _, _, _, _, _, finished -> callback = finished; AutoCloseable { } })
             try {
-                next(diagram).doClick(0)
+                navigation.stepFromSource(false, diagram, java.awt.Point())
                 val browse = BrowseState("test", "e", explorer.path, navigationState = explorer.navigationState)
                 assertFalse(navigation.synchronize("e", browse))
-                assertEquals(setOf("ab", "ac", "bd", "cd", "de"), (diagram.routeEdgeIds + diagram.completeRouteNavigation.upstreamEdgeIds))
-                previous(diagram).doClick(0)
-                previous(diagram).doClick(0)
+                assertEquals(setOf("ab", "ac", "bd", "cd", "de"), (diagram.routeEdgeIds + diagram.pathHighlights.upstreamEdgeIds))
+                navigation.stepFromSource(true, diagram, java.awt.Point())
+                navigation.stepFromSource(true, diagram, java.awt.Point())
                 val stale = callback
                 diagram.selectUnderstandingNode("b", notify = true)
                 val expected = explorer.navigationState
                 stale?.invoke("cd")
                 assertEquals(expected, explorer.navigationState)
-                assertEquals(setOf("ab"), (diagram.routeEdgeIds + diagram.completeRouteNavigation.upstreamEdgeIds))
+                assertEquals(setOf("ab"), (diagram.routeEdgeIds + diagram.pathHighlights.upstreamEdgeIds))
                 val fromSource = BrowseState(
                     "test", "d", listOf("ab", "bd"),
                     navigationState = RouteNavigationState("a", listOf("ab", "bd"))
                 )
                 assertTrue(navigation.synchronize("d", fromSource))
-                assertEquals(setOf("ab", "bd"), (diagram.routeEdgeIds + diagram.completeRouteNavigation.upstreamEdgeIds))
+                assertEquals(setOf("ab", "bd"), (diagram.routeEdgeIds + diagram.pathHighlights.upstreamEdgeIds))
                 assertEquals(3, commits)
             } finally {
                 navigation.close()
@@ -103,14 +103,14 @@ class DiagramIncomingPathNavigationTest {
         var callback: ((String?) -> Unit)? = null
         val navigation = DiagramRouteNavigation(
             diagram, graph, explorer, {},
-            RouteChoicePresenter { _, _, _, _, _, finished -> callback = finished; AutoCloseable { } })
-        next(diagram).doClick(0)
+            RouteChoicePresenter { _, _, _, _, _, _, finished -> callback = finished; AutoCloseable { } })
+        navigation.stepFromSource(false, diagram, java.awt.Point())
         callback?.invoke("ab")
-        next(diagram).doClick(0)
-        assertEquals(setOf("ab", "bd"), (diagram.routeEdgeIds + diagram.completeRouteNavigation.upstreamEdgeIds))
+        navigation.stepFromSource(false, diagram, java.awt.Point())
+        assertEquals(setOf("ab", "bd"), (diagram.routeEdgeIds + diagram.pathHighlights.upstreamEdgeIds))
         diagram.selectUnderstandingNode("d", notify = true)
-        assertEquals(setOf("ab", "ac", "bd", "cd"), (diagram.routeEdgeIds + diagram.completeRouteNavigation.upstreamEdgeIds))
-        previous(diagram).doClick(0)
+        assertEquals(setOf("ab", "ac", "bd", "cd"), (diagram.routeEdgeIds + diagram.pathHighlights.upstreamEdgeIds))
+        navigation.stepFromSource(true, diagram, java.awt.Point())
         val snapshot = explorer.navigationState
         navigation.close()
         callback?.invoke("bd")
@@ -124,12 +124,12 @@ class DiagramIncomingPathNavigationTest {
         var released = 0
         val navigation = DiagramRouteNavigation(
             diagram, graph, explorer, {},
-            RouteChoicePresenter { _, _, _, _, _, finished ->
+            RouteChoicePresenter { _, _, _, _, _, _, finished ->
                 finished("ab")
                 AutoCloseable { released++ }
             })
         try {
-            next(diagram).doClick(0)
+            navigation.stepFromSource(false, diagram, java.awt.Point())
             assertEquals("b", explorer.currentNodeId)
             assertEquals(1, released)
         } finally {
@@ -146,15 +146,15 @@ class DiagramIncomingPathNavigationTest {
         var commits = 0
         val navigation = DiagramRouteNavigation(
             diagram, graph, explorer, { commits++ },
-            RouteChoicePresenter { _, _, _, _, _, finished -> callback = finished; AutoCloseable { } },
+            RouteChoicePresenter { _, _, _, _, _, _, finished -> callback = finished; AutoCloseable { } },
             isCurrent = { current },
         )
         try {
-            next(diagram).doClick(0)
+            navigation.stepFromSource(false, diagram, java.awt.Point())
             val snapshot = explorer.navigationState
             current = false
             callback?.invoke("ab")
-            next(diagram).doClick(0)
+            navigation.stepFromSource(false, diagram, java.awt.Point())
             diagram.selectUnderstandingNode("d", notify = true)
             assertFalse(navigation.synchronize("d", BrowseState("test", "d")))
             assertEquals(snapshot, explorer.navigationState)

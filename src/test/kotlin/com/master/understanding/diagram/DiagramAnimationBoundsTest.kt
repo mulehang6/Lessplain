@@ -1,12 +1,14 @@
 package com.master.understanding.diagram
 
 import com.master.understanding.model.GraphEdge
+import com.master.understanding.model.GraphNode
 import com.master.understanding.model.UnderstandingGraph
 import com.master.understanding.model.UnderstandingRecord
 import java.awt.Rectangle
 import java.awt.geom.Path2D
 import java.awt.geom.Rectangle2D
 import kotlin.test.assertTrue
+import kotlin.test.assertEquals
 import org.junit.jupiter.api.Test
 import javax.swing.JComponent
 import javax.swing.RepaintManager
@@ -17,7 +19,8 @@ class DiagramAnimationBoundsTest {
     fun `flow repaints when only arrow enters viewport at different camera transforms`() {
         SwingUtilities.invokeAndWait {
             val record = UnderstandingRecord("animation", 1, null, null, "测试", "", null,
-                UnderstandingGraph(emptyList(), emptyList()), 0)
+                UnderstandingGraph(listOf(GraphNode("a", "A"), GraphNode("b", "B")),
+                    listOf(GraphEdge("flow", "a", "b", "control_flow"))), 0)
             val diagram = UnderstandingDiagram(record, null)
             val previous = RepaintManager.currentManager(diagram)
             val regions = mutableListOf<Rectangle>()
@@ -37,12 +40,16 @@ class DiagramAnimationBoundsTest {
                     diagram.centerX = 80.0
                     // The line is just outside the bottom; the upper arrow wing is visible.
                     diagram.centerY = -51.0 / scale
-                    diagram.routeEdgeIds = setOf("flow")
-                    regions.clear()
-                    diagram.advanceFlow()
-                    assertTrue(regions.any { it.intersects(Rectangle2D.Double(35.0, 94.0, 30.0, 6.0)) },
-                        "仅箭头可见时仍应请求局部重绘: $scale / $regions")
-                    assertTrue(regions.all { it.width > 0 && it.height > 0 })
+                    for (upstreamOnly in listOf(false, true)) {
+                        diagram.showUnderstandingPath(if (upstreamOnly) emptyList() else listOf("flow"), "b", false)
+                        assertEquals(setOf("flow"), diagram.highlightedEdgeIds)
+                        assertEquals(upstreamOnly, diagram.routeEdgeIds.isEmpty())
+                        regions.clear()
+                        diagram.advanceFlow()
+                        assertTrue(regions.any { it.intersects(Rectangle2D.Double(35.0, 94.0, 30.0, 6.0)) },
+                            "仅箭头可见时仍应请求局部重绘: $scale / $upstreamOnly / $regions")
+                        assertTrue(regions.all { it.width > 0 && it.height > 0 })
+                    }
                 }
             } finally {
                 diagram.dispose()

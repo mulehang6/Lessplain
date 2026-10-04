@@ -9,7 +9,7 @@ import java.awt.RenderingHints
 import javax.swing.Icon
 import javax.swing.UIManager
 
-internal enum class GraphControlIconKind { ZOOM_IN, ZOOM_OUT, FIT, ARRANGE, CLUSTERS, HIERARCHY, ROUTE, MORE, PREVIOUS, NEXT }
+internal enum class GraphControlIconKind { ZOOM_IN, ZOOM_OUT, FIT, ARRANGE, CLUSTERS, HIERARCHY, COMPLETE_ROUTE, CANCEL_ROUTE, MORE, PREVIOUS, NEXT }
 
 /** Simple vector glyphs so the controls remain visible in IDE themes and preview rendering. */
 internal class GraphControlIcon(private val kind: GraphControlIconKind) : Icon {
@@ -62,14 +62,18 @@ internal class GraphControlIcon(private val kind: GraphControlIconKind) : Icon {
                     g.fillOval(9, 3, 4, 4)
                     g.fillOval(9, 10, 4, 4)
                 }
-                GraphControlIconKind.ROUTE -> {
-                    g.drawOval(1, 10, 4, 4)
-                    g.drawOval(11, 1, 4, 4)
-                    g.drawLine(5, 12, 9, 12)
-                    g.drawLine(9, 12, 9, 3)
-                    g.drawLine(9, 3, 11, 3)
-                    g.drawLine(3, 10, 3, 3)
-                    g.drawLine(3, 3, 6, 3)
+                GraphControlIconKind.COMPLETE_ROUTE -> {
+                    g.drawOval(1, 1, 3, 3)
+                    g.drawOval(1, 12, 3, 3)
+                    g.drawLine(3, 4, 3, 12)
+                    g.drawLine(3, 9, 9, 3)
+                    g.drawLine(9, 3, 12, 3)
+                    g.drawLine(10, 11, 15, 11)
+                    g.drawLine(13, 8, 13, 14)
+                }
+                GraphControlIconKind.CANCEL_ROUTE -> {
+                    g.drawLine(3, 3, 13, 13)
+                    g.drawLine(13, 3, 3, 13)
                 }
                 GraphControlIconKind.MORE -> {
                     g.fillOval(2, 7, 3, 3)

@@ -6,10 +6,36 @@ import java.awt.geom.Path2D
 import java.awt.geom.Rectangle2D
 import java.awt.image.BufferedImage
 import kotlin.test.assertContentEquals
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
 
 class DiagramEdgePainterTest {
+    @Test
+    fun `candidate edge emphasis stays separate from flowing committed routes`() {
+        val edges = (0..2).map { index ->
+            edge(listOf(10.0 to (20.0 + index * 30), 110.0 to (20.0 + index * 30)))
+                .let { it.copy(edge = it.edge.copy(id = "edge-$index")) }
+        }
+        fun render(focus: String?, phase: Float): BufferedImage {
+            val image = BufferedImage(130, 110, BufferedImage.TYPE_INT_ARGB)
+            val g = image.createGraphics()
+            try {
+                DiagramEdgePainter.paint(g, edges, setOf("edge-0", "edge-1"), true, phase,
+                    choiceIds = setOf("edge-0", "edge-1"), focusedChoice = focus)
+            } finally { g.dispose() }
+            return image
+        }
+        fun strip(image: BufferedImage, index: Int) = image.getRGB(5, 15 + index * 30, 115, 10, null, 0, 115)
+        val first = render("edge-0", 0f)
+        val second = render("edge-1", 0f)
+        val later = render("edge-0", 5f)
+        assertTrue(!strip(first, 0).contentEquals(strip(second, 0)))
+        assertTrue(!strip(first, 1).contentEquals(strip(second, 1)))
+        assertContentEquals(strip(first, 2), strip(second, 2))
+        for (index in edges.indices) assertContentEquals(strip(first, index), strip(later, index))
+    }
+
     @Test
     fun `horizontal vertical and bent edges survive clipping before any drag`() {
         val edges = listOf(
@@ -45,6 +71,33 @@ class DiagramEdgePainterTest {
         val placed = edge(listOf(-80.0 to -30.0, 100.0 to -30.0))
         for (zoom in listOf(0.35, 1.0, 2.4)) {
             compareClippedPaint(placed, Rectangle2D.Double(-20.0, -32.0, 60.0, 6.0), zoom, true)
+        }
+    }
+
+    @Test
+    fun `every highlighted edge flows while unrelated edges and disabled flow remain still`() {
+        val edges = (0..2).map { index ->
+            edge(listOf(10.0 to (20.0 + index * 30), 110.0 to (20.0 + index * 30)))
+                .let { it.copy(edge = it.edge.copy(id = "edge-$index")) }
+        }
+        fun render(highlighted: Set<String>, enabled: Boolean, phase: Float): BufferedImage {
+            val image = BufferedImage(130, 100, BufferedImage.TYPE_INT_ARGB)
+            val g = image.createGraphics()
+            try { DiagramEdgePainter.paint(g, edges, highlighted, enabled, phase) }
+            finally { g.dispose() }
+            return image
+        }
+        fun strip(image: BufferedImage, index: Int) = image.getRGB(5, 15 + index * 30, 115, 10, null, 0, 115)
+        for (highlighted in listOf(setOf("edge-0"), setOf("edge-0", "edge-1"))) {
+            for (enabled in listOf(true, false)) {
+                val first = render(highlighted, enabled, 0f)
+                val next = render(highlighted, enabled, 5f)
+                for (index in edges.indices) {
+                    val changed = !strip(first, index).contentEquals(strip(next, index))
+                    assertEquals(enabled && "edge-$index" in highlighted, changed,
+                        "只有开启流动的高亮线应随相位变化: $highlighted / $enabled / $index")
+                }
+            }
         }
     }
 

@@ -26,7 +26,6 @@ internal class UnderstandingDiagramControls(private val diagram: UnderstandingDi
     private val clusterNav = button(GraphControlIcon(GraphControlIconKind.CLUSTERS), "跳转到分组") { showClusterMenu() }
     private val hierarchy = button(GraphControlIcon(GraphControlIconKind.HIERARCHY), "查看层级") { showHierarchyMenu() }
     private val behavior = button(GraphControlIcon(GraphControlIconKind.MORE), "画布行为") { showBehaviorMenu() }
-    private val route = button(GraphControlIcon(GraphControlIconKind.ROUTE), "选一条路线") { diagram.completeRouteNavigation.showPicker() }
     private val behaviorPopup = DiagramBehaviorPopup(diagram, behavior)
     val sideControls = JPanel(null).apply { isOpaque = false }
     private var hierarchyItems = emptyList<DiagramHierarchyItem>()
@@ -34,9 +33,8 @@ internal class UnderstandingDiagramControls(private val diagram: UnderstandingDi
     val previousButton = button(GraphControlIcon(GraphControlIconKind.PREVIOUS), "上一步") { diagram.previousStep() }
     val nextButton = button(GraphControlIcon(GraphControlIconKind.NEXT), "下一步") { diagram.nextStep() }
     private var routeAction: (() -> Unit)? = null
-    val routeButton = JButton("补全来路").apply {
+    val routeButton = button(GraphControlIcon(GraphControlIconKind.COMPLETE_ROUTE), "补全来路") { routeAction?.invoke() }.apply {
         isVisible = false
-        addActionListener { routeAction?.invoke() }
     }
     private val buttons: List<AbstractButton> = listOf(zoomIn, zoomOut, fit, arrangeNodes)
 
@@ -45,11 +43,8 @@ internal class UnderstandingDiagramControls(private val diagram: UnderstandingDi
         buttons.forEach(::add)
         sideControls.add(clusterNav)
         sideControls.add(hierarchy)
-        sideControls.add(route)
         sideControls.add(behavior)
         clusterNav.isVisible = diagram.clusterCount > 1
-        route.isVisible = diagram.nodeIds.isNotEmpty()
-        route.isEnabled = diagram.completeRouteNavigation.routes.entryNodeIds.isNotEmpty()
         hierarchy.isVisible = false
         previousButton.isVisible = false
         nextButton.isVisible = false
@@ -67,10 +62,6 @@ internal class UnderstandingDiagramControls(private val diagram: UnderstandingDi
         arrangeSide(diagram.width, diagram.height)
     }
 
-    fun refreshRouteAvailability() {
-        route.isEnabled = diagram.completeRouteNavigation.routes.entryNodeIds.isNotEmpty()
-    }
-
     fun updateStepAvailability(hasPrevious: Boolean, hasNext: Boolean) {
         previousButton.isEnabled = previousButton.isVisible && hasPrevious
         nextButton.isEnabled = nextButton.isVisible && hasNext
@@ -78,9 +69,10 @@ internal class UnderstandingDiagramControls(private val diagram: UnderstandingDi
 
     fun updateRoute(visible: Boolean, choosing: Boolean, notice: String?, action: (() -> Unit)?) {
         routeAction = action
-        routeButton.text = if (choosing) "取消选路" else "补全来路"
-        routeButton.accessibleContext.accessibleName = routeButton.text
-        routeButton.setToolTipText(HtmlChunk.text(notice ?: if (choosing) "点击候选节点选择路线，Esc 取消" else "当前为局部路径，选择来路可补全"))
+        val label = if (choosing) "取消选路" else "补全来路"
+        routeButton.icon = GraphControlIcon(if (choosing) GraphControlIconKind.CANCEL_ROUTE else GraphControlIconKind.COMPLETE_ROUTE)
+        routeButton.accessibleContext.accessibleName = label
+        routeButton.setToolTipText(HtmlChunk.text("$label：${notice ?: if (choosing) "点击候选节点选择路线，Esc 取消" else "当前为局部路径，选择来路可补全"}"))
         routeButton.isVisible = visible && action != null
         arrangeSteps(diagram.width, diagram.height)
         diagram.repaint()
@@ -117,7 +109,7 @@ internal class UnderstandingDiagramControls(private val diagram: UnderstandingDi
     }
 
     fun arrangeSide(availableWidth: Int, availableHeight: Int) {
-        val visible = listOf(clusterNav, hierarchy, route, behavior).filter { it.isVisible }
+        val visible = listOf(clusterNav, hierarchy, behavior).filter { it.isVisible }
         val panelHeight = visible.size * BUTTON_SIZE + (visible.size - 1) * GAP
         val minTop = y + height + GAP
         val maxTop = (availableHeight - INSET - BUTTON_SIZE - GAP - panelHeight).coerceAtLeast(0)
@@ -131,16 +123,14 @@ internal class UnderstandingDiagramControls(private val diagram: UnderstandingDi
 
     fun arrangeSteps(availableWidth: Int, availableHeight: Int) {
         val bottom = (availableHeight - INSET - BUTTON_SIZE).coerceAtLeast(0)
-        if (availableWidth >= INSET * 2 + BUTTON_SIZE * 2 + GAP) {
-            previousButton.setBounds(INSET, bottom, BUTTON_SIZE, BUTTON_SIZE)
-            nextButton.setBounds(INSET + BUTTON_SIZE + GAP, bottom, BUTTON_SIZE, BUTTON_SIZE)
-        } else {
-            previousButton.setBounds(INSET, (bottom - BUTTON_SIZE - GAP).coerceAtLeast(0), BUTTON_SIZE, BUTTON_SIZE)
-            nextButton.setBounds(INSET, bottom, BUTTON_SIZE, BUTTON_SIZE)
+        val steps = listOf(previousButton, nextButton) + if (routeButton.isVisible) listOf(routeButton) else emptyList()
+        val columns = ((availableWidth - INSET * 2 + GAP) / (BUTTON_SIZE + GAP)).coerceIn(1, steps.size)
+        val rows = (steps.size + columns - 1) / columns
+        steps.forEachIndexed { index, button ->
+            button.setBounds(INSET + (index % columns) * (BUTTON_SIZE + GAP),
+                (bottom - (rows - 1 - index / columns) * (BUTTON_SIZE + GAP)).coerceAtLeast(0),
+                BUTTON_SIZE, BUTTON_SIZE)
         }
-        val left = nextButton.x + BUTTON_SIZE + GAP
-        val routeWidth = routeButton.preferredSize.width.coerceAtMost((availableWidth - left - INSET).coerceAtLeast(0))
-        routeButton.setBounds(left, bottom, routeWidth, BUTTON_SIZE)
     }
 
     private fun showClusterMenu() {

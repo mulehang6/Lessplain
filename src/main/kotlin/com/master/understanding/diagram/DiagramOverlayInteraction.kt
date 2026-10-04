@@ -54,13 +54,6 @@ internal fun UnderstandingDiagram.showNodeMenu(nodeId: String, point: Point) {
             isEnabled = routeNavigation != null
             addActionListener { routeNavigation?.complete(nodeId) }
         })
-        add(JMenuItem("选一条路线").apply {
-            addActionListener {
-                routeNavigation?.cancel()
-                selectUnderstandingNode(nodeId, notify = true)
-                completeRouteNavigation.showPicker()
-            }
-        })
         add(JMenuItem("添加注释").apply {
             isEnabled = addNoteCallbacks.isNotEmpty()
             addActionListener { addNoteCallbacks.toList().forEach { it(nodeId) } }

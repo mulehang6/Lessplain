@@ -4,7 +4,7 @@ import com.master.understanding.core.StaticExplorer
 import com.master.understanding.core.StepDirection
 import com.master.understanding.core.StepResult
 import com.master.understanding.diagram.RouteChoicePresenter
-import com.master.understanding.diagram.swingRouteChoicePresenter
+import com.master.understanding.diagram.ideRouteChoicePresenter
 import com.master.understanding.model.BrowseState
 import com.master.understanding.model.UnderstandingRecord
 import com.master.understanding.storage.UnderstandingRepository
@@ -17,7 +17,7 @@ internal class SourceGraphNavigation(
     private val graphStates: GraphViewStateStore,
     private val isSelected: (recordId: String, nodeId: String) -> Boolean,
     private val selectNode: (record: UnderstandingRecord, nodeId: String) -> Unit,
-    private val choices: RouteChoicePresenter = swingRouteChoicePresenter,
+    private val choices: RouteChoicePresenter = ideRouteChoicePresenter,
 ) : AutoCloseable {
     private var generation = 0L
     private var popup: AutoCloseable? = null
@@ -39,7 +39,11 @@ internal class SourceGraphNavigation(
     private fun step(recordId: String, nodeId: String, direction: StepDirection, component: Component?, point: Point) {
         if (closed || !isSelected(recordId, nodeId)) return
         cancelChoices()
-        if (graphStates.navigationSessions.step(recordId, nodeId, backward = direction == StepDirection.PREVIOUS)) return
+        if (graphStates.navigationSessions.step(
+                recordId, nodeId, backward = direction == StepDirection.PREVIOUS,
+                component = component, point = point,
+            )
+        ) return
         val record = repository.getRecord(recordId)
         val route = explorer(record, nodeId)
         val result = if (direction == StepDirection.PREVIOUS) route.previous() else route.next()
@@ -49,7 +53,7 @@ internal class SourceGraphNavigation(
                 if (component == null) return
                 val request = generation
                 val snapshot = route.navigationState
-                val handle = choices.show(record.graph, direction, result.edges, component, Point(point.x, point.y + 2)) { edgeId ->
+                val handle = choices.show(record.graph, direction, result.edges, component, point, {}) { edgeId ->
                     if (request != generation || !isSelected(recordId, nodeId)) return@show
                     cancelChoices()
                     if (edgeId == null) return@show
@@ -61,6 +65,7 @@ internal class SourceGraphNavigation(
                 }
                 if (request == generation) popup = handle else handle.close()
             }
+
             else -> Unit
         }
     }
@@ -71,20 +76,31 @@ internal class SourceGraphNavigation(
         popup = null
     }
 
+    fun cancelChoices(recordId: String, nodeId: String) {
+        cancelChoices()
+        graphStates.navigationSessions.cancelChoices(recordId, nodeId)
+    }
+
     private fun commit(record: UnderstandingRecord, explorer: StaticExplorer) {
         val nodeId = explorer.currentNodeId
         val previous = repository.getBrowseState(record.id)
         graphStates.update(GraphLayerKey(record.id)) { state ->
             val browse = state.browse ?: previous ?: BrowseState(record.id)
-            state.copy(browse = browse.copy(nodeId = nodeId, staticPath = explorer.path,
-                navigationState = explorer.navigationState))
+            state.copy(
+                browse = browse.copy(
+                    nodeId = nodeId, staticPath = explorer.path,
+                    navigationState = explorer.navigationState,
+                ),
+            )
         }
         if (!repository.readOnly) {
-            repository.saveBrowseState((previous ?: BrowseState(record.id)).copy(
-                nodeId = nodeId,
-                staticPath = explorer.path,
-                navigationState = explorer.navigationState,
-            ))
+            repository.saveBrowseState(
+                (previous ?: BrowseState(record.id)).copy(
+                    nodeId = nodeId,
+                    staticPath = explorer.path,
+                    navigationState = explorer.navigationState,
+                ),
+            )
         }
         selectNode(record, nodeId)
     }

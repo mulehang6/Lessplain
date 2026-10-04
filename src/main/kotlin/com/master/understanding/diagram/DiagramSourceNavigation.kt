@@ -128,6 +128,10 @@ internal fun UnderstandingDiagram.bindSourceNavigation(
         busy = { navigation.hasChoice },
         previous = ::previousStep,
         next = ::nextStep,
+        sourceStep = { backward, component, point ->
+            navigation.stepFromSource(backward, component, point)
+        },
+        cancel = navigation::cancel,
     )
     navigation.onActivated = registration::activate
     return AutoCloseable { navigation.onActivated = {}; registration.close() }
