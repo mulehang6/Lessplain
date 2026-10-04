@@ -34,14 +34,14 @@
 
 ## Master Understanding：IDEA MCP 连接说明
 
-本项目开发时会同时出现两条内置 IDEA MCP 连接，下表区分主开发 IDE 与插件验收 IDE。调用前先确认目标 IDE 已打开对应项目，始终传入其绝对 `projectPath`；不得为探测连接而自动打开工程或启动 IDE。停用 Index MCP，不作为源码分析或失败回退。
+本项目区分日常开发 IDE 的内置 MCP 与插件验收 IDE 的开发 MCP。调用前先确认连接对应的 IDE 及其已打开项目，将该项目的绝对路径传入路由外层 `projectPath`；不得为探测连接而自动打开工程或启动 IDE。
 
-| 连接名          | 连接对象                                                                                           | 主要用途                                                     | 工具入口                            |
-|-----------------|----------------------------------------------------------------------------------------------------|--------------------------------------------------------------|-------------------------------------|
-| `idea`          | 日常开发使用的 IDEA，当前打开包含本插件工程的工作区                                                | 查找插件源码、分析符号、检查修改后的文件及构建配置                   | `execute_tool` 路由器               |
-| `idea_dev_2026` | 由 `Master Understanding IDE` 启动的开发 IDE，加载本插件；其中打开的项目是验收对象，可能随测试改变 | 调用插件自身的 MCP 工具，检查开发 IDE 中的运行行为和测试项目 | `execute_tool` 路由器               |
+| 连接名          | 连接对象                                                                                           | 主要用途                                                     | 工具入口                         |
+|-----------------|----------------------------------------------------------------------------------------------------|--------------------------------------------------------------|----------------------------------|
+| `idea`          | 日常开发使用的 IDEA 的内置 MCP，当前打开包含本插件工程的工作区                                     | 面向插件源码工程的日常开发操作                               | `mcp__idea__execute_tool` 路由器 |
+| `idea_dev_2026` | 由 `Master Understanding IDE` 启动的开发 IDE，加载本插件；其中打开的项目是验收对象，可能随测试改变 | 调用插件自身的 MCP 工具，检查开发 IDE 中的运行行为和测试项目 | `execute_tool` 路由器            |
 
-两条内置连接通过各自的 `execute_tool` 路由器调用。将 `get_understanding_context` 或 `present_understanding` 及参数放入 `command`，把插件验收 IDE 当前打开的项目路径放在外层 `projectPath`；不要将插件工程路径误传给验收 IDE。本插件目前只有这两个 MCP 工具。本工程 Kotlin 源码分析遵循 `idea-mcp-priority`：优先使用 `idea` 的项目搜索、符号分析、语义操作和诊断能力；内置能力不可用或合理修正后仍失败时，用等价的自身工具处理并说明覆盖限制。普通磁盘读取、文本编辑、新增及命令执行使用本机工具；`idea_dev_2026` 用于插件自身工具及验收对象，不能作为开发源码分析的替代连接。
+两条连接通过各自的 `execute_tool` 路由器调用。`idea` 面向日常开发 IDE 中的插件源码工程；`idea_dev_2026` 面向插件开发实例中当前打开的验收项目。调用插件的 `get_understanding_context` 或 `present_understanding` 时，将工具名及参数放入 `command`，把验收项目路径放在外层 `projectPath`，不要误传插件源码工程路径。本插件目前只有这两个 MCP 工具。`idea_dev_2026` 用于插件自身工具及验收对象，不能作为日常开发连接的替代。
 
 开发默认打开父级 `Agent-dev` 工程。仓库内 `Master Understanding IDE`、`Master Understanding Tests` 和 `Master Understanding Verifications` 三份运行配置的 Gradle 路径都是 `$PROJECT_DIR$/master-understanding`，这是父工程下的预期设置，不为单独打开插件目录而修改。启动插件时选唯一的 `Master Understanding IDE`；不要选旧配置 `Run IDE with Plugin`，它属于 `walkthrough-plugin`，会把没有 Gradle 构建文件的工作区根目录传给 Gradle。单独打开 `master-understanding` 时，使用本目录的 Gradle 命令，或另建 Gradle 工程目录指向本插件 `settings.gradle.kts` 所在目录的配置。
 
@@ -54,4 +54,4 @@
 不要自行启动开发 IDE、操作桌面或截图检查界面。完成必要的命令行测试与代码检查即可；需要视觉反馈时使用用户提供的截图，除非用户明确另行要求交互检查。
 
 ## 说明
-- ![context.md](./docs/context.md) 必读
+- [context.md](./docs/context.md) 必读
