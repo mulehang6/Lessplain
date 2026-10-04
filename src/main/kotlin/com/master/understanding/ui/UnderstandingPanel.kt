@@ -177,7 +177,7 @@ private fun RecordView(
     }
     val diagram = remember(record.id, record.revision) {
         runCatching { createUnderstandingDiagram(record, graphBrowseState(service, graphKey)).apply {
-            bindGraphState(service, graphKey)
+            bindGraphState(service.graphStates, graphKey)
         } }
     }
     DisposableEffect(diagram, hierarchy, onNavigateIndex) {

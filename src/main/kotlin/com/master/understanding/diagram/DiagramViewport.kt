@@ -43,11 +43,14 @@ internal fun UnderstandingDiagram.initializeViewport() {
     repaint()
 }
 
-internal fun UnderstandingDiagram.restoreViewport(saved: BrowseState) {
+internal fun UnderstandingDiagram.restoreViewport(saved: BrowseState, persist: Boolean = true) {
     if (!saved.hasPan || !saved.panX.isFinite() || !saved.panY.isFinite()) return
+    cameraTimer.stop()
+    pendingCenterNodeId = null
     zoom = saved.zoom
     centerX = saved.panX
     centerY = saved.panY
+    if (!persist) cancelViewportSave()
     repaint()
 }
 

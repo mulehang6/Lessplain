@@ -1,6 +1,8 @@
 package com.master.understanding.diagram
 
 import com.master.understanding.ide.GraphLayerKey
+import com.master.understanding.ide.GraphViewStateStore
+import com.master.understanding.ide.GraphViewState
 import com.master.understanding.ide.UnderstandingService
 import com.master.understanding.model.BrowseState
 import com.master.understanding.model.RouteNavigationState
@@ -9,35 +11,32 @@ internal fun graphBrowseState(service: UnderstandingService, key: GraphLayerKey)
     service.graphStates.get(key).browse ?:
         if (key.questionNodeId == null) service.repository.getBrowseState(key.recordId) else null
 
-internal fun UnderstandingDiagram.bindGraphState(service: UnderstandingService, key: GraphLayerKey) {
-    val state = service.graphStates.get(key)
+internal fun UnderstandingDiagram.bindGraphState(store: GraphViewStateStore, key: GraphLayerKey) {
+    applyGraphState(store.get(key))
+    onPinChanged { value -> store.update(key) { it.copy(navigationPinned = value) } }
+    onAutoFollowChanged { value -> store.update(key) { it.copy(autoFollowNode = value) } }
+    onFlowChanged { value -> store.update(key) { it.copy(flowEnabled = value) } }
+    onNodePositionsChanged { value ->
+        store.update(key) { it.withPositions(activeDirection, value) }
+    }
+    onLayoutPreferenceChanged { value ->
+        store.update(key) { it.copy(layoutPreference = value) }
+    }
+    bindStateSubscription(store.listen(key, ::applyGraphState))
+}
+
+/** Initial binding and live updates apply the same direction-specific state. */
+private fun UnderstandingDiagram.applyGraphState(state: GraphViewState) {
     navigationPinned = state.navigationPinned
     autoFollowNode = state.autoFollowNode
     flowEnabled = state.flowEnabled
     setDirectionState(LayoutDirection.VERTICAL, state.verticalViewport, state.verticalPositions)
     setDirectionState(LayoutDirection.HORIZONTAL, state.horizontalViewport, state.horizontalPositions)
     setLayoutPreference(state.layoutPreference, persist = false)
-    onPinChanged { value -> service.graphStates.update(key) { it.copy(navigationPinned = value) } }
-    onAutoFollowChanged { value -> service.graphStates.update(key) { it.copy(autoFollowNode = value) } }
-    onFlowChanged { value -> service.graphStates.update(key) { it.copy(flowEnabled = value) } }
-    onNodePositionsChanged { value ->
-        service.graphStates.update(key) { it.withPositions(activeDirection, value) }
-    }
-    onLayoutPreferenceChanged { value ->
-        service.graphStates.update(key) { it.copy(layoutPreference = value) }
-    }
-    bindStateSubscription(service.graphStates.listen(key) { current ->
-        navigationPinned = current.navigationPinned
-        autoFollowNode = current.autoFollowNode
-        flowEnabled = current.flowEnabled
-        setDirectionState(LayoutDirection.VERTICAL, current.verticalViewport, current.verticalPositions)
-        setDirectionState(LayoutDirection.HORIZONTAL, current.horizontalViewport, current.horizontalPositions)
-        setLayoutPreference(current.layoutPreference, persist = false)
-    })
 }
 
 internal fun saveGraphViewState(
-    service: UnderstandingService,
+    store: GraphViewStateStore,
     key: GraphLayerKey,
     diagram: UnderstandingDiagram,
     path: List<String>,
@@ -45,7 +44,7 @@ internal fun saveGraphViewState(
     navigationState: RouteNavigationState? = null,
 ) {
     val center = diagram.center
-    service.graphStates.update(key) { previous ->
+    store.update(key) { previous ->
         val browse = BrowseState(key.canvasId, nodeId, path, diagram.zoom, center.x, center.y, true, navigationState)
         previous.withViewport(diagram.activeDirection, browse).copy(browse = browse)
     }

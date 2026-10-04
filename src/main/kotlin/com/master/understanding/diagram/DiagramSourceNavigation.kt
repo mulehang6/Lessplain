@@ -25,21 +25,23 @@ internal fun bindDiagramSourceNavigation(
     var closed = false
     fun saveViewport() {
         if (closed) return
-        saveGraphViewState(service, key, diagram, explorer?.path.orEmpty(), explorer?.currentNodeId,
+        saveGraphViewState(service.graphStates, key, diagram, explorer?.path.orEmpty(), explorer?.currentNodeId,
             explorer?.navigationState)
     }
+    fun sourceAt(nodeId: String): SourceNode? = canvas?.sources?.get(nodeId)
+        ?: if (canvas == null) SourceNode(record, nodeId) else null
+
+    val sourceFeedback = diagram.bindSourceLocationFeedback(service, ::sourceAt)
     if (explorer == null) {
         diagram.onViewportChanged { saveViewport() }
         return AutoCloseable {
             if (!closed) {
                 saveViewport()
                 closed = true
+                sourceFeedback.close()
             }
         }
     }
-
-    fun sourceAt(nodeId: String): SourceNode? = canvas?.sources?.get(nodeId)
-        ?: if (canvas == null) SourceNode(record, nodeId) else null
 
     fun isCurrentSource(nodeId: String): Boolean {
         val source = sourceAt(nodeId) ?: return false
@@ -106,6 +108,7 @@ internal fun bindDiagramSourceNavigation(
             } finally {
                 closed = true
                 sourceSelection.close()
+                sourceFeedback.close()
                 sourceSession.close()
                 navigation.close()
             }

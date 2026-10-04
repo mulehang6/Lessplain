@@ -71,7 +71,7 @@ internal fun QuestionIndexView(
     val diagram = remember(canvas) {
         createUnderstandingDiagram(canvas.record, graphBrowseState(service, graphKey),
             clusters = canvas.clusters, examplePanels = canvas.examplePanels).apply {
-            bindGraphState(service, graphKey)
+            bindGraphState(service.graphStates, graphKey)
         }
     }
     DisposableEffect(diagram, service.panelFocusQuestionId) {

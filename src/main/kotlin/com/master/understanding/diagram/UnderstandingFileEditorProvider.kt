@@ -77,7 +77,7 @@ private class UnderstandingFileEditor(private val project: Project, private val 
         createUnderstandingDiagram(canvas.record, graphBrowseState(service, graphKey),
             clusters = canvas.clusters, examplePanels = canvas.examplePanels)
     } ?: createUnderstandingDiagram(record, graphBrowseState(service, graphKey))).apply {
-        bindGraphState(service, graphKey)
+        bindGraphState(service.graphStates, graphKey)
     }
     private val explorer = (questionCanvas?.record ?: record).graph.nodes.firstOrNull()?.let {
         val saved = graphBrowseState(service, graphKey)

@@ -9,9 +9,6 @@ import com.master.understanding.ide.GraphNodePosition
 import com.master.understanding.ide.GraphLayoutPreference
 import java.awt.Dimension
 import java.awt.Graphics
-import java.awt.event.ComponentAdapter
-import java.awt.event.ComponentEvent
-import java.awt.event.HierarchyEvent
 import java.awt.event.MouseEvent
 import java.awt.geom.Point2D
 import java.awt.geom.Rectangle2D
@@ -38,6 +35,8 @@ internal class UnderstandingDiagram(
     internal var layout = automaticLayout
     private val layoutCoordinator = DiagramLayoutCoordinator(layoutComputer, ::onLayoutResult)
     internal var layoutReady = false
+        private set
+    internal var layoutRequestPending = false
         private set
     internal val layoutBusy: Boolean get() = layoutCoordinator.busy
     internal var layoutFailure: String? = null
@@ -95,6 +94,7 @@ internal class UnderstandingDiagram(
 
     internal val header = DiagramHeader(if (record.parentId == null || clusterSpecs.isEmpty()) record.displayTitle ?: record.question
         else "节点追问 · ${record.question}")
+    internal val sourceStatus = DiagramSourceStatus()
     val jComponent: JComponent get() = this
     val center: Point2D.Double get() = Point2D.Double(centerX, centerY)
     var centerX: Double = layout.bounds.centerX
@@ -223,9 +223,16 @@ internal class UnderstandingDiagram(
 
     fun setDirectionState(direction: LayoutDirection, viewport: BrowseState?,
         positions: Map<String, GraphNodePosition>) {
+        val viewportChanged = viewport != null && directionViewports[direction] != viewport
         if (viewport != null) directionViewports[direction] = viewport
         directionPositions[direction] = positions
-        if (layoutReady && activeDirection == direction) setNodePositions(positions)
+        if (layoutReady && activeDirection == direction) {
+            setNodePositions(positions)
+            if (viewportChanged && initializedViewport &&
+                (zoom != viewport.zoom || centerX != viewport.panX || centerY != viewport.panY)) {
+                restoreViewport(viewport, persist = false)
+            }
+        }
     }
 
     fun retryLayout() { requestLayout() }
@@ -237,7 +244,10 @@ internal class UnderstandingDiagram(
     }
 
     internal fun requestLayout() {
-        if (disposed || width <= 0 || height <= 0) return
+        if (disposed) return
+        layoutRequestPending = true
+        if (width <= 0 || height <= 0) return
+        layoutRequestPending = false
         layoutFailure = null
         layoutCoordinator.request(requestedDirection())
         repaint()
@@ -251,9 +261,10 @@ internal class UnderstandingDiagram(
             layout = automaticLayout
             nodePositions = emptyMap()
             setNodePositions(directionPositions[activeDirection].orEmpty())
-            if (!initializedViewport) initializeViewport()
-            else {
-                directionViewports[activeDirection]?.let(::restoreViewport)
+            if (!initializedViewport) {
+                if (width > 0 && height > 0) initializeViewport()
+            } else {
+                directionViewports[activeDirection]?.let { restoreViewport(it, persist = false) }
                     ?: currentNodeId?.let(::centerOnNode)
             }
             controls.refreshClusters()
@@ -276,6 +287,7 @@ internal class UnderstandingDiagram(
     fun bindStateSubscription(subscription: AutoCloseable) { stateSubscription = subscription }
 
     private val viewportSaveTimer = Timer(200) { viewportChanged?.invoke() }.apply { isRepeats = false }
+    internal fun cancelViewportSave() { viewportSaveTimer.stop() }
     internal fun queueViewportSave() {
         if (viewportChanged != null) viewportSaveTimer.restart()
     }
@@ -305,6 +317,7 @@ internal class UnderstandingDiagram(
     init {
         setLayout(null)
         add(header)
+        add(sourceStatus)
         add(controls)
         add(controls.sideControls)
         add(controls.previousButton)
@@ -316,31 +329,7 @@ internal class UnderstandingDiagram(
         preferredSize = Dimension(520, 360)
         getAccessibleContext().accessibleName = "理解图"
         getAccessibleContext().accessibleDescription = "方向键选择节点，Ctrl+C 复制来源，Enter 查看追问"
-        DiagramKeyboardActions.install(this, { DiagramKeyboardActions.move(this, it) },
-            onCopy = { currentNodeId?.let { id -> copyCallbacks.toList().forEach { it(id) } } },
-            onQuestions = questions@ {
-                if (routeNavigation?.confirmCandidate() == true) return@questions
-                currentNodeId?.takeIf { (questionCounts[it] ?: 0) > 0 }?.let { id ->
-                    questionCallbacks.toList().forEach { it(id) }
-                }
-            }, onCancel = { routeNavigation?.cancel() })
-        val mouse = DiagramMouseInteraction(this)
-        addMouseListener(mouse)
-        addMouseMotionListener(mouse)
-        addMouseWheelListener(mouse)
-        addComponentListener(object : ComponentAdapter() {
-            override fun componentResized(event: ComponentEvent) {
-                if (!initializedViewport && width > 0 && height > 0) initializeViewport()
-                applyPendingClusterFocus()
-                if (autoFollowNode) pendingCenterNodeId?.let { centerOnNode(it) }
-            }
-        })
-        addHierarchyListener { event ->
-            if (event.changeFlags and HierarchyEvent.SHOWING_CHANGED.toLong() != 0L) {
-                if (!isShowing) routeNavigation?.cancel()
-                updateTimer()
-            }
-        }
+        installDiagramInteractions()
         if (record.graph.nodes.isNotEmpty()) {
             val explorer = StaticExplorer(record.graph, initialState?.staticPath.orEmpty(), initialState?.nodeId,
                 initialState?.navigationState)
@@ -374,6 +363,7 @@ internal class UnderstandingDiagram(
         header.arrange(width, controls.bounds, controls.components.first().height)
         controls.arrangeSide(width, height)
         controls.arrangeSteps(width, height)
+        sourceStatus.arrange(width, controls.previousButton.y)
         super.doLayout()
     }
 

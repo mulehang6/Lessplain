@@ -127,6 +127,43 @@ class DiagramAsyncLayoutTest {
     }
 
     @Test
+    fun `layout preference changed at zero size is applied after an initialized canvas resizes`() {
+        SwingUtilities.invokeAndWait {
+            val diagram = createUnderstandingDiagram(record)
+            try {
+                resize(diagram, 700)
+                await { diagram.layoutReady }
+                resize(diagram, 0)
+                diagram.setLayoutPreference(GraphLayoutPreference.HORIZONTAL)
+                assertTrue(diagram.layoutRequestPending)
+                assertEquals(LayoutDirection.VERTICAL, diagram.activeDirection)
+                resize(diagram, 700)
+                await { !diagram.layoutBusy && diagram.activeDirection == LayoutDirection.HORIZONTAL }
+                assertFalse(diagram.layoutRequestPending)
+                assertTrue(diagram.initializedViewport)
+            } finally { diagram.dispose() }
+        }
+    }
+
+    @Test
+    fun `only the latest preference deferred at zero size is applied`() {
+        SwingUtilities.invokeAndWait {
+            val diagram = createUnderstandingDiagram(record)
+            try {
+                resize(diagram, 1000)
+                await { diagram.layoutReady }
+                resize(diagram, 0)
+                diagram.setLayoutPreference(GraphLayoutPreference.VERTICAL)
+                diagram.setLayoutPreference(GraphLayoutPreference.HORIZONTAL)
+                resize(diagram, 700)
+                await { !diagram.layoutBusy && !diagram.layoutRequestPending }
+                assertEquals(GraphLayoutPreference.HORIZONTAL, diagram.layoutPreference)
+                assertEquals(LayoutDirection.HORIZONTAL, diagram.activeDirection)
+            } finally { diagram.dispose() }
+        }
+    }
+
+    @Test
     fun `disposing coordinator interrupts work and drops its result`() {
         val started = CountDownLatch(1)
         val interrupted = CountDownLatch(1)
