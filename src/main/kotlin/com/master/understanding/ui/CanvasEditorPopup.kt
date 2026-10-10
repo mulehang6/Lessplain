@@ -26,7 +26,7 @@ internal class CanvasEditorPopup(
     save: (String) -> Unit,
     private val onClosed: () -> Unit,
 ) : AutoCloseable {
-    private val width = size.width.coerceAtLeast(1)
+    private val width = JBUI.scale(size.width).coerceAtLeast(1)
     private var closed = false
     private var resizeQueued = false
     private val editor = CanvasTextEditor(
@@ -88,7 +88,7 @@ internal class CanvasEditorPopup(
 
     private fun resizeToContent() {
         if (closed || popup.isDisposed || !popup.isVisible) return
-        val location = popup.locationOnScreen
+        val location = nativePopupLocation(popup)
         val screen = usableScreenBoundsAt(location)
         val currentSize = popup.size
         val contentSize = editor.size.takeIf { it.width > 0 && it.height > 0 } ?: editor.preferredSize
@@ -100,11 +100,11 @@ internal class CanvasEditorPopup(
 
         editor.preferredSize = editor.preferredSizeFor(contentWidth, availableContentHeight)
         editor.revalidate()
+        popup.content.preferredSize = null
         popup.pack(true, true)
 
         val bounds = clampPopupBounds(location, popup.size, screen)
-        popup.size = bounds.size
-        popup.setLocation(bounds.location)
+        setNativePopupBounds(popup, bounds)
     }
 
     private fun release() {
@@ -126,7 +126,8 @@ internal fun clampPopupBounds(location: Point, size: Dimension, screen: Rectangl
     return Rectangle(x, y, width, height)
 }
 
-private fun usableScreenBoundsAt(point: Point): Rectangle {
+/** Public AWT monitor bounds shared by native popup hosts, excluding taskbars. */
+internal fun usableScreenBoundsAt(point: Point): Rectangle {
     val environment = GraphicsEnvironment.getLocalGraphicsEnvironment()
     val configuration = environment.screenDevices
         .asSequence()

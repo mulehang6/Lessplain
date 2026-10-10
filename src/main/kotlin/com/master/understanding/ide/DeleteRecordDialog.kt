@@ -8,6 +8,7 @@ import com.intellij.ui.components.JBLabel
 import com.intellij.util.ui.JBFont
 import com.intellij.util.ui.JBUI
 import com.master.understanding.ui.DeleteRecordState
+import com.master.understanding.ui.UnderstandingUiMetrics
 import java.awt.BorderLayout
 import javax.swing.JComponent
 import javax.swing.JPanel
@@ -32,7 +33,8 @@ internal class DeleteRecordDialog(
         Disposer.register(disposable) { closed() }
     }
 
-    override fun createCenterPanel(): JComponent = JPanel(BorderLayout(0, JBUI.scale(12))).apply {
+    override fun createCenterPanel(): JComponent = JPanel(BorderLayout(0, JBUI.scale(UnderstandingUiMetrics.SECTION_GAP))).apply {
+        border = JBUI.Borders.empty(UnderstandingUiMetrics.SMALL_GAP, 0)
         add(JTextArea(state.title).apply {
             isEditable = false
             isFocusable = false

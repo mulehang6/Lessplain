@@ -1,8 +1,7 @@
 package com.master.understanding.diagram
 
-import com.intellij.ui.JBColor
+import com.master.understanding.ui.UnderstandingUiStyle
 import java.awt.BasicStroke
-import java.awt.Color
 import java.awt.Graphics2D
 import java.awt.geom.Rectangle2D
 import java.awt.geom.Path2D
@@ -10,12 +9,12 @@ import kotlin.math.abs
 
 /** Directed edges and uniform animated flow for every highlighted reading path. */
 internal object DiagramEdgePainter {
-    private val background = JBColor(Color(0xFAFBFC), Color(0x1E1F22))
-    private val edgeColor = JBColor(Color(0x596579), Color(0xB1BAC7))
-    private val routeColor = JBColor(Color(0x2563EB), Color(0x72B7FF))
-    private val flowColor = JBColor(Color(0xDCEBFF), Color(0xE2F3FF))
-    private val labelColor = JBColor(Color(0x374151), Color(0xC4CBD5))
-    private val choiceColor = JBColor(Color(0xB66A00), Color(0xFFC14D))
+    private val background get() = UnderstandingUiStyle.canvas
+    private val edgeColor get() = UnderstandingUiStyle.edge
+    private val routeColor get() = UnderstandingUiStyle.accent
+    private val flowColor get() = UnderstandingUiStyle.flow
+    private val labelColor get() = UnderstandingUiStyle.muted
+    private val choiceColor get() = UnderstandingUiStyle.warning
     private val dashPattern = floatArrayOf(10f, 10f)
 
     fun paint(g: Graphics2D, edges: List<PlacedEdge>, routeIds: Set<String>, animate: Boolean,
@@ -73,7 +72,7 @@ internal object DiagramEdgePainter {
                 else { moveTo(point.x, point.y - 5); quadTo(point.x + 7, point.y, point.x, point.y + 5) }
             }
             g.color = if (clusters.any { it.bounds.contains(point) })
-                JBColor(Color(0xF5F8FC), Color(0x24272D)) else background
+                UnderstandingUiStyle.group else background
             g.stroke = BasicStroke(7f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
             if (horizontal) g.drawLine((point.x - 5).toInt(), point.y.toInt(), (point.x + 5).toInt(), point.y.toInt())
             else g.drawLine(point.x.toInt(), (point.y - 5).toInt(), point.x.toInt(), (point.y + 5).toInt())

@@ -25,6 +25,9 @@ import com.master.understanding.ui.questionsForNode
 import com.master.understanding.ui.bindContentActions
 import com.master.understanding.ui.SourceNode
 import com.master.understanding.storage.pendingQuestionsForNode
+import com.intellij.util.ui.JBUI
+import com.master.understanding.ui.CanvasUiFonts
+import com.master.understanding.ui.UnderstandingUiMetrics
 import java.awt.BorderLayout
 import java.awt.FlowLayout
 import java.beans.PropertyChangeListener
@@ -119,13 +122,15 @@ private class UnderstandingFileEditor(private val project: Project, private val 
             }
         }
     }
-    private val header = JPanel(FlowLayout(FlowLayout.LEFT, 4, 2)).apply {
+    private val header = JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(UnderstandingUiMetrics.GAP), 0)).apply {
         isOpaque = false
+        border = JBUI.Borders.empty(UnderstandingUiMetrics.SMALL_GAP, UnderstandingUiMetrics.SMALL_GAP)
         add(backButton)
     }
     private val panel = JPanel(BorderLayout()).apply {
         add(builder.jComponent, BorderLayout.CENTER)
     }
+    private val fonts = CanvasUiFonts(listOf(backButton), onRefreshed = { panel.revalidate() })
     private var disposed = false
 
     init {
@@ -204,6 +209,7 @@ private class UnderstandingFileEditor(private val project: Project, private val 
         copySelection.close()
         content.close()
         changed.close()
+        fonts.close()
         Disposer.dispose(builder)
         panel.removeAll()
     }

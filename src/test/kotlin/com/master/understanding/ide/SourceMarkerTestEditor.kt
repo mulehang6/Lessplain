@@ -1,17 +1,17 @@
 package com.master.understanding.ide
 
-import com.intellij.openapi.editor.Document
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.util.Disposer
+import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.Inlay
 import com.intellij.openapi.editor.InlayModel
 import com.intellij.openapi.editor.ScrollingModel
 import com.intellij.openapi.editor.colors.EditorColorsScheme
-import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.editor.event.DocumentEvent
+import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.editor.markup.MarkupModel
 import com.intellij.openapi.editor.markup.RangeHighlighter
+import com.intellij.openapi.util.Disposer
 import java.awt.Font
 import java.awt.Point
 import java.awt.Rectangle
@@ -65,6 +65,7 @@ internal class SourceMarkerTestEditor {
     private val scrolling = fake(ScrollingModel::class.java) { name, _ ->
         if (name == "getVisibleArea") visibleArea else null
     }
+
     val inlay: Inlay<*> = fake(Inlay::class.java) { name, _ ->
         when (name) {
             "getEditor" -> editor

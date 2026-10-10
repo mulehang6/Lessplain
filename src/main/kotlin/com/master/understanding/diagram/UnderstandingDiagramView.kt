@@ -7,6 +7,8 @@ import com.master.understanding.model.UnderstandingRecord
 import com.master.understanding.model.branchNodeIds
 import com.master.understanding.ide.GraphNodePosition
 import com.master.understanding.ide.GraphLayoutPreference
+import com.master.understanding.ui.CanvasUiFonts
+import com.master.understanding.ui.UnderstandingUiStyle
 import java.awt.Dimension
 import java.awt.Graphics
 import java.awt.event.MouseEvent
@@ -287,6 +289,14 @@ internal class UnderstandingDiagram(
     fun bindStateSubscription(subscription: AutoCloseable) { stateSubscription = subscription }
 
     private val viewportSaveTimer = Timer(200) { viewportChanged?.invoke() }.apply { isRepeats = false }
+    private val uiFonts = CanvasUiFonts(listOf(this, sourceStatus.label)) {
+        if (!disposed) {
+            header.refreshAppearance()
+            doLayout()
+            requestLayout()
+            repaint()
+        }
+    }
     internal fun cancelViewportSave() { viewportSaveTimer.stop() }
     internal fun queueViewportSave() {
         if (viewportChanged != null) viewportSaveTimer.restart()
@@ -424,7 +434,8 @@ internal class UnderstandingDiagram(
             routeChoice.edgeIds, routeChoice.focusedEdgeId, routeChoice.focusedNodeId))
         if (!layoutReady || layoutFailure != null) {
             val message = layoutFailure?.let { "布局失败：$it（点击重试）" } ?: "正在排版…"
-            graphics.color = foreground
+            graphics.font = DiagramTextMetrics.font()
+            graphics.color = if (layoutFailure != null) UnderstandingUiStyle.failure else UnderstandingUiStyle.muted
             graphics.drawString(message, 18, height - 22)
         }
         hasPainted = true
@@ -436,6 +447,7 @@ internal class UnderstandingDiagram(
         overlays.close()
         header.close()
         controls.dispose()
+        uiFonts.close()
         layoutCoordinator.close()
         flowTimer.stop()
         choiceTimer.stop()

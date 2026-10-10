@@ -10,14 +10,14 @@ import com.master.understanding.model.GraphEdge
 import com.master.understanding.model.GraphNode
 import com.master.understanding.model.GraphCluster
 import com.master.understanding.model.ClusterUpdate
-import com.master.understanding.model.UNDERSTANDING_SCHEMA_VERSION
+import com.master.understanding.model.UNDERSTANDING_SCHEMA_REVISION
 import com.master.understanding.model.SourceAnchor
 import com.master.understanding.model.UnderstandingGraph
 import com.master.understanding.model.UnderstandingInputException
 
 internal data class GraphSubmission(val graph: UnderstandingGraph, val clusterUpdate: ClusterUpdate)
 
-internal fun parseGraphPayload(json: String, schemaVersion: Int = UNDERSTANDING_SCHEMA_VERSION): UnderstandingGraph =
+internal fun parseGraphPayload(json: String, schemaVersion: Int = UNDERSTANDING_SCHEMA_REVISION): UnderstandingGraph =
     parseGraphSubmission(json, schemaVersion).graph
 
 internal fun parseGraphSubmission(json: String, schemaVersion: Int): GraphSubmission {

@@ -5,6 +5,10 @@ import com.intellij.openapi.ui.popup.JBPopup
 import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.ui.popup.JBPopupListener
 import com.intellij.openapi.ui.popup.LightweightWindowEvent
+import com.master.understanding.ui.clampPopupBounds
+import com.master.understanding.ui.nativePopupLocation
+import com.master.understanding.ui.setNativePopupBounds
+import com.master.understanding.ui.usableScreenBoundsAt
 import java.awt.AWTEvent
 import java.awt.Component
 import java.awt.EventQueue
@@ -21,7 +25,7 @@ internal class DiagramBehaviorPopup(
     private val popupFactory: (JComponent, JComponent, () -> Boolean) -> JBPopup = ::createBehaviorPopup,
     private val currentEvent: () -> AWTEvent? = EventQueue::getCurrentEvent,
 ) : Disposable {
-    private val panel = DiagramBehaviorPanel(diagram)
+    private val panel = DiagramBehaviorPanel(diagram, ::resizeToContent)
     private var popup: JBPopup? = null
     private var popupListener: JBPopupListener? = null
     private var closing = false
@@ -64,6 +68,14 @@ internal class DiagramBehaviorPopup(
 
     fun refresh() = panel.refresh()
 
+    private fun resizeToContent() {
+        val current = popup?.takeIf { !it.isDisposed && it.isVisible } ?: return
+        val location = nativePopupLocation(current)
+        current.content.preferredSize = null
+        current.pack(true, true)
+        setNativePopupBounds(current, clampPopupBounds(location, current.size, usableScreenBoundsAt(location)))
+    }
+
     private fun mayCancel(): Boolean {
         if (closing) return true
         val event = currentEvent() as? MouseEvent ?: return true
@@ -94,6 +106,7 @@ internal class DiagramBehaviorPopup(
         if (disposed) return
         disposed = true
         close()
+        panel.close()
         anchor.removeHierarchyListener(visibilityListener)
     }
 }

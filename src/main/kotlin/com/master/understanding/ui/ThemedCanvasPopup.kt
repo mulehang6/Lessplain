@@ -21,18 +21,21 @@ internal class ThemedCanvasPopup(
     point: Point,
     size: Dimension,
     requestFocus: Boolean = true,
+    title: String? = null,
     private val onClosed: () -> Unit = {},
     mayCancel: () -> Boolean = { true },
     centerInProject: Project? = null,
+    preferredSize: (() -> Dimension)? = null,
     content: @Composable () -> Unit,
 ) : AutoCloseable {
     private lateinit var composePanel: ComposePanel
     private val panel = JewelComposePanel(config = {
         composePanel = this
-        preferredSize = JBUI.size(size.width, size.height)
+        this.preferredSize = preferredSize?.invoke() ?: JBUI.size(size.width, size.height)
     }, content = content)
     private var closed = false
     val popup: JBPopup = JBPopupFactory.getInstance().createComponentPopupBuilder(panel, panel)
+        .apply { if (title != null) setTitle(title) }
         .setFocusable(true)
         .setRequestFocus(requestFocus)
         .setCancelOnClickOutside(true)
@@ -40,6 +43,11 @@ internal class ThemedCanvasPopup(
         .setCancelOnWindowDeactivation(true)
         .setCancelCallback { mayCancel() }
         .createPopup()
+    private val fonts = preferredSize?.let { measure ->
+        CanvasUiFonts(listOf(panel), onRefreshed = {
+            resizeToContent(measure)
+        })
+    }
 
     init {
         popup.addListener(object : JBPopupListener {
@@ -48,15 +56,27 @@ internal class ThemedCanvasPopup(
         try {
             if (centerInProject == null) popup.show(RelativePoint(owner, point))
             else popup.showCenteredInCurrentWindow(centerInProject)
+            preferredSize?.let(::resizeToContent)
         } catch (failure: RuntimeException) {
             close()
             throw failure
         }
     }
 
+    private fun resizeToContent(measure: () -> Dimension) {
+        if (closed || popup.isDisposed || !popup.isVisible) return
+        val location = nativePopupLocation(popup)
+        panel.preferredSize = measure()
+        popup.content.preferredSize = null
+        popup.pack(true, true)
+        val bounds = clampPopupBounds(location, popup.size, usableScreenBoundsAt(location))
+        setNativePopupBounds(popup, bounds)
+    }
+
     private fun release() {
         if (closed) return
         closed = true
+        fonts?.close()
         panel.removeAll()
         composePanel.dispose()
         onClosed()

@@ -4,7 +4,9 @@ import com.intellij.icons.AllIcons
 import com.intellij.ide.setToolTipText
 import com.intellij.openapi.util.text.HtmlChunk
 import com.intellij.util.ui.JBUI
+import com.master.understanding.ui.UnderstandingUiStyle
 import java.awt.Cursor
+import java.awt.Font
 import java.awt.Point
 import java.awt.Rectangle
 import java.awt.event.ActionEvent
@@ -22,7 +24,7 @@ import javax.swing.SwingUtilities
 /** Compact viewport overlay. Only the title and its adjacent edit target receive pointer input. */
 internal class DiagramHeader(title: String) : JPanel(null), AutoCloseable {
     internal val label = JLabel()
-    internal val editButton = JButton(AllIcons.Actions.Edit).apply {
+    internal val editButton: JButton = DiagramIconButton(AllIcons.Actions.Edit).apply {
         setToolTipText(HtmlChunk.text("编辑标题"))
         accessibleContext.accessibleName = "编辑标题"
         border = JBUI.Borders.empty(2)
@@ -61,6 +63,7 @@ internal class DiagramHeader(title: String) : JPanel(null), AutoCloseable {
 
     init {
         isOpaque = false
+        refreshAppearance()
         label.setToolTipText(HtmlChunk.text(title))
         label.accessibleContext.accessibleName = title
         getAccessibleContext().accessibleName = title
@@ -75,6 +78,13 @@ internal class DiagramHeader(title: String) : JPanel(null), AutoCloseable {
         actionMap.put("edit", object : AbstractAction() {
             override fun actionPerformed(e: ActionEvent) { edit?.invoke() }
         })
+    }
+
+    fun refreshAppearance() {
+        label.font = DiagramTextMetrics.font().deriveFont(Font.BOLD)
+        label.foreground = UnderstandingUiStyle.foreground
+        revalidate()
+        repaint()
     }
 
     fun bindEdit(action: (() -> Unit)?): AutoCloseable {

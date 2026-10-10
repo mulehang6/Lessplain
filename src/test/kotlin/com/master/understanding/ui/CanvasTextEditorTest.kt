@@ -3,8 +3,10 @@ package com.master.understanding.ui
 import org.junit.jupiter.api.Test
 import java.awt.event.ActionEvent
 import java.awt.event.InputMethodEvent
+import java.awt.Font
 import java.text.AttributedString
 import javax.swing.SwingUtilities
+import javax.swing.UIManager
 import javax.swing.text.AbstractDocument
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -12,6 +14,24 @@ import kotlin.test.assertTrue
 
 /** Exercises the native document and shortcut layer without opening an IDE or popup window. */
 class CanvasTextEditorTest {
+    @Test fun `single line title editor grows with native font and visible error instead of using a fixed height`() {
+        val original = UIManager.getFont("Label.font")
+        try {
+            SwingUtilities.invokeAndWait {
+                UIManager.put("Label.font", Font(Font.DIALOG, Font.PLAIN, 32))
+                val editor = CanvasTextEditor("标题", CanvasTextDraft("标题"), false, {}, {}, {}, {})
+                try {
+                    val base = editor.preferredSizeFor(420, Int.MAX_VALUE)
+                    assertTrue(base.height >= editor.input.preferredSize.height + editor.saveButton.preferredSize.height +
+                        editor.insets.top + editor.insets.bottom)
+                    editor.showErrorMessage("内容不能为空，请填写新的标题")
+                    assertTrue(editor.preferredSizeFor(420, Int.MAX_VALUE).height > base.height)
+                    assertTrue(editor.preferredSizeFor(420, 90).height <= 90)
+                } finally { editor.close() }
+            }
+        } finally { SwingUtilities.invokeAndWait { UIManager.put("Label.font", original) } }
+    }
+
     @Test fun `note editor wraps grows caps visible rows and shrinks when text is deleted`() {
         lateinit var editor: CanvasTextEditor
         SwingUtilities.invokeAndWait {

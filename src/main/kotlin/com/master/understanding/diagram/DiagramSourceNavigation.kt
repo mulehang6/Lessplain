@@ -12,6 +12,8 @@ import com.master.understanding.ui.isCurrent
 import com.master.understanding.ui.projectCanvasNavigationToSource
 import com.master.understanding.ui.projectCanvasPathToSource
 import com.master.understanding.ui.projectSourceBrowseToCanvas
+import java.awt.event.HierarchyEvent
+import java.awt.event.HierarchyListener
 
 /** Shares route persistence, source feedback and combined-canvas ID projection across all graph hosts. */
 internal fun bindDiagramSourceNavigation(
@@ -70,7 +72,7 @@ internal fun bindDiagramSourceNavigation(
         }
     }
 
-    val navigation = DiagramRouteNavigation(diagram, (canvas?.record ?: record).graph, explorer, onMoved = { route ->
+    val navigation = DiagramRouteNavigation(diagram, explorer, onMoved = { route ->
         persist()
         val source = sourceAt(route.currentNodeId)
         if (source != null) {
@@ -131,11 +133,19 @@ internal fun UnderstandingDiagram.bindSourceNavigation(
         busy = { navigation.hasChoice },
         previous = ::previousStep,
         next = ::nextStep,
-        sourceStep = { backward, component, point ->
-            navigation.stepFromSource(backward, component, point)
-        },
+        sourceStep = navigation::stepFromSource,
         cancel = navigation::cancel,
     )
+    val visibility = HierarchyListener { event ->
+        if (event.changeFlags and HierarchyEvent.SHOWING_CHANGED.toLong() != 0L && isShowing) {
+            registration.activate()
+        }
+    }
+    addHierarchyListener(visibility)
     navigation.onActivated = registration::activate
-    return AutoCloseable { navigation.onActivated = {}; registration.close() }
+    return AutoCloseable {
+        removeHierarchyListener(visibility)
+        navigation.onActivated = {}
+        registration.close()
+    }
 }

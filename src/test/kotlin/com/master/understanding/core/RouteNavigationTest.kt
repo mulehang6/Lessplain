@@ -145,4 +145,52 @@ class RouteNavigationTest {
         assertEquals(explorer.navigationState,
             StaticExplorer(graph, explorer.path, explorer.currentNodeId, explorer.navigationState).navigationState)
     }
+
+    @Test
+    fun `structure before a marked start and dependency after it can be read and restored`() {
+        val graph = UnderstandingGraph(
+            listOf(GraphNode("registered", "登记"), GraphNode("tool", "工具", flowRoles = listOf("start")),
+                GraphNode("store", "存储")),
+            listOf(GraphEdge("registration", "registered", "tool", "structure"),
+                GraphEdge("storage", "tool", "store", "dependency")),
+        )
+        val explorer = StaticExplorer(graph)
+        assertEquals("tool", explorer.currentNodeId)
+        assertTrue(explorer.canPrevious)
+        assertEquals(StepResult.Moved("registered"), explorer.previous())
+        assertFalse(explorer.canPrevious)
+        assertTrue(explorer.canNext)
+        assertEquals(StepResult.Moved("tool"), explorer.next())
+        assertEquals(StepResult.Moved("store"), explorer.next())
+        assertEquals(listOf("registration", "storage"), explorer.path)
+        assertEquals(explorer.navigationState,
+            StaticExplorer(graph, explorer.path, "store", explorer.navigationState).navigationState)
+        assertEquals(StepResult.Moved("tool"), explorer.previous())
+        assertEquals(listOf("registration"), explorer.path)
+    }
+
+    @Test
+    fun `mixed structural and dependency alternatives require a choice and completion preserves types`() {
+        val graph = UnderstandingGraph(listOf("root", "module", "store").map { GraphNode(it, it) }, listOf(
+            GraphEdge("contains", "root", "module", "structure"),
+            GraphEdge("requires", "root", "store", "dependency"),
+            GraphEdge("uses", "module", "store", "dependency"),
+        ))
+        val explorer = StaticExplorer(graph)
+        assertEquals(listOf("contains", "requires"), (explorer.next() as StepResult.Choose).edges.map { it.id })
+        assertEquals(StepResult.Moved("module"), explorer.choose("contains"))
+        assertEquals(StepResult.Moved("store"), explorer.next())
+        assertEquals(listOf("requires", "uses"), (explorer.previous() as StepResult.Choose).edges.map { it.id })
+        explorer.choose("uses", StepDirection.PREVIOUS)
+        assertEquals(listOf("contains"), explorer.path)
+        val partial = StaticExplorer(graph, savedNodeId = "module")
+        assertEquals(StepResult.Moved("module"), partial.completeRoute())
+        assertEquals(listOf("contains"), partial.path)
+        assertEquals(listOf("structure", "dependency", "dependency"), graph.edges.map { it.relation })
+        val scoped = StaticExplorer(graph, savedNodeId = "root",
+            scopes = mapOf("root" to "a", "module" to "a", "store" to "b"))
+        assertEquals(StepResult.Moved("module"), scoped.next())
+        assertEquals(StepResult.End, scoped.next())
+        assertEquals(setOf("contains"), scoped.highlightedEdgeIds)
+    }
 }

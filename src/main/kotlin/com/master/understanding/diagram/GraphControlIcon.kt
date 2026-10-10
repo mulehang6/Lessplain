@@ -1,15 +1,17 @@
 package com.master.understanding.diagram
 
-import com.intellij.ui.JBColor
+import com.master.understanding.ui.UnderstandingUiStyle
 import java.awt.BasicStroke
 import java.awt.Component
 import java.awt.Graphics
 import java.awt.Graphics2D
 import java.awt.RenderingHints
 import javax.swing.Icon
-import javax.swing.UIManager
 
-internal enum class GraphControlIconKind { ZOOM_IN, ZOOM_OUT, FIT, ARRANGE, CLUSTERS, HIERARCHY, COMPLETE_ROUTE, CANCEL_ROUTE, MORE, PREVIOUS, NEXT }
+internal enum class GraphControlIconKind {
+    ZOOM_IN, ZOOM_OUT, FIT, ARRANGE, CLUSTERS, HIERARCHY, COMPLETE_ROUTE, CANCEL_ROUTE, MORE, PREVIOUS, NEXT,
+    COPY, COPIED, QUESTIONS, NOTE, ADD,
+}
 
 /** Simple vector glyphs so the controls remain visible in IDE themes and preview rendering. */
 internal class GraphControlIcon(private val kind: GraphControlIconKind) : Icon {
@@ -21,8 +23,9 @@ internal class GraphControlIcon(private val kind: GraphControlIconKind) : Icon {
         try {
             g.translate(x, y)
             g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-            g.color = UIManager.getColor("Button.foreground") ?: component?.foreground ?: JBColor.foreground()
-            g.stroke = BasicStroke(1.7f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
+            g.color = if (component?.isEnabled == false) UnderstandingUiStyle.disabledForeground
+                else UnderstandingUiStyle.controlForeground
+            g.stroke = BasicStroke(1.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
             when (kind) {
                 GraphControlIconKind.ZOOM_IN, GraphControlIconKind.ZOOM_OUT -> {
                     g.drawOval(1, 1, 10, 10)
@@ -86,6 +89,31 @@ internal class GraphControlIcon(private val kind: GraphControlIconKind) : Icon {
                     g.drawLine(center - 5 * direction, 8, center + 5 * direction, 8)
                     g.drawLine(center + 5 * direction, 8, center * 1 + direction, 4)
                     g.drawLine(center + 5 * direction, 8, center * 1 + direction, 12)
+                }
+                GraphControlIconKind.COPY -> {
+                    g.drawRoundRect(2, 1, 9, 10, 2, 2)
+                    g.drawRoundRect(5, 5, 9, 10, 2, 2)
+                }
+                GraphControlIconKind.COPIED -> {
+                    g.drawLine(2, 8, 6, 12)
+                    g.drawLine(6, 12, 14, 3)
+                }
+                GraphControlIconKind.QUESTIONS, GraphControlIconKind.NOTE -> {
+                    g.drawRoundRect(1, 2, 14, 10, 4, 4)
+                    g.drawLine(5, 12, 5, 15)
+                    g.drawLine(5, 15, 9, 12)
+                    if (kind == GraphControlIconKind.QUESTIONS) {
+                        g.drawArc(6, 4, 4, 4, 0, 180)
+                        g.drawLine(10, 6, 8, 8)
+                        g.fillOval(7, 9, 2, 2)
+                    } else {
+                        g.drawLine(4, 6, 12, 6)
+                        g.drawLine(4, 9, 9, 9)
+                    }
+                }
+                GraphControlIconKind.ADD -> {
+                    g.drawLine(3, 8, 13, 8)
+                    g.drawLine(8, 3, 8, 13)
                 }
             }
         } finally {

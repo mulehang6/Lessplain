@@ -34,4 +34,40 @@ class SourceNavigatorTest {
         assertEquals(EvidenceStatus.UNCHANGED, located.evidence)
         assertEquals(content.lastIndexOf(anchor.text), located.offset)
     }
+
+    @Test
+    fun `outdated hash resolves an indented declaration by its code token and retains the full excerpt`() {
+        for (separator in listOf("\n", "\r\n")) {
+            val excerpt = "    private fun deliver() {$separator        send()$separator    }"
+            val content = "class Service {$separator$excerpt$separator}"
+            val anchor = SourceAnchor("src/Service.kt", "Service.deliver", excerpt, "0".repeat(64), 2)
+            val offset = content.indexOf(excerpt)
+            val lookedUp = mutableListOf<Int>()
+            val located = matchAnchorText(anchor, content) { at ->
+                lookedUp += at
+                if (at == offset + 4) "Service.deliver" else "Service"
+            }
+            assertEquals(listOf(offset + 4), lookedUp)
+            assertEquals(LocationStatus.RELOCATED, located.location)
+            assertEquals(EvidenceStatus.UNKNOWN, located.evidence)
+            assertEquals(offset, located.offset)
+            assertEquals(excerpt, content.substring(located.offset!!, located.offset + excerpt.length))
+            assertEquals(LocationStatus.UNRESOLVED, matchAnchorText(anchor, content) { "Other.deliver" }.location)
+        }
+    }
+
+    @Test
+    fun `leading blank lines do not prevent symbol validation or bypass duplicate detection`() {
+        val excerpt = "\n\t  fun deliver() { send() }"
+        val content = "class Service {$excerpt\n}"
+        val anchor = SourceAnchor("src/Service.kt", "Service.deliver", excerpt, "0".repeat(64))
+        val located = matchAnchorText(anchor, content) { at ->
+            assertEquals(content.indexOf("fun deliver"), at)
+            "Service.deliver"
+        }
+        assertEquals(content.indexOf(excerpt), located.offset)
+        val duplicate = matchAnchorText(anchor, "$content\n$content") { error("Ambiguous text must not resolve a symbol") }
+        assertEquals(LocationStatus.AMBIGUOUS, duplicate.location)
+        assertNull(duplicate.offset)
+    }
 }

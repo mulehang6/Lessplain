@@ -21,7 +21,7 @@ class UpstreamRoutesTest {
         val routes = UpstreamRoutes(graph)
         assertEquals(listOf("a", "b"), routes.entryNodeIds)
         assertFalse(routes.isEntry("merge"))
-        assertEquals(setOf("a-m", "b-m", "m-t", "m-t-alt"), routes.edgesTo("target"))
+        assertEquals(setOf("a-m", "b-m", "m-t", "m-t-alt", "a-other", "structural"), routes.edgesTo("target"))
     }
 
     @Test

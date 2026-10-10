@@ -1,8 +1,7 @@
 package com.master.understanding.diagram
 
-import com.intellij.ui.JBColor
+import com.master.understanding.ui.UnderstandingUiStyle
 import java.awt.BasicStroke
-import java.awt.Color
 import java.awt.Graphics
 import java.awt.Graphics2D
 import java.awt.RenderingHints
@@ -43,9 +42,9 @@ internal data class DiagramPaintState(
 
 /** Paints the canvas from a snapshot; input and navigation remain in the diagram view. */
 internal object DiagramCanvasPainter {
-    private val background = JBColor(Color(0xFAFBFC), Color(0x1E1F22))
-    private val clusterFill = JBColor(Color(0xF5F8FC), Color(0x24272D))
-    private val clusterBorder = JBColor(Color(0x9EACC0), Color(0x788494))
+    private val background get() = UnderstandingUiStyle.canvas
+    private val clusterFill get() = UnderstandingUiStyle.group
+    private val clusterBorder get() = UnderstandingUiStyle.groupBorder
 
     fun paint(graphics: Graphics, state: DiagramPaintState) {
         val g = graphics.create() as Graphics2D
@@ -63,10 +62,12 @@ internal object DiagramCanvasPainter {
                 val b = cluster.bounds
                 if (visible != null && !visible.intersects(b)) return@forEach
                 g.color = clusterFill
-                g.fillRoundRect(b.x.toInt(), b.y.toInt(), b.width.toInt(), b.height.toInt(), 18, 18)
+                g.fillRoundRect(b.x.toInt(), b.y.toInt(), b.width.toInt(), b.height.toInt(),
+                    UnderstandingUiStyle.GROUP_ARC, UnderstandingUiStyle.GROUP_ARC)
                 g.color = clusterBorder
-                g.stroke = BasicStroke(2f)
-                g.drawRoundRect(b.x.toInt(), b.y.toInt(), b.width.toInt(), b.height.toInt(), 18, 18)
+                g.stroke = BasicStroke(1f)
+                g.drawRoundRect(b.x.toInt(), b.y.toInt(), b.width.toInt(), b.height.toInt(),
+                    UnderstandingUiStyle.GROUP_ARC, UnderstandingUiStyle.GROUP_ARC)
                 DiagramClusterText.paint(g, cluster, state.titleState)
                 val panel = state.examplePanels.firstOrNull { it.clusterId == cluster.id }
                 if (panel != null && cluster.exampleBounds != null) {
@@ -79,7 +80,7 @@ internal object DiagramCanvasPainter {
             DiagramNodePainter.paint(g, state.layout, state.currentNodeId, state.hoveredNodeId,
                 state.questionCounts, state.pendingNoteCounts, state.startIds, state.endIds, state.choiceTargets,
                 state.choicePhase, state.copiedNodeId, visible, state.branchIds, state.draftNoteNodes,
-                state.focusedChoiceNodeId)
+                state.focusedChoiceNodeId, state.hoveredAction)
             paintActionTooltip(graphics, state)
         } finally {
             g.dispose()
@@ -115,9 +116,12 @@ internal object DiagramCanvasPainter {
                 .coerceIn(0, (state.width - w).coerceAtLeast(0))
             val y = (state.height / 2.0 + (actionBounds.y - state.centerY) * state.zoom - h - 5).toInt()
                 .coerceIn(0, (state.height - h).coerceAtLeast(0))
-            g.color = UIManager.getColor("ToolTip.background") ?: JBColor(Color(0xF1F1F1), Color(0x33363D))
+            g.color = UnderstandingUiStyle.tooltipBackground
             g.fillRoundRect(x, y, w, h, 8, 8)
-            g.color = UIManager.getColor("ToolTip.foreground") ?: JBColor(Color.BLACK, Color.WHITE)
+            g.color = UnderstandingUiStyle.border
+            g.stroke = BasicStroke(1f)
+            g.drawRoundRect(x, y, w, h, 8, 8)
+            g.color = UnderstandingUiStyle.tooltipForeground
             g.drawString(label, x + 8, y + 4 + metrics.ascent)
         } finally { g.dispose() }
     }

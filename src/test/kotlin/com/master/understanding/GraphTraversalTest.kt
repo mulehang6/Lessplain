@@ -41,7 +41,8 @@ class GraphTraversalTest {
             ),
         )
         assertEquals(setOf("fork", "self"), graph.branchNodeIds())
-        assertEquals(listOf("parallel-yes", "parallel-no"), graph.traversableEdgesFrom("parallel").map { it.id })
+        assertEquals(listOf("parallel-yes", "parallel-no", "parallel-dependency", "parallel-structure"),
+            graph.traversableEdgesFrom("parallel").map { it.id })
         assertEquals(emptyList(), graph.traversableEdgesFrom("missing"))
     }
 }

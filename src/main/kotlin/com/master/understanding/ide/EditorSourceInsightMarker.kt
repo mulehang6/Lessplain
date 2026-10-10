@@ -1,20 +1,20 @@
 package com.master.understanding.ide
 
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.editor.markup.HighlighterLayer
 import com.intellij.openapi.editor.markup.HighlighterTargetArea
 import com.intellij.openapi.editor.markup.TextAttributes
+import com.intellij.openapi.util.Disposer
 import java.awt.Point
 import java.awt.event.ComponentAdapter
 import java.awt.event.ComponentEvent
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
-import javax.swing.Timer
 import javax.swing.SwingUtilities
+import javax.swing.Timer
 
 /** Owns the editor listeners and reveal timer for one source marker. */
 internal class EditorSourceInsightMarker(
@@ -92,12 +92,12 @@ internal class EditorSourceInsightMarker(
             when (inlay?.let { renderer.buttonAt(it, event.point) }) {
                 SourceInlayButton.PREVIOUS -> if (navigation.canPrevious) {
                     event.consume()
-                    navigation.previous(editor.contentComponent, popupAnchor())
+                    navigation.previous()
                 }
 
                 SourceInlayButton.NEXT -> if (navigation.canNext) {
                     event.consume()
-                    navigation.next(editor.contentComponent, popupAnchor())
+                    navigation.next()
                 }
 
                 SourceInlayButton.EXPAND -> {
@@ -112,7 +112,9 @@ internal class EditorSourceInsightMarker(
     }
     private val resize = object : ComponentAdapter() {
         override fun componentResized(event: ComponentEvent) {
-            if (!disposed) inlay?.update()
+            if (!disposed) {
+                inlay?.update()
+            }
         }
     }
 
@@ -124,9 +126,6 @@ internal class EditorSourceInsightMarker(
     }
 
     private fun inHint(point: Point): Boolean = inlay?.let { renderer.hintBounds(it).contains(point) } == true
-
-    private fun popupAnchor(): Point = inlay?.let { renderer.hintBounds(it) }
-        ?.let { Point(it.maxX.toInt(), it.y) } ?: Point()
 
     private fun inBlock(point: Point): Boolean = highlighter?.let {
         sourceBlockBounds(editor, it.startOffset, it.endOffset)?.contains(point)

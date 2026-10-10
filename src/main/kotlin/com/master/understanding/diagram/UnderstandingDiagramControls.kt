@@ -155,7 +155,7 @@ internal class UnderstandingDiagramControls(private val diagram: UnderstandingDi
 
     fun dispose() { routeAction = null; behaviorPopup.dispose() }
 
-    private fun button(icon: Icon, label: String, action: () -> Unit): JButton = JButton(icon).apply {
+    private fun button(icon: Icon, label: String, action: () -> Unit): JButton = DiagramIconButton(icon).apply {
         setToolTipText(HtmlChunk.text(label))
         getAccessibleContext().accessibleName = label
         preferredSize = Dimension(BUTTON_SIZE, BUTTON_SIZE)

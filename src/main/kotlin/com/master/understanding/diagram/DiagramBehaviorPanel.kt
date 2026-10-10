@@ -1,9 +1,11 @@
 package com.master.understanding.diagram
 
 import com.master.understanding.ide.GraphLayoutPreference
+import com.intellij.util.ui.JBUI
+import com.master.understanding.ui.CanvasUiFonts
+import com.master.understanding.ui.UnderstandingUiMetrics
 import java.awt.Dimension
 import javax.swing.AbstractButton
-import javax.swing.BorderFactory
 import javax.swing.BoxLayout
 import javax.swing.ButtonGroup
 import javax.swing.JButton
@@ -13,7 +15,10 @@ import javax.swing.JRadioButton
 import javax.swing.JSeparator
 
 /** Immediate canvas settings use ordinary controls, so editing never accepts or closes the popup. */
-internal class DiagramBehaviorPanel(private val diagram: UnderstandingDiagram) : JPanel() {
+internal class DiagramBehaviorPanel(
+    private val diagram: UnderstandingDiagram,
+    onMetricsChanged: () -> Unit = {},
+) : JPanel(), AutoCloseable {
     val resetZoom = JButton("恢复 100% 缩放").apply {
         addActionListener { diagram.zoom = 1.0 }
     }
@@ -33,10 +38,21 @@ internal class DiagramBehaviorPanel(private val diagram: UnderstandingDiagram) :
     private val follow = JCheckBox("自动跟随节点").apply {
         addActionListener { diagram.autoFollowNode = isSelected }
     }
+    private val controls: List<AbstractButton> = buildList {
+        add(resetZoom)
+        addAll(directions.values)
+        addAll(listOf(flow, navigate, follow))
+    }
+    private val fonts = CanvasUiFonts(controls, onRefreshed = {
+        controls.forEach { it.maximumSize = Dimension(Int.MAX_VALUE, it.preferredSize.height) }
+        revalidate()
+        repaint()
+        onMetricsChanged()
+    })
 
     init {
         layout = BoxLayout(this, BoxLayout.Y_AXIS)
-        border = BorderFactory.createEmptyBorder(8, 8, 8, 8)
+        border = JBUI.Borders.empty(UnderstandingUiMetrics.PAGE_PADDING)
         addControl(resetZoom)
         addSeparator()
         val group = ButtonGroup()
@@ -64,8 +80,10 @@ internal class DiagramBehaviorPanel(private val diagram: UnderstandingDiagram) :
     private fun addSeparator() {
         add(JSeparator().apply {
             alignmentX = LEFT_ALIGNMENT
-            maximumSize = Dimension(Int.MAX_VALUE, 9)
-            border = BorderFactory.createEmptyBorder(4, 0, 4, 0)
+            maximumSize = Dimension(Int.MAX_VALUE, JBUI.scale(UnderstandingUiMetrics.GAP + 1))
+            border = JBUI.Borders.empty(UnderstandingUiMetrics.SMALL_GAP, 0)
         })
     }
+
+    override fun close() = fonts.close()
 }

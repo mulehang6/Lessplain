@@ -3,13 +3,10 @@ package com.master.understanding.ide
 import com.master.understanding.core.StaticExplorer
 import com.master.understanding.core.StepDirection
 import com.master.understanding.core.StepResult
-import com.master.understanding.diagram.RouteChoicePresenter
-import com.master.understanding.diagram.ideRouteChoicePresenter
 import com.master.understanding.model.BrowseState
+import com.master.understanding.model.RouteNavigationState
 import com.master.understanding.model.UnderstandingRecord
 import com.master.understanding.storage.UnderstandingRepository
-import java.awt.Component
-import java.awt.Point
 
 /** Source inlay controls use the same directional edge choices and saved route as graph views. */
 internal class SourceGraphNavigation(
@@ -17,10 +14,20 @@ internal class SourceGraphNavigation(
     private val graphStates: GraphViewStateStore,
     private val isSelected: (recordId: String, nodeId: String) -> Boolean,
     private val selectNode: (record: UnderstandingRecord, nodeId: String) -> Unit,
-    private val choices: RouteChoicePresenter = ideRouteChoicePresenter,
+    private val showGraph: (UnderstandingRecord, ready: () -> Unit) -> Unit,
 ) : AutoCloseable {
+    /** Identical source clicks share the tool-window show and canvas-attachment request. */
+    private data class OpeningChoice(
+        val recordId: String,
+        val revision: Int,
+        val nodeId: String,
+        val direction: StepDirection,
+        val snapshot: RouteNavigationState,
+    )
+
+    private var openingChoice: OpeningChoice? = null
+    private var pendingGraph: AutoCloseable? = null
     private var generation = 0L
-    private var popup: AutoCloseable? = null
     private var closed = false
 
     fun explorer(record: UnderstandingRecord, nodeId: String): StaticExplorer {
@@ -28,42 +35,46 @@ internal class SourceGraphNavigation(
         return StaticExplorer(record.graph, saved?.staticPath.orEmpty(), nodeId, saved?.navigationState)
     }
 
-    fun previous(recordId: String, nodeId: String, component: Component? = null, point: Point = Point()) {
-        step(recordId, nodeId, StepDirection.PREVIOUS, component, point)
-    }
+    fun previous(recordId: String, nodeId: String) = step(recordId, nodeId, StepDirection.PREVIOUS)
 
-    fun next(recordId: String, nodeId: String, component: Component, point: Point) {
-        step(recordId, nodeId, StepDirection.NEXT, component, point)
-    }
+    fun next(recordId: String, nodeId: String) = step(recordId, nodeId, StepDirection.NEXT)
 
-    private fun step(recordId: String, nodeId: String, direction: StepDirection, component: Component?, point: Point) {
+    private fun step(recordId: String, nodeId: String, direction: StepDirection) {
         if (closed || !isSelected(recordId, nodeId)) return
-        cancelChoices()
-        if (graphStates.navigationSessions.step(
-                recordId, nodeId, backward = direction == StepDirection.PREVIOUS,
-                component = component, point = point,
-            )
-        ) return
         val record = repository.getRecord(recordId)
         val route = explorer(record, nodeId)
-        val result = if (direction == StepDirection.PREVIOUS) route.previous() else route.next()
-        when (result) {
+        val opening = OpeningChoice(recordId, record.revision, nodeId, direction, route.navigationState)
+        if (openingChoice == opening) return
+        cancelChoices()
+        val backward = direction == StepDirection.PREVIOUS
+        if (graphStates.navigationSessions.step(recordId, nodeId, backward)) return
+        when (if (backward) route.previous() else route.next()) {
             is StepResult.Moved -> commit(record, route)
             is StepResult.Choose -> {
-                if (component == null) return
+                openingChoice = opening
                 val request = generation
                 val snapshot = route.navigationState
-                val handle = choices.show(record.graph, direction, result.edges, component, point, {}) { edgeId ->
-                    if (request != generation || !isSelected(recordId, nodeId)) return@show
-                    cancelChoices()
-                    if (edgeId == null) return@show
-                    val currentRecord = repository.getRecord(recordId)
-                    if (currentRecord.revision != record.revision) return@show
-                    val current = explorer(currentRecord, nodeId)
-                    if (current.navigationState != snapshot) return@show
-                    if (current.choose(edgeId, direction) is StepResult.Moved) commit(currentRecord, current)
+                // Opening a graph may complete later; never step a changed source context.
+                fun valid(): Boolean {
+                    if (closed || request != generation || !isSelected(recordId, nodeId)) return false
+                    val current = repository.getRecord(recordId)
+                    return current.revision == record.revision && explorer(current, nodeId).navigationState == snapshot
                 }
-                if (request == generation) popup = handle else handle.close()
+                try {
+                    showGraph(record) {
+                        if (valid()) {
+                            pendingGraph = graphStates.navigationSessions.whenAvailable(recordId, nodeId) {
+                                if (valid()) {
+                                    openingChoice = null
+                                    graphStates.navigationSessions.step(recordId, nodeId, backward)
+                                } else if (request == generation) cancelChoices()
+                            }
+                        } else if (request == generation) cancelChoices()
+                    }
+                } catch (failure: RuntimeException) {
+                    cancelChoices()
+                    throw failure
+                }
             }
 
             else -> Unit
@@ -72,8 +83,9 @@ internal class SourceGraphNavigation(
 
     fun cancelChoices() {
         generation++
-        popup?.close()
-        popup = null
+        openingChoice = null
+        pendingGraph?.close()
+        pendingGraph = null
     }
 
     fun cancelChoices(recordId: String, nodeId: String) {

@@ -9,6 +9,7 @@ import com.master.understanding.model.UnderstandingInputException
 import com.master.understanding.model.UnderstandingQuestion
 import com.master.understanding.model.UnderstandingRecord
 import com.master.understanding.model.UNDERSTANDING_SCHEMA_VERSION
+import com.master.understanding.model.UNDERSTANDING_SCHEMA_REVISION
 import com.master.understanding.model.requireInput
 import com.master.understanding.model.validate
 import com.master.understanding.storage.UnderstandingRepository
@@ -164,7 +165,7 @@ class UnderstandingCore(
     }
 
     private fun validateVersion(value: Int) {
-        requireInput(value in 3..UNDERSTANDING_SCHEMA_VERSION, "不支持的 schemaVersion：$value；请使用版本 4 或无分组的版本 3")
+        requireInput(value in 3..UNDERSTANDING_SCHEMA_REVISION, "不支持的内部协议修订号：$value")
     }
 
     /** Protocol-3 retries must retain the payload hash written before the new graph field existed. */

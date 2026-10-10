@@ -66,7 +66,10 @@ internal fun matchAnchorText(anchor: SourceAnchor, content: String, symbolAt: (I
     }
     if (matches.isEmpty()) return LocatedSource(LocationStatus.UNRESOLVED, EvidenceStatus.CHANGED)
     if (matches.size > 1) return LocatedSource(LocationStatus.AMBIGUOUS, EvidenceStatus.UNKNOWN)
-    if (anchor.symbol != null && !symbolMatches(anchor.symbol, symbolAt(matches.single()))) {
+    val match = matches.single()
+    // Indentation may belong to the containing class in PSI, rather than the method declaration.
+    val symbolOffset = match + anchor.text.indexOfFirst { !it.isWhitespace() }.coerceAtLeast(0)
+    if (anchor.symbol != null && !symbolMatches(anchor.symbol, symbolAt(symbolOffset))) {
         return LocatedSource(LocationStatus.UNRESOLVED, EvidenceStatus.UNKNOWN)
     }
     return LocatedSource(if (versionMatches) LocationStatus.EXACT else LocationStatus.RELOCATED,

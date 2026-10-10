@@ -80,7 +80,7 @@ class RootClusterProtocolTest {
                 }
             } }
             val payload = understandingContextPayload(repository, context)
-            assertEquals(4, payload["schemaVersion"])
+            assertEquals("1.4", payload["schemaVersion"])
             assertEquals(true, (payload["capabilities"] as Map<*, *>)["rootClusters"])
         }
     }

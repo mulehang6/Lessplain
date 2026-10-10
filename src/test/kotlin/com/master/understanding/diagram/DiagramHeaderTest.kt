@@ -10,11 +10,11 @@ import java.awt.event.ActionEvent
 import java.awt.event.FocusEvent
 import java.awt.event.MouseEvent
 import javax.swing.SwingUtilities
-import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
+import org.junit.jupiter.api.Test
 
 class DiagramHeaderTest {
     private fun withDiagram(title: String, action: (UnderstandingDiagram) -> Unit) = SwingUtilities.invokeAndWait {
@@ -24,8 +24,8 @@ class DiagramHeaderTest {
         try { diagram.setSize(600, 400); diagram.doLayout(); action(diagram) } finally { diagram.dispose() }
     }
 
-    private fun mouse(component: Component, type: Int, x: Int = 2, y: Int = 2, clicks: Int = 1) =
-        MouseEvent(component, type, 0, 0, x, y, clicks, false, MouseEvent.BUTTON1)
+    private fun mouse(component: Component, type: Int, x: Int = 2, y: Int = 2, clicks: Int = 1, button: Int = MouseEvent.BUTTON1) =
+        MouseEvent(component, type, 0, 0, x, y, clicks, false, button)
 
     @Test fun `title overlays full height canvas beside controls and stays fixed through camera changes`() = withDiagram("付费文章") { diagram ->
         val header = diagram.header
@@ -113,9 +113,9 @@ class DiagramHeaderTest {
         assertSame(diagram, SwingUtilities.getDeepestComponentAt(diagram, point.x, point.y))
         val before = diagram.center
         val titleBounds = header.bounds
-        diagram.dispatchEvent(mouse(diagram, MouseEvent.MOUSE_PRESSED, point.x, point.y))
-        diagram.dispatchEvent(mouse(diagram, MouseEvent.MOUSE_DRAGGED, point.x + 18, point.y + 10))
-        diagram.dispatchEvent(mouse(diagram, MouseEvent.MOUSE_RELEASED, point.x + 18, point.y + 10))
+        diagram.dispatchEvent(mouse(diagram, MouseEvent.MOUSE_PRESSED, point.x, point.y, button = MouseEvent.BUTTON3))
+        diagram.dispatchEvent(mouse(diagram, MouseEvent.MOUSE_DRAGGED, point.x + 18, point.y + 10, button = MouseEvent.BUTTON3))
+        diagram.dispatchEvent(mouse(diagram, MouseEvent.MOUSE_RELEASED, point.x + 18, point.y + 10, button = MouseEvent.BUTTON3))
         assertEquals(before.x - 18 / diagram.zoom, diagram.centerX)
         assertEquals(before.y - 10 / diagram.zoom, diagram.centerY)
         assertEquals(titleBounds, header.bounds)

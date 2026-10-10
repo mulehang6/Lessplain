@@ -57,6 +57,12 @@ class UnderstandingService(private val project: Project) : Disposable {
         graphStates = graphStates,
         isSelected = { recordId, nodeId -> activeRecordId == recordId && activeNodeId == nodeId },
         selectNode = { record, nodeId -> select(record, nodeId) },
+        showGraph = { record, ready ->
+            showRoot(record)
+            ToolWindowManager.getInstance(project).getToolWindow("Understanding")?.show {
+                if (!project.isDisposed) ready()
+            }
+        },
     )
     internal val resultInbox = ResultInbox(project)
     @Volatile private var pendingAutoOpenKey: String? = resultInbox.pending().lastOrNull()?.key
@@ -330,8 +336,8 @@ class UnderstandingService(private val project: Project) : Disposable {
                         val navigation = SourceInlayNavigation(
                             canPrevious = explorer.canPrevious,
                             canNext = explorer.canNext,
-                            previous = { component, point -> sourceNavigation.previous(record.id, validNode, component, point) },
-                            next = { component, point -> sourceNavigation.next(record.id, validNode, component, point) },
+                            previous = { sourceNavigation.previous(record.id, validNode) },
+                            next = { sourceNavigation.next(record.id, validNode) },
                             cancelChoices = { sourceNavigation.cancelChoices(record.id, validNode) },
                         )
                         val located = sourceHints.show(anchor, node.label, navigation)

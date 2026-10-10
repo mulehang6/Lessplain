@@ -9,6 +9,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.awt.SwingPanel
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.intellij.openapi.util.Disposer
 import com.master.understanding.diagram.DiagramCluster
@@ -131,9 +132,10 @@ internal fun QuestionIndexView(
         }.toMap())
         onDispose { }
     }
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(UnderstandingUiMetrics.GAP.dp)) {
         key(diagram) {
-            SwingPanel(factory = { diagram.jComponent }, modifier = Modifier.fillMaxWidth().weight(1f))
+            SwingPanel(factory = { diagram.jComponent }, background = Color(UnderstandingUiStyle.canvas.rgb),
+                modifier = Modifier.fillMaxWidth().weight(1f))
         }
     }
 }

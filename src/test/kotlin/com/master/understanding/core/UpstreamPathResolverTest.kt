@@ -69,14 +69,14 @@ class UpstreamPathResolverTest {
     }
 
     @Test
-    fun `dependencies and structural links neither supply entries nor become route edges`() {
+    fun `dependencies and structural links supply readable entries and upstream edges`() {
         val graph = graph(
             "a", "b", "d", "x", edges = listOf(
                 edge("ab", "a", "b", "call"), edge("bd", "b", "d", "data_flow"),
                 edge("xa", "x", "a", "structure"), edge("xd", "x", "d", "dependency"),
             )
         )
-        assertEquals(setOf("ab", "bd"), UpstreamPathResolver(graph).edgeIdsTo("d"))
+        assertEquals(setOf("xa", "ab", "bd", "xd"), UpstreamPathResolver(graph).edgeIdsTo("d"))
         assertEquals(emptySet(), UpstreamPathResolver(graph).edgeIdsTo("missing"))
     }
 

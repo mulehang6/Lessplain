@@ -14,10 +14,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.master.understanding.ide.UnderstandingService
 import com.master.understanding.ide.resultUnreadSummary
 import com.master.understanding.model.UnderstandingRecord
+import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.component.Text
 
 /** An empty or reopened tool window starts from a compact, centered home. */
@@ -29,17 +29,18 @@ internal fun UnderstandingWelcome(
     onSelectRecord: (UnderstandingRecord) -> Unit,
 ) {
     val unread = service.resultInbox.pending()
-    Box(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+    Box(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(UnderstandingUiMetrics.DETAIL_PADDING.dp),
         contentAlignment = Alignment.Center) {
         Column(Modifier.widthIn(max = 540.dp).fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(UnderstandingUiMetrics.SECTION_GAP.dp),
             horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("欢迎回来", fontSize = 22.sp, textAlign = TextAlign.Center)
+            UnderstandingSectionTitle("欢迎回来")
             if (unread.isNotEmpty()) Text("未读：${resultUnreadSummary(unread)}", textAlign = TextAlign.Center)
             if (recentRecords.isEmpty()) {
-                Text("完成代码理解后，图会出现在这里。", textAlign = TextAlign.Center)
+                Text("完成代码理解后，图会出现在这里。", color = JewelTheme.globalColors.text.info,
+                    textAlign = TextAlign.Center)
             } else {
-                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(UnderstandingUiMetrics.SMALL_GAP.dp)) {
                     recentRecords.take(4).forEach { record ->
                         RecordCandidateRow(record, selected = service.activeRecordId == record.id,
                             onClick = { onSelectRecord(record) })

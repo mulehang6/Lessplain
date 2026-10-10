@@ -1,6 +1,6 @@
 package com.master.understanding.diagram
 
-import com.intellij.ui.JBColor
+import com.master.understanding.ui.UnderstandingUiStyle
 import java.awt.Font
 import java.awt.Graphics2D
 import java.awt.image.BufferedImage
@@ -54,15 +54,14 @@ internal object DiagramClusterText {
         val bounds = titleBounds(cluster)
         if (cluster.id == state.hovered || cluster.id == state.selected || cluster.id == state.pressed) {
             val active = cluster.id == state.pressed || cluster.id == state.selected
-            graphics.color = if (active) JBColor(java.awt.Color(0xDDE9FA), java.awt.Color(0x30435B))
-                else JBColor(java.awt.Color(0xEAF0F7), java.awt.Color(0x303640))
+            graphics.color = if (active) UnderstandingUiStyle.controlPressed else UnderstandingUiStyle.controlHover
             graphics.fillRoundRect((bounds.x - 5).toInt(), (bounds.y - 5).toInt(),
                 (bounds.width + 10).toInt(), (bounds.height + 10).toInt(), 8, 8)
         }
         val text = cluster.textLayout
         var baseline = cluster.bounds.y + TOP_PADDING
         graphics.font = titleFont
-        graphics.color = JBColor.foreground()
+        graphics.color = UnderstandingUiStyle.foreground
         val titleAscent = graphics.fontMetrics.ascent
         text.titleLines.forEach { line ->
             val x = cluster.bounds.centerX - 14 - graphics.fontMetrics.stringWidth(line) / 2.0

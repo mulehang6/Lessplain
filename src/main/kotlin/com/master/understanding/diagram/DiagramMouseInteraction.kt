@@ -1,5 +1,6 @@
 package com.master.understanding.diagram
 
+import com.intellij.util.ui.JBUI
 import com.master.understanding.ide.GraphNodePosition
 import java.awt.Cursor
 import java.awt.Point
@@ -15,19 +16,22 @@ internal class DiagramMouseInteraction(private val diagram: UnderstandingDiagram
     private var draggedNodeId: String? = null
     private var draggedExampleClusterId: String? = null
     private var dragged = false
+    private var panning = false
 
     override fun mousePressed(event: MouseEvent) {
-        if (event.isPopupTrigger || event.button == MouseEvent.BUTTON3) {
-            diagram.nodeAt(event.point)?.let { diagram.showNodeMenu(it, event.point) }
-            return
-        }
-        if (event.button != MouseEvent.BUTTON1) return
-        diagram.requestFocusInWindow()
-        diagram.overlays.pressed(event.point)
+        if (event.button != MouseEvent.BUTTON1 && event.button != MouseEvent.BUTTON3) return
+        panning = event.button == MouseEvent.BUTTON3 || event.isPopupTrigger
+        dragged = false
         pressPoint = event.point
         previousDragPoint = event.point
         draggedNodeId = null
         draggedExampleClusterId = null
+        if (panning) {
+            diagram.requestFocusInWindow()
+            return
+        }
+        diagram.requestFocusInWindow()
+        diagram.overlays.pressed(event.point)
         if (diagram.copyActionAt(event.point) == null && diagram.questionActionAt(event.point) == null &&
             diagram.noteActionAt(event.point) == null) {
             draggedNodeId = diagram.nodeAt(event.point)
@@ -40,8 +44,10 @@ internal class DiagramMouseInteraction(private val diagram: UnderstandingDiagram
     override fun mouseDragged(event: MouseEvent) {
         val previous = previousDragPoint ?: return
         if ((pressPoint?.distance(event.point) ?: 0.0) > 3.0) dragged = true
+        if (!panning && draggedNodeId == null && draggedExampleClusterId == null) return
         if (!dragged) return
         diagram.cameraTimer.stop()
+        if (panning) diagram.cursor = Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR)
         val nodeId = draggedNodeId
         if (nodeId != null) {
             val b = diagram.layout.nodes[nodeId]?.bounds ?: return
@@ -63,8 +69,11 @@ internal class DiagramMouseInteraction(private val diagram: UnderstandingDiagram
     }
 
     override fun mouseReleased(event: MouseEvent) {
+        if (panning && !dragged) {
+            diagram.nodeAt(event.point)?.let { diagram.showNodeMenu(it, event.point) }
+        }
         if (event.button == MouseEvent.BUTTON1 && diagram.retryFailedLayout()) return
-        if (event.button == MouseEvent.BUTTON1 && !dragged) {
+        if (event.button == MouseEvent.BUTTON1 && !panning && !dragged) {
             val copyNode = diagram.copyActionAt(event.point)
             val questionNode = diagram.questionActionAt(event.point)
             val noteNode = diagram.noteActionAt(event.point)
@@ -82,18 +91,19 @@ internal class DiagramMouseInteraction(private val diagram: UnderstandingDiagram
                 val edge = diagram.candidateEdgeAt(event.point)
                 if (edge != null) diagram.routeNavigation?.selectCandidateEdge(edge)
                 else if (node != null) diagram.selectUnderstandingNode(node, notify = true)
-                else diagram.routeNavigation?.cancel()
             }
         }
         previousDragPoint = null
-        diagram.overlays.released(event.point, dragged)
+        if (!panning) diagram.overlays.released(event.point, dragged)
         pressPoint = null
         if (dragged) {
             if (draggedNodeId != null || draggedExampleClusterId != null) diagram.commitNodePositions()
-            else diagram.queueViewportSave()
+            else if (panning) diagram.queueViewportSave()
         }
         draggedNodeId = null
         draggedExampleClusterId = null
+        panning = false
+        diagram.cursor = Cursor.getDefaultCursor()
     }
 
     override fun mouseClicked(event: MouseEvent) {
@@ -134,12 +144,22 @@ internal class DiagramMouseInteraction(private val diagram: UnderstandingDiagram
     }
 
     override fun mouseWheelMoved(event: MouseWheelEvent) {
+        if (event.isConsumed || event.preciseWheelRotation == 0.0) return
         diagram.cameraTimer.stop()
-        val before = diagram.screenToWorld(event.point)
-        diagram.zoom *= 1.12.pow(-event.preciseWheelRotation)
-        val after = diagram.screenToWorld(event.point)
-        diagram.centerX += before.x - after.x
-        diagram.centerY += before.y - after.y
+        if (event.isControlDown) {
+            val before = diagram.screenToWorld(event.point)
+            diagram.zoom *= 1.12.pow(-event.preciseWheelRotation)
+            val after = diagram.screenToWorld(event.point)
+            diagram.centerX += before.x - after.x
+            diagram.centerY += before.y - after.y
+        } else {
+            val unit = if (event.scrollType == MouseWheelEvent.WHEEL_BLOCK_SCROLL) {
+                (if (event.isShiftDown) diagram.width else diagram.height) * 0.9
+            } else event.scrollAmount * JBUI.scale(16).toDouble()
+            val distance = event.preciseWheelRotation * unit / diagram.zoom
+            if (event.isShiftDown) diagram.centerX += distance else diagram.centerY += distance
+        }
+        event.consume()
         diagram.repaint()
         diagram.queueViewportSave()
     }

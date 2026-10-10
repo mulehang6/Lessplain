@@ -1,10 +1,12 @@
 package com.master.understanding.diagram
 
 import com.master.understanding.model.GraphEdge
+import com.master.understanding.ui.UnderstandingUiStyle
 import java.awt.Color
 import java.awt.geom.Path2D
 import java.awt.geom.Rectangle2D
 import java.awt.image.BufferedImage
+import javax.swing.UIManager
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -15,13 +17,19 @@ class DiagramCrossingsTest {
             edge("vertical", "c", "d", 50.0, 10.0, 50.0, 90.0))
         val crossings = diagramCrossings(edges)
         assertEquals(1, crossings.size)
-        val full = render(edges, crossings)
-        val joined = render(edges, emptyList())
-        assertEquals(Color(0xFAFBFC).rgb, full.getRGB(50, 50))
-        assertTrue(joined.getRGB(50, 50) != full.getRGB(50, 50))
-        val viewport = Rectangle2D.Double(44.0, 44.0, 20.0, 20.0)
-        val clipped = render(edges, crossings, viewport)
-        for (x in 44..63) for (y in 44..63) assertEquals(full.getRGB(x, y), clipped.getRGB(x, y), "$x,$y")
+        val original = UIManager.get("EditorPane.background")
+        try {
+            for (background in listOf(Color(0xF7F8FA), Color(0x1E1F22))) {
+                UIManager.put("EditorPane.background", background)
+                val full = render(edges, crossings)
+                val joined = render(edges, emptyList())
+                assertEquals(background.rgb, full.getRGB(50, 50))
+                assertTrue(joined.getRGB(50, 50) != full.getRGB(50, 50))
+                val viewport = Rectangle2D.Double(44.0, 44.0, 20.0, 20.0)
+                val clipped = render(edges, crossings, viewport)
+                for (x in 44..63) for (y in 44..63) assertEquals(full.getRGB(x, y), clipped.getRGB(x, y), "$x,$y")
+            }
+        } finally { UIManager.put("EditorPane.background", original) }
     }
 
     @Test fun `shared node endpoints remain junctions without a bridge`() {
@@ -33,7 +41,7 @@ class DiagramCrossingsTest {
         val image = BufferedImage(100, 100, BufferedImage.TYPE_INT_RGB)
         val graphics = image.createGraphics()
         try {
-            graphics.color = Color(0xFAFBFC)
+            graphics.color = UnderstandingUiStyle.canvas
             graphics.fillRect(0, 0, 100, 100)
             viewport?.let { graphics.clip = it }
             DiagramEdgePainter.paint(graphics, edges, emptySet(), false, 0f, viewport, crossings = crossings)

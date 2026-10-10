@@ -1,7 +1,5 @@
 package com.master.understanding.model
 
-const val UNDERSTANDING_SCHEMA_VERSION = 4
-
 /** A fixed code excerpt. The line is a hint, never its identity. */
 data class SourceAnchor(
     val path: String,

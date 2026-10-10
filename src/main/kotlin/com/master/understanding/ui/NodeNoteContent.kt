@@ -10,13 +10,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.text.font.FontWeight
 import com.master.understanding.model.UnderstandingQuestion
 import org.jetbrains.jewel.ui.component.OutlinedButton
 import org.jetbrains.jewel.ui.component.Text
@@ -39,22 +42,22 @@ internal fun NodeNoteContent(
     continueDraft: (String) -> Unit,
     delete: (UnderstandingQuestion) -> Unit,
 ) {
-    Column(Modifier.fillMaxSize().background(JewelTheme.globalColors.panelBackground).padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("节点注释", style = JewelTheme.defaultTextStyle.copy(fontWeight = FontWeight.SemiBold))
+    Column(Modifier.fillMaxSize().background(JewelTheme.globalColors.toolwindowBackground)
+        .padding(UnderstandingUiMetrics.PAGE_PADDING.dp),
+        verticalArrangement = Arrangement.spacedBy(UnderstandingUiMetrics.SECTION_GAP.dp)) {
+        UnderstandingSectionTitle("节点注释")
         Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            verticalArrangement = Arrangement.spacedBy(UnderstandingUiMetrics.SECTION_GAP.dp)) {
             state.notes.forEach { note ->
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                UnderstandingDetailIsland {
                     SelectionContainer { Text(note.text, style = JewelTheme.defaultTextStyle) }
                     state.drafts.firstOrNull { it.questionId == note.id }?.let { draft ->
-                        Text("未保存草稿", style = JewelTheme.defaultTextStyle.copy(fontWeight = FontWeight.SemiBold))
-                        SelectionContainer { Text(draft.text, style = JewelTheme.defaultTextStyle) }
+                        NoteDraftText("未保存草稿", draft.text)
                         if (!readOnly) {
                             OutlinedButton(onClick = { continueDraft(note.id) }) { Text("继续编辑") }
                         }
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(UnderstandingUiMetrics.GAP.dp)) {
                         if (!readOnly) {
                             OutlinedButton(onClick = { edit(note) }) { Text("编辑") }
                             OutlinedButton(onClick = { delete(note) }) { Text("删除") }
@@ -63,16 +66,28 @@ internal fun NodeNoteContent(
                 }
             }
             state.drafts.filter { it.questionId.isEmpty() }.forEach { draft ->
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("未保存注释", style = JewelTheme.defaultTextStyle.copy(fontWeight = FontWeight.SemiBold))
-                    SelectionContainer { Text(draft.text, style = JewelTheme.defaultTextStyle) }
+                UnderstandingDetailIsland {
+                    NoteDraftText("未保存注释", draft.text)
                     if (!readOnly) {
                         OutlinedButton(onClick = { continueDraft("") }) { Text("继续编辑") }
                     }
                 }
             }
         }
-        state.error?.let { Text(it) }
+        state.error?.let { Text(it, color = Color(UnderstandingUiStyle.failure.rgb)) }
         if (!readOnly) OutlinedButton(onClick = add) { Text("添加注释") }
+    }
+}
+
+/** A retained draft belongs to its note and shares the island surface. */
+@Composable
+private fun NoteDraftText(title: String, text: String) {
+    val shape = RoundedCornerShape(UnderstandingUiMetrics.INNER_RADIUS.dp)
+    Column(Modifier.fillMaxWidth().clip(shape)
+        .border(1.dp, Color(UnderstandingUiStyle.border.rgb).copy(alpha = 0.35f), shape)
+        .padding(UnderstandingUiMetrics.GAP.dp),
+        verticalArrangement = Arrangement.spacedBy(UnderstandingUiMetrics.GAP.dp)) {
+        Text(title, color = JewelTheme.globalColors.text.info)
+        SelectionContainer { Text(text, style = JewelTheme.defaultTextStyle) }
     }
 }

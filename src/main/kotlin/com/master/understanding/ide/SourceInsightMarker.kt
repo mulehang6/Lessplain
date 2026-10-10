@@ -11,8 +11,6 @@ import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.master.understanding.model.SourceAnchor
-import java.awt.Component
-import java.awt.Point
 import java.nio.file.Path
 import javax.swing.SwingUtilities
 
@@ -97,7 +95,7 @@ internal class SourceInsightMarker(private val project: Project, parent: Disposa
 internal data class SourceInlayNavigation(
     val canPrevious: Boolean,
     val canNext: Boolean,
-    val previous: (Component, Point) -> Unit,
-    val next: (Component, Point) -> Unit,
+    val previous: () -> Unit,
+    val next: () -> Unit,
     val cancelChoices: () -> Unit = {},
 )

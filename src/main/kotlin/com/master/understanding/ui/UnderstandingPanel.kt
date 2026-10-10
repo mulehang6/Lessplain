@@ -1,5 +1,6 @@
 package com.master.understanding.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,6 +36,8 @@ import com.intellij.openapi.util.Disposer
 import org.jetbrains.jewel.ui.component.OutlinedButton
 import org.jetbrains.jewel.ui.component.Text
 import org.jetbrains.jewel.ui.component.TextField
+import org.jetbrains.jewel.foundation.theme.JewelTheme
+import androidx.compose.ui.graphics.Color
 
 @Composable
 fun UnderstandingPanel(service: UnderstandingService) {
@@ -92,17 +95,21 @@ fun UnderstandingPanel(service: UnderstandingService) {
         }
     }
 
-    Column(Modifier.fillMaxSize().padding(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.fillMaxSize().background(JewelTheme.globalColors.toolwindowBackground)
+        .padding(UnderstandingUiMetrics.PAGE_PADDING.dp),
+        verticalArrangement = Arrangement.spacedBy(UnderstandingUiMetrics.SECTION_GAP.dp)) {
         if (history) {
-            Text("历史记录")
+            UnderstandingSectionTitle("历史记录")
             TextField(search, modifier = Modifier.fillMaxWidth(), placeholder = { Text("搜索标题或问题") })
         }
-        if (service.repository.readOnly) Text("此项目已在另一 IDE 实例中打开，当前只读")
+        if (service.repository.readOnly) Text("此项目已在另一 IDE 实例中打开，当前只读",
+            color = JewelTheme.globalColors.text.info)
         if (service.panelPage == PanelPage.WELCOME || (selected == null && layers.isEmpty() && !history)) {
             UnderstandingWelcome(service, recentRecords, Modifier.weight(1f), selectRoot)
         } else if (history) {
-            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (records.isEmpty()) Text("暂无理解记录")
+            Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(UnderstandingUiMetrics.SMALL_GAP.dp)) {
+                if (records.isEmpty()) Text("暂无理解记录", color = JewelTheme.globalColors.text.info)
                 records.forEach { record ->
                     RecordCandidateRow(record, selected?.id == record.id,
                         onClick = { selectRoot(record) },
@@ -127,8 +134,8 @@ fun UnderstandingPanel(service: UnderstandingService) {
                     }
                 }
                 if (layers.isNotEmpty() || service.canReturnToPrevious) {
-                    Column(Modifier.align(Alignment.TopEnd).padding(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Column(Modifier.align(Alignment.TopEnd).padding(UnderstandingUiMetrics.GAP.dp),
+                        verticalArrangement = Arrangement.spacedBy(UnderstandingUiMetrics.SMALL_GAP.dp)) {
                         if (layers.isNotEmpty()) {
                             OutlinedButton(onClick = {
                                 val parentLayers = layers.dropLast(1)
@@ -207,11 +214,12 @@ private fun RecordView(
         diagram.getOrNull()?.setPendingNoteCounts(noteCounts)
         onDispose { }
     }
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(UnderstandingUiMetrics.GAP.dp)) {
         diagram.onSuccess { builder ->
             key(builder) {
-                SwingPanel(factory = { builder.jComponent }, modifier = Modifier.fillMaxWidth().weight(1f))
+                SwingPanel(factory = { builder.jComponent }, background = Color(UnderstandingUiStyle.canvas.rgb),
+                    modifier = Modifier.fillMaxWidth().weight(1f))
             }
-        }.onFailure { failure -> Text("图无法加载：${failure.message}") }
+        }.onFailure { failure -> Text("图无法加载：${failure.message}", color = Color(UnderstandingUiStyle.failure.rgb)) }
     }
 }

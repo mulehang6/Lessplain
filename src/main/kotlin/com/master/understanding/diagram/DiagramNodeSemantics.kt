@@ -1,6 +1,6 @@
 package com.master.understanding.diagram
 
-import com.intellij.ui.JBColor
+import com.master.understanding.ui.UnderstandingUiStyle
 import java.awt.BasicStroke
 import java.awt.Color
 import java.awt.Font
@@ -11,13 +11,13 @@ import kotlin.math.ceil
 
 /** Semantic colors and the graph-fork glyph share no navigation or hit-test state. */
 internal object DiagramNodeSemantics {
-    val successFill = JBColor(Color(0xDBF3DE), Color(0x244B38))
-    val successBorder = JBColor(Color(0x238344), Color(0x72C58F))
-    val failureFill = JBColor(Color(0xFFDAD6), Color(0x682E33))
-    val failureBorder = JBColor(Color(0xC62828), Color(0xFF7979))
-    val unclassifiedFill = JBColor(Color(0xE7EBF1), Color(0x37424B))
-    val unclassifiedBorder = JBColor(Color(0x64748B), Color(0x9AA4B2))
-    val branchColor = JBColor(Color(0xA65300), Color(0xF2B35E))
+    val successFill get() = UnderstandingUiStyle.successSurface
+    val successBorder get() = UnderstandingUiStyle.success
+    val failureFill get() = UnderstandingUiStyle.failureSurface
+    val failureBorder get() = UnderstandingUiStyle.failure
+    val unclassifiedFill get() = UnderstandingUiStyle.neutralSurface
+    val unclassifiedBorder get() = UnderstandingUiStyle.border
+    val branchColor get() = UnderstandingUiStyle.warning
 
     fun endFill(outcome: String?): Color = when (outcome) {
         "success" -> successFill

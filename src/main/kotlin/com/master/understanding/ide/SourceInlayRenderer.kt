@@ -5,6 +5,7 @@ import com.intellij.openapi.editor.Inlay
 import com.intellij.openapi.editor.colors.EditorFontType
 import com.intellij.openapi.editor.markup.TextAttributes
 import com.intellij.ui.JBColor
+import com.master.understanding.ui.UnderstandingControlPainter
 import java.awt.Color
 import java.awt.Graphics2D
 import java.awt.Point
@@ -127,20 +128,10 @@ internal class InsightInlayRenderer(
             g.drawString("收起", bounds.x + 8,
                 bounds.y + layout.lines.size * layout.lineHeight + g.fontMetrics.ascent + 2)
         }
-        paintButton(g, controls.previous, SourceInlayButton.PREVIOUS, "‹", canPrevious)
-        paintButton(g, controls.next, SourceInlayButton.NEXT, "›", canNext)
-    }
-
-    private fun paintButton(g: Graphics2D, b: Rectangle, button: SourceInlayButton, glyph: String, enabled: Boolean) {
-        if (hoveredButton == button && enabled) {
-            g.color = Color(130, 95, 200, 50)
-            g.fillRoundRect(b.x, b.y, b.width, b.height, 5, 5)
-        }
-        g.color = if (enabled) JBColor(Color(103, 58, 183), Color(189, 145, 242))
-            else JBColor(Color(166, 166, 174), Color(105, 105, 114))
-        val metrics = g.fontMetrics
-        g.drawString(glyph, b.x + (b.width - metrics.stringWidth(glyph)) / 2,
-            b.y + (b.height + metrics.ascent) / 2 - 2)
+        UnderstandingControlPainter.paintNavigation(g, controls.previous, next = false,
+            enabled = canPrevious, hovered = hoveredButton == SourceInlayButton.PREVIOUS)
+        UnderstandingControlPainter.paintNavigation(g, controls.next, next = true,
+            enabled = canNext, hovered = hoveredButton == SourceInlayButton.NEXT)
     }
 
 }

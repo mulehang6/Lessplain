@@ -67,7 +67,7 @@ internal class CanvasTextEditor(
     private val dismiss: () -> Unit,
     private val cancel: () -> Unit,
     private val onMetricsChanged: () -> Unit = {},
-) : JPanel(BorderLayout(0, JBUI.scale(10))), AutoCloseable, UISettingsListener {
+) : JPanel(BorderLayout(0, JBUI.scale(UnderstandingUiMetrics.SECTION_GAP))), AutoCloseable, UISettingsListener {
     internal val input: JTextComponent = if (multiline) {
         JBTextArea(draft.text).apply {
             lineWrap = true
@@ -102,7 +102,7 @@ internal class CanvasTextEditor(
     }
     private val bottom = JPanel(BorderLayout()).apply {
         add(error, BorderLayout.NORTH)
-        add(JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(8), 0)).apply {
+        add(JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(UnderstandingUiMetrics.GAP), 0)).apply {
             add(saveButton)
             add(cancelButton)
         }, BorderLayout.SOUTH)
@@ -129,7 +129,7 @@ internal class CanvasTextEditor(
     }
 
     init {
-        border = JBUI.Borders.empty(12)
+        border = JBUI.Borders.empty(UnderstandingUiMetrics.DETAIL_PADDING)
         input.enableInputMethods(true)
         input.accessibleContext.accessibleName = title
         input.document.addDocumentListener(documentListener)
@@ -154,7 +154,9 @@ internal class CanvasTextEditor(
         if (!multiline) {
             visibleRowCount = 1
             scrollRequired = false
-            val size = Dimension(editorWidth, minOf(SINGLE_LINE_EDITOR_HEIGHT, maxHeight))
+            val height = panelInsets.top + panelInsets.bottom + input.preferredSize.height +
+                bottom.preferredSize.height + JBUI.scale(UnderstandingUiMetrics.SECTION_GAP)
+            val size = Dimension(editorWidth, minOf(height, maxHeight))
             preferredSize = size
             return size
         }
@@ -167,7 +169,8 @@ internal class CanvasTextEditor(
         val scrollbarWidth = pane.verticalScrollBar.preferredSize.width.coerceAtLeast(JBUI.scale(12))
         val baseTextWidth = (editorWidth - panelInsets.left - panelInsets.right - paneInsets.left - paneInsets.right -
             textInsets.left - textInsets.right).coerceAtLeast(1)
-        val chromeHeight = panelInsets.top + panelInsets.bottom + bottom.preferredSize.height + JBUI.scale(10)
+        val chromeHeight = panelInsets.top + panelInsets.bottom + bottom.preferredSize.height +
+            JBUI.scale(UnderstandingUiMetrics.SECTION_GAP)
         val maxRowsByScreen = ((maxHeight - chromeHeight - paneInsets.top - paneInsets.bottom -
             textInsets.top - textInsets.bottom) / lineHeight).coerceAtLeast(1)
         val visibleRowLimit = minOf(MAX_VISIBLE_ROWS, maxRowsByScreen)
@@ -243,6 +246,7 @@ internal class CanvasTextEditor(
 
     internal fun showErrorMessage(message: String) {
         error.text = message
+        error.foreground = UnderstandingUiStyle.failure
         scheduleMetricsChanged()
     }
 
@@ -252,6 +256,7 @@ internal class CanvasTextEditor(
         SwingUtilities.invokeLater {
             metricsQueued = false
             if (disposed) return@invokeLater
+            error.foreground = UnderstandingUiStyle.failure
             revalidate()
             onMetricsChanged()
         }
@@ -292,7 +297,6 @@ internal class CanvasTextEditor(
 
     private companion object {
         const val MAX_VISIBLE_ROWS = 8
-        const val SINGLE_LINE_EDITOR_HEIGHT = 150
         const val MAX_MEASURE_HEIGHT = 32768f
     }
 }
