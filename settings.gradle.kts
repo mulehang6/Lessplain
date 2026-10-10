@@ -1,6 +1,6 @@
 import org.jetbrains.intellij.platform.gradle.extensions.intellijPlatform
 
-rootProject.name = "master-understanding"
+rootProject.name = "Lessplain"
 
 pluginManagement {
     plugins {
