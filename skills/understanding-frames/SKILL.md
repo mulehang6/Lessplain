@@ -1,6 +1,6 @@
 ---
 name: understanding-frames
-description: 为 Master Understanding 插件组织有源码证据的理解图、回答节点追问或修订已有图。适用于用户要求在插件中呈现代码理解、沿图节点继续提问或更新旧理解；普通开发任务与单个独立事实答疑不因此创建图。
+description: 为 Lessplain 插件组织有源码证据的理解图、回答节点追问或修订已有图。适用于用户要求在插件中呈现代码理解、沿图节点继续提问或更新旧理解；普通开发任务与单个独立事实答疑不因此创建图。
 ---
 
 # Understanding Frames

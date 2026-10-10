@@ -81,7 +81,7 @@ JDK 21 构建，测试 JVM 为 Java 25.0.4，Windows 11、28 个逻辑处理器�
 
 ## 2026-09-29：首轮基准
 
-2026-09-29，在 Windows 11 10.0、28 个逻辑处理器的机器上执行。Gradle 启动与守护进程使用 JDK 21.0.7；IntelliJ 平台测试进程使用 Java 25.0.4。基准源码为 `GraphPerformanceBenchmarkTest`，命令为 `./gradlew.bat test -PgraphBenchmark --tests com.master.understanding.diagram.GraphPerformanceBenchmarkTest`。普通 `test` 不执行此基准。下表是在主线平直优先级与层间距调整后重新测得。
+2026-09-29，在 Windows 11 10.0、28 个逻辑处理器的机器上执行。Gradle 启动与守护进程使用 JDK 21.0.7；IntelliJ 平台测试进程使用 Java 25.0.4。基准源码为 `GraphPerformanceBenchmarkTest`，命令为 `./gradlew.bat test -PgraphBenchmark --tests com.master.lessplain.diagram.GraphPerformanceBenchmarkTest`。普通 `test` 不执行此基准。下表是在主线平直优先级与层间距调整后重新测得。
 
 每个规模生成一条完整展开的流程，节点分别连接后续 1、2、3 个节点；100 节点预热两次。每个规模测量三次 ELK 纵向布局，取中位数；在 1000×700 的离屏视口绘制 30 次，取 P95。内存变化是在该规模测量前后请求 GC 后的已用堆差值，仅供比较。
 

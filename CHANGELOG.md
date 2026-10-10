@@ -1,6 +1,6 @@
 <!-- Keep a Changelog guide -> https://keepachangelog.com -->
 
-# Master-understanding Changelog
+# Lessplain Changelog
 
 ## [Unreleased]
 

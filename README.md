@@ -1,4 +1,4 @@
-# Master Understanding
+# Lessplain
 
 IntelliJ IDEA 2026.1 起兼容的插件；以 2026.1.5 编译，开发实例使用 2026.2.3。Agent 通过 IDE MCP 提交代码理解图；插件保存图和固定提问来源，并在工具窗口查看。产品目标与未实现范围见 [主设计文档](docs/code-understanding-design-v0.5.md)，Agent 工作流见 [配套 skill](skills/understanding-frames/SKILL.md)。
 
@@ -28,7 +28,7 @@ IntelliJ IDEA 2026.1 起兼容的插件；以 2026.1.5 编译，开发实例使�
 
 安装包生成在 `build/distributions/`。在 IntelliJ IDEA 2026.1 或更新版本的 Settings → Plugins → Install Plugin from Disk 中选择 ZIP。插件依赖 IDE 自带的 MCP Server 和 Compose，不依赖 Diagrams。
 
-开发默认在 IDEA 中打开父级 `Agent-dev` 工程。仓库内 `Master Understanding IDE`、`Master Understanding Tests` 和 `Master Understanding Verifications` 三份运行配置均以父工程为前提，Gradle 路径为 `$PROJECT_DIR$/master-understanding`，保留这个设置。单独打开本目录时，使用上面的命令行任务，或自行创建 Gradle 路径指向本目录的运行配置。开发配置执行 `runIdeLatest`，目前运行 2026.2.3；`runIde` 仍运行 2026.1.5，供最低兼容版本复查。`sinceBuild=261` 保持不变，`verifyPlugin` 检查两个版本。从终端运行 Gradle 命令前先进入本目录；自动化构建不会启动长期 IDE 进程。
+开发默认在 IDEA 中打开父级 `Agent-dev` 工程。仓库内 `Lessplain IDE`、`Lessplain Tests` 和 `Lessplain Verifications` 三份运行配置均以父工程为前提，Gradle 路径为 `$PROJECT_DIR$/Lessplain`，保留这个设置。单独打开本目录时，使用上面的命令行任务，或自行创建 Gradle 路径指向本目录的运行配置。开发配置执行 `runIdeLatest`，目前运行 2026.2.3；`runIde` 仍运行 2026.1.5，供最低兼容版本复查。`sinceBuild=261` 保持不变，`verifyPlugin` 检查两个版本。从终端运行 Gradle 命令前先进入本目录；自动化构建不会启动长期 IDE 进程。
 
 ## 使用流程
 
@@ -68,4 +68,4 @@ IntelliJ IDEA 2026.1 起兼容的插件；以 2026.1.5 编译，开发实例使�
 
 开发 IDE 中已有真实 MCP 写入和手动界面试用。下一轮重点核对：从“最近”切换历史时标题、图和源码标识是否一起切换；每条历史及其追问层的固定、跟踪、路径和视口是否分别恢复；工具窗口与编辑器同时打开同一图时开关是否同步。自动化测试和 Plugin Verifier 不能替代这些界面检查。
 
-`runIde` 和 `runIdeLatest` 在启动前会同步各自的插件沙箱。构建脚本保留在开发 IDE 内手动安装的其他插件，只替换正在开发的 Master Understanding；两个运行配置仍使用不同的沙箱，安装的插件不会自动跨沙箱共享。
+`runIde` 和 `runIdeLatest` 在启动前会同步各自的插件沙箱。构建脚本保留在开发 IDE 内手动安装的其他插件，只替换正在开发的 Lessplain；两个运行配置仍使用不同的沙箱，安装的插件不会自动跨沙箱共享。

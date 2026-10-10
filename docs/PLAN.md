@@ -1,4 +1,4 @@
-# Master Understanding：真实插件基础实施计划
+# Lessplain：真实插件基础实施计划
 
 本文保留启动阶段的计划及选型过程。当前实现以 [README](../README.md) 为准；下文关于原生 Diagram、单一浏览状态和旧运行配置的条目是当时的计划，不代表现状。
 
@@ -66,7 +66,7 @@
 - Jewel 与 Diagram 在深浅主题、键盘、焦点、菜单及关闭重开场景中正常配合。
 - 完成相关自动化测试、插件构建及目标版本的 Plugin Verifier 检查。
 
-开发实例使用 `Master Understanding IDE`，单独打开插件目录时使用 `Master Understanding IDE (standalone)`；旧的 `Run IDE with Plugin` 属于其他插件。两项配置运行 `runIdeLatest`，当前目标为 2026.2.3；编译平台与普通 `runIde` 保持 2026.1.5，最低兼容 build 保持 261。Verifier 分别检查 2026.1.5 与 2026.2.3。自动化检查不启动长期 IDE 进程；启动或重启调试仅使用 IDEA MCP。未完成的运行验证必须明确列出。
+开发实例使用 `Lessplain IDE`，单独打开插件目录时使用 `Lessplain IDE (standalone)`；旧的 `Run IDE with Plugin` 属于其他插件。两项配置运行 `runIdeLatest`，当前目标为 2026.2.3；编译平台与普通 `runIde` 保持 2026.1.5，最低兼容 build 保持 261。Verifier 分别检查 2026.1.5 与 2026.2.3。自动化检查不启动长期 IDE 进程；启动或重启调试仅使用 IDEA MCP。未完成的运行验证必须明确列出。
 
 交付安装包、测试结果和简短验收说明，同步 README、设计文档的实现状态及配套 Agent skill。保留用户批注，不重复扩写规划，不把未验证能力写成已支持，不提交 Git。
 

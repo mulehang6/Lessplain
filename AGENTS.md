@@ -2,7 +2,7 @@
 
 ## 项目结构与模块
 
-插件源码位于 `src/main/kotlin/com/master/understanding/`，按 `core`、`diagram`、`ide`、`mcp`、`model`、`storage` 和 `ui` 分模块。平台描述、图标和消息资源在 `src/main/resources/`；测试位于 `src/test/kotlin/`，并按主代码包路径组织。`docs/` 保存设计文档，`skills/understanding-frames/` 保存 Agent 工作流。`prototype/` 是独立的交互原型，不属于插件源码。
+插件源码位于 `src/main/kotlin/com/master/lessplain/`，按 `core`、`diagram`、`ide`、`mcp`、`model`、`storage` 和 `ui` 分模块。平台描述、图标和消息资源在 `src/main/resources/`；测试位于 `src/test/kotlin/`，并按主代码包路径组织。`docs/` 保存设计文档，`skills/understanding-frames/` 保存 Agent 工作流。`prototype/` 是独立的交互原型，不属于插件源码。
 
 ## 构建、测试与本地开发
 
@@ -32,18 +32,18 @@
 
 `.idea/`、构建输出和 IntelliJ 沙箱属于本地状态，已由 `.gitignore` 排除。不要提交本机数据库、IDE 配置或凭据。
 
-## Master Understanding：IDEA MCP 连接说明
+## Lessplain：IDEA MCP 连接说明
 
 本项目区分日常开发 IDE 的内置 MCP 与插件验收 IDE 的开发 MCP。调用前先确认连接对应的 IDE 及其已打开项目，将该项目的绝对路径传入路由外层 `projectPath`；不得为探测连接而自动打开工程或启动 IDE。
 
 | 连接名          | 连接对象                                                                                           | 主要用途                                                     | 工具入口                         |
 |-----------------|----------------------------------------------------------------------------------------------------|--------------------------------------------------------------|----------------------------------|
 | `idea`          | 日常开发使用的 IDEA 的内置 MCP，当前打开包含本插件工程的工作区                                     | 面向插件源码工程的日常开发操作                               | `mcp__idea__execute_tool` 路由器 |
-| `idea_dev_2026` | 由 `Master Understanding IDE` 启动的开发 IDE，加载本插件；其中打开的项目是验收对象，可能随测试改变 | 调用插件自身的 MCP 工具，检查开发 IDE 中的运行行为和测试项目 | `execute_tool` 路由器            |
+| `idea_dev_2026` | 由 `Lessplain IDE` 启动的开发 IDE，加载本插件；其中打开的项目是验收对象，可能随测试改变 | 调用插件自身的 MCP 工具，检查开发 IDE 中的运行行为和测试项目 | `execute_tool` 路由器            |
 
 两条连接通过各自的 `execute_tool` 路由器调用。`idea` 面向日常开发 IDE 中的插件源码工程；`idea_dev_2026` 面向插件开发实例中当前打开的验收项目。调用插件的 `get_understanding_context` 或 `present_understanding` 时，将工具名及参数放入 `command`，把验收项目路径放在外层 `projectPath`，不要误传插件源码工程路径。本插件目前只有这两个 MCP 工具。`idea_dev_2026` 用于插件自身工具及验收对象，不能作为日常开发连接的替代。
 
-开发默认打开父级 `Agent-dev` 工程。仓库内 `Master Understanding IDE`、`Master Understanding Tests` 和 `Master Understanding Verifications` 三份运行配置的 Gradle 路径都是 `$PROJECT_DIR$/master-understanding`，这是父工程下的预期设置，不为单独打开插件目录而修改。启动插件时选唯一的 `Master Understanding IDE`；不要选旧配置 `Run IDE with Plugin`，它属于 `walkthrough-plugin`，会把没有 Gradle 构建文件的工作区根目录传给 Gradle。单独打开 `master-understanding` 时，使用本目录的 Gradle 命令，或另建 Gradle 工程目录指向本插件 `settings.gradle.kts` 所在目录的配置。
+开发默认打开父级 `Agent-dev` 工程。仓库内 `Lessplain IDE`、`Lessplain Tests` 和 `Lessplain Verifications` 三份运行配置的 Gradle 路径都是 `$PROJECT_DIR$/Lessplain`，这是父工程下的预期设置，不为单独打开插件目录而修改。启动插件时选唯一的 `Lessplain IDE`；不要选旧配置 `Run IDE with Plugin`，它属于 `walkthrough-plugin`，会把没有 Gradle 构建文件的工作区根目录传给 Gradle。单独打开 `Lessplain` 时，使用本目录的 Gradle 命令，或另建 Gradle 工程目录指向本插件 `settings.gradle.kts` 所在目录的配置。
 
 开发 IDE 重新启动后，旧的 stdio MCP 连接可能失效。MCP 重连只恢复通信，不会把新构建的插件代码加载进仍在运行的 IDE。自动化工作不要为验证而启动开发 IDE 或截图；需要时等待用户明确要求。
 
