@@ -20,6 +20,7 @@ import com.master.lessplain.storage.readUnderstandingRecord
 class UnderstandingCore(
     private val repository: UnderstandingRepository,
     private val gson: Gson = Gson(),
+    private val prepareGraph: (UnderstandingGraph) -> UnderstandingGraph = { it },
 ) {
     fun captureContext(
         recordId: String? = null,
@@ -56,7 +57,7 @@ class UnderstandingCore(
 
     fun context(token: String): UnderstandingContext = repository.getContext(token)
 
-    /** Persist before copying the handoff payload. */
+    /** 先保存问题，再复制交接载荷。 */
     fun prepareQuestion(text: String, contextToken: String): PreparedQuestion {
         val normalized = text.trim()
         requireInput(normalized.isNotEmpty(), "问题不能为空")
@@ -98,25 +99,31 @@ class UnderstandingCore(
         requireInput(schemaVersion >= 4 || graph.clusters.isEmpty(), "版本 3 不支持语义分组 clusters")
         requireInput(question.isNotBlank(), "问题不能为空")
         requireInput(displayTitle == null || displayTitle.isNotBlank(), "标题不能为空")
-        graph.validate()
+        graph.validate(validateAnchors = false)
         requireInput(graph.nodes.any { it.kind != "placeholder" }, "回答必须包含实际图节点")
-        val savedQuestion = questionId?.let(repository::getQuestion)
-        requireInput(savedQuestion?.status != "cancelled", "注释已取消，不能继续回答")
-        requireInput(savedQuestion == null || savedQuestion.text == question.trim(), "questionId 与原问题不一致")
-        requireInput(savedQuestion == null || placement == "child", "节点注释的回答必须作为子图保存")
-        val token = contextToken ?: savedQuestion?.contextToken
-        requireInput(savedQuestion == null || savedQuestion.contextToken == token, "questionId 与 contextToken 不一致")
-        val context = token?.let(repository::getContext)
-        val parent = resolveParent(placement, parentId, context)
-        requireInput(parent == null || graph.clusters.isEmpty(), "只有根理解图可以提交 clusters")
+        val token = contextToken ?: questionId?.let {
+            repository.requestContextToken(requestId) ?: repository.getQuestion(it).contextToken
+        }
         val payload = gson.toJson(listOf(schemaVersion, question.trim(), graphPayload(graph, schemaVersion),
             placement, token, questionId, parentId, displayTitle?.trim()))
-        val json = repository.request(requestId, "present_understanding", payload) { db ->
+        val json = repository.requestPrepared(requestId, "present_understanding", payload, {
+            val savedQuestion = questionId?.let(repository::getQuestion)
+            requireInput(savedQuestion?.status != "cancelled", "注释已取消，不能继续回答")
+            requireInput(savedQuestion == null || savedQuestion.text == question.trim(), "questionId 与原问题不一致")
+            requireInput(savedQuestion == null || placement == "child", "节点注释的回答必须作为子图保存")
+            requireInput(savedQuestion == null || savedQuestion.contextToken == token, "questionId 与 contextToken 不一致")
+            val context = token?.let(repository::getContext)
+            val parent = resolveParent(placement, parentId, context)
+            requireInput(parent == null || graph.clusters.isEmpty(), "只有根理解图可以提交 clusters")
+            val preparedGraph = prepareGraph(graph).also { it.validate() }
+            PresentPreparation(preparedGraph, savedQuestion, context, parent)
+        }) { db, prepared ->
+            val (preparedGraph, savedQuestion, context, parent) = prepared
             val effectiveQuestion = savedQuestion ?: if (placement == "child" && context?.recordId != null) {
                 UnderstandingQuestion(
                     id = newId(),
                     text = question.trim(),
-                    contextToken = token,
+                    contextToken = requireNotNull(token),
                     ownerRecordId = context.recordId,
                     status = "pending",
                     createdAt = System.currentTimeMillis(),
@@ -130,7 +137,7 @@ class UnderstandingCore(
                 question = question.trim(),
                 answer = "",
                 contextToken = token,
-                graph = graph,
+                graph = preparedGraph,
                 createdAt = System.currentTimeMillis(),
                 displayTitle = displayTitle?.trim(),
             )
@@ -154,12 +161,13 @@ class UnderstandingCore(
         requireInput(schemaVersion >= 4 || clusterUpdate == ClusterUpdate.Keep, "版本 3 不支持更新 clusters")
         requireInput(question.isNotBlank(), "问题不能为空")
         requireInput(recordId.isNotBlank() && expectedRevision > 0, "修订需要记录 ID 和预期版本")
-        graph.validate()
+        graph.validate(validateAnchors = false)
         requireInput(graph.nodes.any { it.kind != "placeholder" }, "回答必须包含实际图节点")
         val values = listOf(schemaVersion, question.trim(), graphPayload(graph, schemaVersion), "revise", recordId, expectedRevision)
         val payload = gson.toJson(if (schemaVersion >= 4) values + clusterUpdate else values)
-        val json = repository.request(requestId, "present_understanding", payload) { db ->
-            gson.toJson(repository.reviseRecordGraph(db, recordId, expectedRevision, question.trim(), graph, clusterUpdate))
+        val json = repository.requestPrepared(requestId, "present_understanding", payload,
+            { prepareGraph(graph).also { it.validate() } }) { db, preparedGraph ->
+            gson.toJson(repository.reviseRecordGraph(db, recordId, expectedRevision, question.trim(), preparedGraph, clusterUpdate))
         }
         return gson.readUnderstandingRecord(json)
     }
@@ -168,7 +176,7 @@ class UnderstandingCore(
         requireInput(value in 3..UNDERSTANDING_SCHEMA_REVISION, "不支持的内部协议修订号：$value")
     }
 
-    /** Protocol-3 retries must retain the payload hash written before the new graph field existed. */
+    /** 协议 3 的重试必须保留新增图字段之前的请求哈希。 */
     private fun graphPayload(graph: UnderstandingGraph, version: Int) = gson.toJsonTree(graph).asJsonObject.apply {
         if (version == 3) remove("clusters")
     }
@@ -197,3 +205,10 @@ class UnderstandingCore(
 }
 
 data class PreparedQuestion(val question: UnderstandingQuestion, val payload: String)
+
+private data class PresentPreparation(
+    val graph: UnderstandingGraph,
+    val question: UnderstandingQuestion?,
+    val context: UnderstandingContext?,
+    val parent: String?,
+)

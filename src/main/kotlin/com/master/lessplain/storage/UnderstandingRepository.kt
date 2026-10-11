@@ -18,13 +18,13 @@ import java.sql.Connection
 import java.util.UUID
 import org.sqlite.SQLiteDataSource
 
-/** All writes, including request deduplication, use one SQLite transaction. */
+/** 所有写入，包括请求去重，都在单个 SQLite 事务中完成。 */
 class UnderstandingRepository(
     projectRoot: Path,
     internal val gson: Gson = Gson(),
 ) : AutoCloseable {
     val projectId: String = sha256(projectRoot.toAbsolutePath().normalize().toString().lowercase())
-    val databasePath: Path = projectRoot.resolve(".idea/code-understanding/understanding.db")
+    val databasePath: Path = projectRoot.resolve(".idea/lessplain/understanding.db")
     private val lockChannel: FileChannel
     private val writerLock: FileLock?
     val readOnly: Boolean
@@ -55,7 +55,7 @@ class UnderstandingRepository(
         }
     }
 
-    // IntelliJ loads bundled plugin libraries with a plugin classloader, which DriverManager may not discover.
+    // IntelliJ 用插件类加载器加载内置依赖，DriverManager 可能无法发现其驱动。
     internal fun connect(): Connection = SQLiteDataSource().apply {
         url = "jdbc:sqlite:${databasePath.toAbsolutePath()}"
     }.connection.apply {
@@ -180,10 +180,33 @@ class UnderstandingRepository(
 
     fun getQuestion(id: String): UnderstandingQuestion = connect().use { readQuestion(it, id) }
 
-    fun request(requestId: String, operation: String, payload: String, block: (Connection) -> String): String {
+    fun request(requestId: String, operation: String, payload: String, block: (Connection) -> String): String =
+        requestPrepared(requestId, operation, payload, { Unit }) { db, _ -> block(db) }
+
+    /** 注释成功回答后已删除，仍可从原响应还原当时用于请求哈希的来源。 */
+    internal fun requestContextToken(requestId: String): String? = connect().use { db ->
+        db.prepareStatement("SELECT response FROM requests WHERE request_id=? AND operation='present_understanding'").use { statement ->
+            statement.setString(1, requestId)
+            statement.executeQuery().use { rows ->
+                if (!rows.next() || rows.getString(1) == DELETED_REQUEST_RESPONSE) null else
+                    com.google.gson.JsonParser.parseString(rows.getString(1)).asJsonObject
+                        .get("contextToken")?.takeUnless { it.isJsonNull }?.asString
+            }
+        }
+    }
+
+    /** 重放先于准备；源码读取在事务外完成，写入前再次查重。 */
+    internal fun <T> requestPrepared(
+        requestId: String,
+        operation: String,
+        payload: String,
+        prepare: () -> T,
+        block: (Connection, T) -> String,
+    ): String {
         if (requestId.isBlank()) throw UnderstandingInputException("requestId 不能为空")
         val hash = sha256(payload)
         lookupRequest(requestId, operation, hash)?.let { return it }
+        val prepared = prepare()
         return write { db ->
             db.prepareStatement("SELECT operation, payload_hash, response FROM requests WHERE request_id=?").use { statement ->
                 statement.setString(1, requestId)
@@ -198,7 +221,7 @@ class UnderstandingRepository(
                     }
                 }
             }
-            val result = block(db)
+            val result = block(db, prepared)
             db.prepareStatement("INSERT INTO requests(request_id, operation, payload_hash, response) VALUES(?, ?, ?, ?)").use { statement ->
                 statement.setString(1, requestId)
                 statement.setString(2, operation)

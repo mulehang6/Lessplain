@@ -1,6 +1,6 @@
 package com.master.lessplain.model
 
-/** A fixed code excerpt. The line is a hint, never its identity. */
+/** 固定源码片段；行号仅是提示，不是其身份。 */
 data class SourceAnchor(
     val path: String,
     val symbol: String?,
@@ -16,9 +16,9 @@ data class GraphNode(
     val kind: String = "step",
     val anchor: SourceAnchor? = null,
     val evidenceIds: List<String> = emptyList(),
-    /** Business boundaries, independent of node category and graph degree. */
+    /** 业务边界，不依赖节点类别和图的入出度。 */
     val flowRoles: List<String> = emptyList(),
-    /** success/failure at this explanation boundary; null leaves the outcome unclassified. */
+    /** 当前解释范围的 success 或 failure；null 表示结果未归类。 */
     val endOutcome: String? = null,
 )
 
@@ -26,11 +26,13 @@ data class GraphEdge(
     val id: String,
     val from: String,
     val to: String,
-    /** control_flow, call, data_flow, dependency, or structure. */
+    /** 关系类型为 control_flow、call、data_flow、dependency 或 structure。 */
     val relation: String,
     val condition: String? = null,
     val coverage: String? = null,
     val evidenceIds: List<String> = emptyList(),
+    /** true 表示关系由证据推断；缺省保留旧图的呈现方式。 */
+    val inferred: Boolean? = null,
 )
 
 data class Evidence(
@@ -100,7 +102,7 @@ data class BrowseState(
     val navigationState: RouteNavigationState? = null,
 )
 
-/** The unresolved upstream prefix and the explicitly selected forward suffix of a reading route. */
+/** 阅读路线中尚未确定的上游前缀和明确选定的后缀。 */
 data class RouteNavigationState(
     val prefixNodeId: String,
     val selectedEdgeIds: List<String> = emptyList(),

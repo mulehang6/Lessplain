@@ -21,7 +21,8 @@ class DiagramSourceStatusTest {
                 val status = diagram.sourceStatus
                 val selection = "root" to "a"
                 assertFalse(status.isVisible)
-                for (message in listOf("源码定位失败：证据文本有多处匹配", "源码定位失败：当前文件中找不到对应证据")) {
+                for (message in listOf("源码定位失败：证据文本有多处匹配", "源码定位失败：当前文件中找不到对应证据",
+                    "仅定位到所属函数，原片段已变化")) {
                     status.showForSelection(message, selection, selection)
                     diagram.doLayout()
                     assertTrue(status.isVisible)

@@ -14,6 +14,7 @@ import com.master.lessplain.model.UnderstandingGraph
 import com.master.lessplain.model.UnderstandingInputException
 import com.master.lessplain.model.UnderstandingRecord
 import com.master.lessplain.model.understandingSchemaRevision
+import com.master.lessplain.model.validate
 import com.master.lessplain.storage.UnderstandingRepository
 import com.master.lessplain.storage.reviseRecordGraph
 import org.junit.jupiter.api.Test
@@ -39,9 +40,22 @@ class UnderstandingSchemaTest {
             assertEquals(true, payload["schemaVersion"].asJsonPrimitive.isString)
             assertEquals(UNDERSTANDING_SCHEMA_VERSION, payload["schemaVersion"].asString)
             assertEquals(UNDERSTANDING_SCHEMA_VERSION, copied["protocolVersion"].asString)
+            assertEquals(true, payload["capabilities"].asJsonObject["anchorValidation"].asBoolean)
+            assertEquals(true, payload["capabilities"].asJsonObject["inferredEdges"].asBoolean)
             assertEquals(String::class.java, UnderstandingToolset::class.java.declaredMethods
                 .single { it.name == "presentUnderstanding" }.parameterTypes.first())
         }
+    }
+
+    @Test
+    fun `inferred edges use an explicit boolean with required coverage`() {
+        val json = """{"nodes":[{"id":"a","label":"A"},{"id":"b","label":"B"}],"edges":[{"id":"ab","from":"a","to":"b","relation":"call","inferred":true,"coverage":"由事件注册推断"}]}"""
+        val parsed = parseGraphSubmission(json, 4).graph
+        assertEquals(true, parsed.edges.single().inferred)
+        parsed.validate()
+        assertFailsWith<UnderstandingInputException> { parsed.copy(edges = parsed.edges.map { it.copy(coverage = null) }).validate() }
+        assertFailsWith<UnderstandingInputException> { parseGraphSubmission(json.replace("\"inferred\":true", "\"inferred\":\"true\""), 4) }
+        assertEquals(null, parseGraphSubmission(json.replace("\"inferred\":true,", ""), 4).graph.edges.single().inferred)
     }
 
     @Test

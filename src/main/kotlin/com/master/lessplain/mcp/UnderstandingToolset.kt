@@ -9,6 +9,7 @@ import com.intellij.mcpserver.projectOrNull
 import com.master.lessplain.ide.UnderstandingService
 import com.master.lessplain.model.requireInput
 import com.master.lessplain.model.understandingSchemaRevision
+import com.master.lessplain.model.resolvedAnchors
 import kotlinx.coroutines.currentCoroutineContext
 
 class UnderstandingToolset : McpToolset {
@@ -16,10 +17,11 @@ class UnderstandingToolset : McpToolset {
 
     @Suppress("unused")
     @McpTool(name = "get_understanding_context")
-    @McpDescription("读取固定来源，以及当前理解图及其追问中的全部待答注释。pendingBatch 每项含 questionId、原问题和固定 context，逐条回答后自动移除注释。")
+    @McpDescription("读取固定来源及当前理解图的全部待答注释。源码追问通过子图回答后移除；缺陷反馈可传 feedbackQuestionIds，在本次读取成功后直接清理，不要求子图或修复验收，也不保留处理记录。")
     suspend fun getUnderstandingContext(
         @McpDescription("可选。先前返回的固定来源 token；空字符串表示捕获当前来源。") contextToken: String = "",
         @McpDescription("可选。复查批量队列时传回 pendingBatch.scopeRecordId，避免界面切换改变范围；不能与 contextToken 同时指定。") pendingScopeRecordId: String = "",
+        @McpDescription("可选。用户缺陷反馈的 questionId JSON 字符串数组，例如 [\"id1\",\"id2\"]；仍返回这些注释全文，并在成功读取后直接删除，不回答源码追问。") feedbackQuestionIds: String = "",
     ): String = runTool {
         val service = service()
         requireInput(contextToken.isBlank() || pendingScopeRecordId.isBlank(), "固定来源与批量范围不能同时指定")
@@ -28,12 +30,15 @@ class UnderstandingToolset : McpToolset {
             pendingScopeRecordId.isNotBlank() -> service.core.captureContext(pendingScopeRecordId)
             else -> service.captureCurrentContext()
         }
-        gson.toJson(understandingContextPayload(service.repository, context))
+        val ids = parseFeedbackQuestionIds(feedbackQuestionIds)
+        val response = readUnderstandingContextResponse(service.repository, context, ids, gson::toJson)
+        if (ids.isNotEmpty()) service.notifyChanged()
+        response
     }
 
     @Suppress("unused")
     @McpTool(name = "present_understanding")
-    @McpDescription("保存或修订代码理解图。必须有实际图节点，不接受纯文字回答；节点和关系标签保持简短，不提交坐标。")
+    @McpDescription("保存或修订代码理解图。保存前校验全部源码锚点，version 可省略并由当前 IDE 文档补齐，lineHint 回填实际行号；失败一次列出锚点错误。边 inferred=true 表示推断，必须用 coverage 说明依据。必须有实际图节点，不接受纯文字回答，不提交坐标。")
     suspend fun presentUnderstanding(
         @McpDescription("协议版本字符串：1.4。兼容字符串 4 及不带 clusters 的字符串 3；按 get_understanding_context 返回的版本提交。") schemaVersion: String,
         @McpDescription("此次写入的唯一请求 ID；相同内容重试返回原结果。") requestId: String,
@@ -65,7 +70,8 @@ class UnderstandingToolset : McpToolset {
         }
         service.resultSaved(recordId = record.id, questionId = record.questionId, revision = record.revision)
         gson.toJson(mapOf("recordId" to record.id, "revision" to record.revision,
-            "parentId" to record.parentId, "questionId" to record.questionId))
+            "parentId" to record.parentId, "questionId" to record.questionId,
+            "resolvedAnchors" to record.graph.resolvedAnchors()))
     }
 
     private suspend fun service(): UnderstandingService {

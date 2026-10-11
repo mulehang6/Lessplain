@@ -10,6 +10,32 @@ import org.junit.jupiter.api.Test
 
 class EditorSourceInsightMarkerTest {
     @Test
+    fun `changed excerpt clears its marker while unchanged excerpt keeps it`() {
+        lateinit var fixture: SourceMarkerTestEditor
+        lateinit var marker: EditorSourceInsightMarker
+        var invalidations = 0
+        SwingUtilities.invokeAndWait {
+            fixture = SourceMarkerTestEditor()
+            marker = EditorSourceInsightMarker(fixture.editor, 0, fixture.text.length, "提示",
+                SourceInlayNavigation(false, false, {}, {}, evidenceChanged = { invalidations++; marker.dispose() }))
+            fixture.changeDocument()
+        }
+        SwingUtilities.invokeAndWait {
+            assertEquals(0, invalidations)
+            assertFalse(fixture.inlayDisposed)
+            fixture.changeDocument(fixture.text.replace("foo", "baz"))
+        }
+        SwingUtilities.invokeAndWait {
+            assertEquals(1, invalidations)
+            assertTrue(fixture.inlayDisposed)
+            assertTrue(fixture.highlighterDisposed)
+            assertTrue(fixture.documentListeners.isEmpty())
+            fixture.changeDocument()
+        }
+        SwingUtilities.invokeAndWait { assertEquals(1, invalidations) }
+    }
+
+    @Test
     fun `document changes cancel choices and disposed markers stop receiving changes`() {
         SwingUtilities.invokeAndWait {
             val fixture = SourceMarkerTestEditor()

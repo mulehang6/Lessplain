@@ -297,7 +297,7 @@ class UnderstandingCoreTest {
 
     @Test
     fun `failed migration leaves old data and a backup`() {
-        val dbPath = root.resolve(".idea/code-understanding/understanding.db")
+        val dbPath = root.resolve(".idea/lessplain/understanding.db")
         Files.createDirectories(dbPath.parent)
         DriverManager.getConnection("jdbc:sqlite:${dbPath.toAbsolutePath()}").use { db ->
             db.createStatement().use { statement ->

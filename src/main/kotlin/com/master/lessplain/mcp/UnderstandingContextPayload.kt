@@ -5,7 +5,7 @@ import com.master.lessplain.model.UNDERSTANDING_SCHEMA_VERSION
 import com.master.lessplain.storage.UnderstandingRepository
 import com.master.lessplain.storage.pendingNoteBatch
 
-/** Keep the queue's scope and each item's fixed source separate from the currently selected node. */
+/** 队列范围及各项的固定来源，与当前选择节点分开处理。 */
 internal fun understandingContextPayload(repository: UnderstandingRepository, context: UnderstandingContext): Map<String, Any?> {
     val record = context.recordId?.let(repository::getRecord)?.copy(answer = "")
     val batch = record?.let { repository.pendingNoteBatch(it.id) }
@@ -15,5 +15,6 @@ internal fun understandingContextPayload(repository: UnderstandingRepository, co
     return mapOf("schemaVersion" to UNDERSTANDING_SCHEMA_VERSION, "context" to context, "record" to record, "questions" to questions,
         "pendingQuestionId" to questions.singleOrNull { it.status == "pending" && it.contextToken == context.token }?.id,
         "pendingBatch" to batch, "capabilities" to mapOf("nodeSemantics" to true, "pendingNoteBatch" to true,
-            "rootClusters" to true, "completeRouteSelection" to true))
+            "rootClusters" to true, "completeRouteSelection" to true,
+            "anchorValidation" to true, "inferredEdges" to true, "feedbackConsumption" to true))
 }

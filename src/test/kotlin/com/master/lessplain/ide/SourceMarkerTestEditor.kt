@@ -18,10 +18,10 @@ import java.awt.Rectangle
 import java.lang.reflect.Proxy
 import javax.swing.JPanel
 
-/** Minimal editor interfaces exercise actual marker events and resource ownership without starting an IDE. */
+/** 通过最小编辑器接口验证真实提示事件及资源生命周期，不启动 IDE。 */
 internal class SourceMarkerTestEditor {
     val component = JPanel().apply { setSize(800, 600) }
-    val text = "    foo()\n    bar()\n"
+    var text = "    foo()\n    bar()\n"
     val inlayBounds = Rectangle(0, 30, 800, 32)
     var visibleArea = Rectangle(0, 40, 800, 300)
     var inlayDisposed = false
@@ -50,7 +50,8 @@ internal class SourceMarkerTestEditor {
         }
     }
 
-    fun changeDocument() {
+    fun changeDocument(newText: String = text) {
+        text = newText
         val event = object : DocumentEvent(document) {
             override fun getOffset(): Int = 0
             override fun getOldLength(): Int = 0
@@ -87,6 +88,7 @@ internal class SourceMarkerTestEditor {
         when (name) {
             "getStartOffset" -> 0
             "getEndOffset" -> text.length
+            "isValid" -> !highlighterDisposed
             "dispose" -> { highlighterDisposed = true; null }
             else -> null
         }

@@ -15,7 +15,7 @@ fun SourceAnchor.validate() {
     requireInput(lineHint == null || lineHint > 0, "锚点行号必须大于零")
 }
 
-fun UnderstandingGraph.validate() {
+fun UnderstandingGraph.validate(validateAnchors: Boolean = true) {
     requireInput(nodes.isNotEmpty(), "图至少需要一个节点")
     requireInput(nodes.size <= 1000 && edges.size <= 3000, "图超过本批容量上限")
     validateClusters()
@@ -30,14 +30,17 @@ fun UnderstandingGraph.validate() {
         requireInput(node.endOutcome == null || node.endOutcome in setOf("success", "failure"), "节点 ${node.id} 结束结果无效")
         requireInput(node.endOutcome == null || "end" in node.flowRoles, "节点 ${node.id} 结束结果需要 end 角色")
         requireInput(node.label.isNotBlank(), "节点 ${node.id} 缺少标签")
-        node.anchor?.validate()
+        if (validateAnchors) node.anchor?.validate()
         requireInput(node.evidenceIds.all(evidenceIds::contains), "节点 ${node.id} 引用未知证据")
     }
     evidence.forEach { item ->
-        item.anchor.validate()
-        item.dependencies.forEach(SourceAnchor::validate)
+        if (validateAnchors) {
+            item.anchor.validate()
+            item.dependencies.forEach(SourceAnchor::validate)
+        }
     }
     edges.forEach { edge ->
+        requireInput(edge.inferred != true || !edge.coverage.isNullOrBlank(), "推断关系 ${edge.id} 需要 coverage 说明依据")
         requireInput(edge.from in nodeIds && edge.to in nodeIds, "关系 ${edge.id} 引用未知节点")
         requireInput(edge.relation in setOf("control_flow", "call", "data_flow", "dependency", "structure"), "关系 ${edge.id} 类型无效")
         requireInput(edge.evidenceIds.all(evidenceIds::contains), "关系 ${edge.id} 引用未知证据")

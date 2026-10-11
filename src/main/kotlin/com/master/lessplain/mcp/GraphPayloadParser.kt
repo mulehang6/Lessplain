@@ -61,6 +61,7 @@ internal fun parseGraphSubmission(json: String, schemaVersion: Int): GraphSubmis
                 condition = item.optionalString("condition"),
                 coverage = item.optionalString("coverage"),
                 evidenceIds = item.optionalStrings("evidenceIds"),
+                inferred = item.optionalBoolean("inferred"),
             )
         },
         evidence = root.optionalArray("evidence").map { it.asObject("evidence").toEvidence() },
@@ -90,7 +91,10 @@ private fun JsonObject.toAnchor(): SourceAnchor = SourceAnchor(
     path = requiredString("path"),
     symbol = optionalString("symbol"),
     text = requiredString("text"),
-    version = requiredString("version"),
+    // 空版本仅存在于提交草稿；保存前由 IDE 文档校验并补齐。
+    version = optionalStrictString("version")?.also {
+        if (it.isBlank()) throw UnderstandingInputException("锚点 version 不能为空；自动补齐时应省略字段")
+    } ?: "",
     lineHint = get("lineHint")?.takeUnless(JsonElement::isJsonNull)?.asInt,
     fingerprint = optionalString("fingerprint"),
 )
@@ -116,6 +120,11 @@ private fun JsonObject.optionalString(name: String): String? = get(name)?.takeUn
 private fun JsonObject.optionalStrictString(name: String): String? = get(name)?.takeUnless(JsonElement::isJsonNull)?.let {
     if (!it.isJsonPrimitive || !it.asJsonPrimitive.isString) throw UnderstandingInputException("$name 必须是字符串")
     it.asString
+}
+
+private fun JsonObject.optionalBoolean(name: String): Boolean? = get(name)?.takeUnless(JsonElement::isJsonNull)?.let {
+    if (!it.isJsonPrimitive || !it.asJsonPrimitive.isBoolean) throw UnderstandingInputException("$name 必须是布尔值")
+    it.asBoolean
 }
 
 private fun JsonObject.requiredObject(name: String): JsonObject = get(name)?.asObject(name)

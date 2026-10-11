@@ -21,23 +21,33 @@ data class LocatedSource(
     val offset: Int? = null,
 )
 
-/** Never uses a repeated text match as proof that an anchor moved. */
-internal fun locateSource(project: Project, anchor: SourceAnchor): LocatedSource =
-    ApplicationManager.getApplication().runReadAction<LocatedSource> {
-        val root = Path.of(project.basePath ?: return@runReadAction LocatedSource(LocationStatus.UNRESOLVED, EvidenceStatus.UNKNOWN))
+/** 重复文本匹配不能作为锚点已移动的证明。 */
+internal fun locateSource(project: Project, anchor: SourceAnchor): LocatedSource {
+    return commitSourceDocuments(project) {
+        val root = Path.of(project.basePath ?: return@commitSourceDocuments LocatedSource(LocationStatus.UNRESOLVED, EvidenceStatus.UNKNOWN))
             .toAbsolutePath().normalize()
         val path = root.resolve(anchor.path).normalize()
-        if (!path.startsWith(root)) return@runReadAction LocatedSource(LocationStatus.UNRESOLVED, EvidenceStatus.UNKNOWN)
+        if (!path.startsWith(root)) return@commitSourceDocuments LocatedSource(LocationStatus.UNRESOLVED, EvidenceStatus.UNKNOWN)
         val file = LocalFileSystem.getInstance().findFileByNioFile(path)
-            ?: return@runReadAction LocatedSource(LocationStatus.UNRESOLVED, EvidenceStatus.UNKNOWN)
+            ?: return@commitSourceDocuments LocatedSource(LocationStatus.UNRESOLVED, EvidenceStatus.UNKNOWN)
         val document = FileDocumentManager.getInstance().getDocument(file)
-            ?: return@runReadAction LocatedSource(LocationStatus.UNRESOLVED, EvidenceStatus.UNKNOWN)
+            ?: return@commitSourceDocuments LocatedSource(LocationStatus.UNRESOLVED, EvidenceStatus.UNKNOWN)
         val psi = PsiDocumentManager.getInstance(project).getPsiFile(document)
-        matchAnchorText(anchor, document.text) { offset -> symbolPathAt(psi?.findElementAt(offset)) }
+        matchAnchorText(anchor, document.text, { offset -> symbolPathAt(psi?.findElementAt(offset)) },
+            { symbol -> functionOffsetsForSymbol(psi, symbol) })
     }
+}
 
-/** A text match in another symbol is a candidate, not a confirmed relocation. */
-internal fun matchAnchorText(anchor: SourceAnchor, content: String, symbolAt: (Int) -> String?): LocatedSource {
+/** 其他符号中的文本匹配仅是候选，不能据此确认迁移。 */
+internal fun matchAnchorText(anchor: SourceAnchor, content: String, symbolAt: (Int) -> String?): LocatedSource =
+    matchAnchorText(anchor, content, symbolAt) { emptyList() }
+
+internal fun matchAnchorText(
+    anchor: SourceAnchor,
+    content: String,
+    symbolAt: (Int) -> String?,
+    functionOffsets: (String) -> List<Int>,
+): LocatedSource {
     val expectedVersion = anchor.version.removePrefix("sha256:").lowercase()
     val normalizedContent = content.replace("\r\n", "\n")
     val versionMatches = sha256(normalizedContent) == expectedVersion ||
@@ -61,13 +71,24 @@ internal fun matchAnchorText(anchor: SourceAnchor, content: String, symbolAt: (I
         if (onHintLine.size > 1) return LocatedSource(LocationStatus.AMBIGUOUS, EvidenceStatus.UNKNOWN)
         if (onHintLine.size == 1) {
             val match = onHintLine.single()
+            val codeOffset = match + anchor.text.indexOfFirst { !it.isWhitespace() }.coerceAtLeast(0)
+            if (anchor.symbol != null && !symbolMatches(anchor.symbol, symbolAt(codeOffset))) {
+                return LocatedSource(LocationStatus.UNRESOLVED, EvidenceStatus.UNKNOWN)
+            }
             return LocatedSource(LocationStatus.EXACT, EvidenceStatus.UNCHANGED, match)
         }
     }
-    if (matches.isEmpty()) return LocatedSource(LocationStatus.UNRESOLVED, EvidenceStatus.CHANGED)
+    if (matches.isEmpty()) {
+        val candidates = anchor.symbol?.let(functionOffsets).orEmpty().distinct().filter { it in content.indices }
+        return when (candidates.size) {
+            1 -> LocatedSource(LocationStatus.RELOCATED, EvidenceStatus.CHANGED, candidates.single())
+            0 -> LocatedSource(LocationStatus.UNRESOLVED, EvidenceStatus.CHANGED)
+            else -> LocatedSource(LocationStatus.AMBIGUOUS, EvidenceStatus.CHANGED)
+        }
+    }
     if (matches.size > 1) return LocatedSource(LocationStatus.AMBIGUOUS, EvidenceStatus.UNKNOWN)
     val match = matches.single()
-    // Indentation may belong to the containing class in PSI, rather than the method declaration.
+    // 缩进对应的 PSI 可能属于外层类，而非方法声明。
     val symbolOffset = match + anchor.text.indexOfFirst { !it.isWhitespace() }.coerceAtLeast(0)
     if (anchor.symbol != null && !symbolMatches(anchor.symbol, symbolAt(symbolOffset))) {
         return LocatedSource(LocationStatus.UNRESOLVED, EvidenceStatus.UNKNOWN)

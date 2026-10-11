@@ -1,6 +1,8 @@
 package com.master.lessplain.ide
 
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
@@ -45,7 +47,7 @@ internal data class PanelLocation(
 class UnderstandingService(private val project: Project) : Disposable {
     private val log = Logger.getInstance(UnderstandingService::class.java)
     val repository = UnderstandingRepository(Path.of(requireNotNull(project.basePath)))
-    val core = UnderstandingCore(repository)
+    val core = UnderstandingCore(repository, prepareGraph = { prepareGraphAnchors(project, it) })
     private val listeners = CopyOnWriteArrayList<() -> Unit>()
     private val selectionListeners = CopyOnWriteArrayList<(String, String?) -> Unit>()
     private val editorFiles = mutableMapOf<String, UnderstandingVirtualFile>()
@@ -82,7 +84,7 @@ class UnderstandingService(private val project: Project) : Disposable {
             .addPropertyChangeListener("focusOwner", focusListener)
     }
 
-    /** Tool-window navigation survives Compose/Swing content recreation. */
+    /** 工具窗口导航状态跨 Compose 和 Swing 内容重建保留。 */
     internal var panelLayers: List<FollowUpLayer> = emptyList()
     internal var panelRootRecordId: String? = null
 
@@ -143,7 +145,7 @@ class UnderstandingService(private val project: Project) : Disposable {
         notifyChanged()
     }
 
-    /** Called only after a tool has committed its result. Replayed request IDs keep the same result key. */
+    /** 仅在工具提交结果后调用，重放请求 ID 保持同一结果键。 */
     fun resultSaved(
         recordId: String? = null,
         questionId: String? = null,
@@ -314,7 +316,7 @@ class UnderstandingService(private val project: Project) : Disposable {
                 else SwingUtilities.invokeLater { listener(record.id, validNode) }
             }
         }
-        if (selectionUnchanged) return
+        if (selectionUnchanged && sourceLocationMessage == null) return
         if (validNode != null) {
             val node = record.graph.nodes.first { it.id == validNode }
             val anchor = node.anchor ?: record.graph.evidence.firstOrNull { it.id in node.evidenceIds }?.anchor
@@ -328,7 +330,8 @@ class UnderstandingService(private val project: Project) : Disposable {
                 }
                 notifyChanged()
             } else {
-                SwingUtilities.invokeLater {
+                // PSI 文档提交需要平台的写安全上下文，普通 Swing 队列无法提供。
+                ApplicationManager.getApplication().invokeLater({
                     if (project.isDisposed || activeRecordId != record.id || activeNodeId != validNode) return@invokeLater
                     sourceScrollAnimation.cancel()
                     runCatching {
@@ -339,6 +342,13 @@ class UnderstandingService(private val project: Project) : Disposable {
                             previous = { sourceNavigation.previous(record.id, validNode) },
                             next = { sourceNavigation.next(record.id, validNode) },
                             cancelChoices = { sourceNavigation.cancelChoices(record.id, validNode) },
+                            evidenceChanged = {
+                                if (activeRecordId == record.id && activeNodeId == validNode) {
+                                    sourceHints.clear()
+                                    sourceLocationMessage = "原片段已变化"
+                                    notifyChanged()
+                                }
+                            },
                         )
                         val located = sourceHints.show(anchor, node.label, navigation)
                         if (navigateSource && nodeId != null && located?.offset != null) {
@@ -348,19 +358,14 @@ class UnderstandingService(private val project: Project) : Disposable {
                         located
                     }
                         .onSuccess { located ->
-                            sourceLocationMessage = when (located?.location) {
-                                LocationStatus.EXACT, LocationStatus.RELOCATED -> null
-                                LocationStatus.AMBIGUOUS -> "源码定位失败：证据文本有多处匹配"
-                                LocationStatus.UNRESOLVED -> "源码定位失败：当前文件中找不到对应证据"
-                                null -> "源码定位失败：当前文件无法读取"
-                            }
+                            sourceLocationMessage = sourceEvidenceMessage(located)
                         }
                         .onFailure { failure ->
                             log.warn("Unable to navigate to source for ${record.id}/$validNode", failure)
                             sourceLocationMessage = "源码定位失败：${failure.message ?: "未知错误"}"
                         }
                     if (sourceLocationMessage != null) notifyChanged()
-                }
+                }, ModalityState.nonModal())
             }
         } else {
             SwingUtilities.invokeLater {
@@ -436,7 +441,7 @@ class UnderstandingService(private val project: Project) : Disposable {
         notifyChanged()
     }
 
-    /** Copy a fixed source token for a node, without creating an empty question. */
+    /** 复制节点的固定来源 token，不创建空问题。 */
     fun copyNodeContext(record: UnderstandingRecord, nodeId: String) {
         val node = record.graph.nodes.firstOrNull { it.id == nodeId }
             ?: throw IllegalArgumentException("节点不属于理解记录")

@@ -8,6 +8,43 @@ import kotlin.test.assertNull
 
 class SourceNavigatorTest {
     @Test
+    fun `missing block returns unique function with changed evidence without changing old anchor`() {
+        val content = "fun submit() { checkPermission(); save() }"
+        val anchor = SourceAnchor("src/A.kt", "submit", "if (valid) save()", "old")
+        val located = matchAnchorText(anchor, content, { error("旧文本不存在，不应按偏移查符号") }) {
+            assertEquals("submit", it)
+            listOf(0)
+        }
+        assertEquals(LocationStatus.RELOCATED, located.location)
+        assertEquals(EvidenceStatus.CHANGED, located.evidence)
+        assertEquals(0, located.offset)
+        assertEquals("if (valid) save()", anchor.text)
+    }
+
+    @Test
+    fun `missing symbol or multiple overloads never pick a function`() {
+        val content = "fun submit() {}\nfun submit(value: Int) {}"
+        val anchor = SourceAnchor("src/A.kt", "submit", "old", "old")
+        val ambiguous = matchAnchorText(anchor, content, { null }) { listOf(0, 16) }
+        assertEquals(LocationStatus.AMBIGUOUS, ambiguous.location)
+        assertNull(ambiguous.offset)
+        val unresolved = matchAnchorText(anchor.copy(symbol = null), content, { null }) { error("没有符号不能回退") }
+        assertEquals(LocationStatus.UNRESOLVED, unresolved.location)
+        assertNull(unresolved.offset)
+    }
+
+    @Test
+    fun `wrong symbol and repeated text cannot fall back to function even with valid hint`() {
+        val content = "fun submit() { save() }"
+        val anchor = SourceAnchor("src/A.kt", "submit", "save()", sha256(content), 1)
+        val wrong = matchAnchorText(anchor, content, { "other" }) { error("文本仍存在不能回退") }
+        assertEquals(LocationStatus.UNRESOLVED, wrong.location)
+        val repeated = content + "\n" + content
+        val ambiguous = matchAnchorText(anchor.copy(version = "old"), repeated, { "submit" }) { error("文本歧义不能回退") }
+        assertEquals(LocationStatus.AMBIGUOUS, ambiguous.location)
+    }
+
+    @Test
     fun `unchanged source cannot distinguish repeated text on the same hinted line`() {
         for (separator in listOf("\n", "\r\n")) {
             val content = "fun consume() {$separator    consume(item, item)$separator}"

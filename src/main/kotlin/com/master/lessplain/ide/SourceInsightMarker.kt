@@ -14,7 +14,7 @@ import com.master.lessplain.model.SourceAnchor
 import java.nio.file.Path
 import javax.swing.SwingUtilities
 
-/** Owns only the inlays and highlighters created for the active Understanding node. */
+/** 只管理为当前理解节点创建的 inline 和高亮。 */
 internal class SourceInsightMarker(private val project: Project, parent: Disposable) : Disposable {
     private data class Target(
         val document: Document,
@@ -44,12 +44,13 @@ internal class SourceInsightMarker(private val project: Project, parent: Disposa
         }, parent)
     }
 
-    /** Resolves the evidence without opening a source editor. */
+    /** 不打开源码编辑器即可定位证据。 */
     fun show(anchor: SourceAnchor?, label: String, navigation: SourceInlayNavigation): LocatedSource? {
         check(SwingUtilities.isEventDispatchThread())
         clear()
         if (anchor == null || disposed) return null
         val located = locateSource(project, anchor)
+        if (located.evidence == EvidenceStatus.CHANGED) return located
         val start = located.offset ?: return located
         val root = Path.of(project.basePath ?: return located).toAbsolutePath().normalize()
         val path = root.resolve(anchor.path).normalize()
@@ -98,4 +99,5 @@ internal data class SourceInlayNavigation(
     val previous: () -> Unit,
     val next: () -> Unit,
     val cancelChoices: () -> Unit = {},
+    val evidenceChanged: () -> Unit = {},
 )

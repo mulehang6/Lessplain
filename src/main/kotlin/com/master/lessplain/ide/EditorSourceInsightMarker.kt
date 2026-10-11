@@ -16,7 +16,7 @@ import java.awt.event.MouseEvent
 import javax.swing.SwingUtilities
 import javax.swing.Timer
 
-/** Owns the editor listeners and reveal timer for one source marker. */
+/** 管理单个源码提示的编辑器监听器和渐显计时器。 */
 internal class EditorSourceInsightMarker(
     private val editor: Editor,
     start: Int,
@@ -25,6 +25,7 @@ internal class EditorSourceInsightMarker(
     private val navigation: SourceInlayNavigation,
 ) : Disposable {
     private val renderer = InsightInlayRenderer(label, start, end, navigation.canPrevious, navigation.canNext)
+    private val originalText = editor.document.charsSequence.subSequence(start, end).toString()
     private val lineStart = editor.document.getLineStartOffset(editor.document.getLineNumber(start))
     private val inlay = editor.inlayModel.addBlockElement(lineStart, false, true, -100, renderer)
     val isInstalled: Boolean get() = inlay != null
@@ -36,8 +37,17 @@ internal class EditorSourceInsightMarker(
     private val documentLifetime = Disposer.newDisposable("Understanding source choice listener")
     private val documentListener = object : DocumentListener {
         override fun documentChanged(event: DocumentEvent) {
-            if (SwingUtilities.isEventDispatchThread()) navigation.cancelChoices()
-            else SwingUtilities.invokeLater { if (!disposed) navigation.cancelChoices() }
+            val onEdt = SwingUtilities.isEventDispatchThread()
+            if (onEdt) navigation.cancelChoices()
+            SwingUtilities.invokeLater {
+                if (!disposed) {
+                    if (!onEdt) navigation.cancelChoices()
+                    val range = highlighter
+                    if (range == null || !range.isValid || sourceExcerptChanged(
+                            editor.document.charsSequence, range.startOffset, range.endOffset, originalText,
+                        )) navigation.evidenceChanged()
+                }
+            }
         }
     }
     private val highlighter = inlay?.let {
