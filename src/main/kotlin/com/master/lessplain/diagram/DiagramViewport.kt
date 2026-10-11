@@ -5,7 +5,7 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
-/** Camera positioning and viewport restoration for a graph canvas. */
+/** 图画布的相机定位和视口恢复。 */
 internal fun UnderstandingDiagram.fitContent() {
     if (width <= 0 || height <= 0) return
     cameraTimer.stop()
@@ -91,7 +91,7 @@ internal fun UnderstandingDiagram.requestFocusCluster(id: String) {
     applyPendingClusterFocus()
 }
 
-/** A requested group survives resize events until asynchronous layout is available. */
+/** 保留请求聚焦的分组，跨越尺寸变化直到异步布局就绪。 */
 internal fun UnderstandingDiagram.applyPendingClusterFocus() {
     if (!layoutReady || width <= 0 || height <= 0) return
     pendingFocusClusterId?.let { id ->
@@ -105,7 +105,7 @@ internal fun UnderstandingDiagram.moveCameraTo(x: Double, y: Double) {
         abs(cameraMotion.targetY - y) < 0.5) return
     cameraTimer.stop()
     cameraMotion.retarget(centerX, centerY, x, y, System.nanoTime())
-    if (!isShowing || !hasPainted || java.lang.Boolean.getBoolean("master.understanding.reduceMotion") ||
+    if (!isShowing || !hasPainted || java.lang.Boolean.getBoolean("lessplain.reduceMotion") ||
         (abs(centerX - x) < 0.5 && abs(centerY - y) < 0.5)) {
         centerX = x
         centerY = y

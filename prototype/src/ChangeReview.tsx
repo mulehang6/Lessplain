@@ -26,7 +26,7 @@ export default function ChangeReview({
   const candidates = source.lines.filter(
     (line) => line.trim() === node.anchor.text.trim(),
   );
-  // The changed-code scene provides a known candidate. A real resolver must supply this evidence.
+  // 代码变化场景提供一个已知候选，真实定位器必须提供对应证据。
   const candidate =
     node.id === "child" &&
     source.lines.some((line) => line.includes("buildBranch(point)"))

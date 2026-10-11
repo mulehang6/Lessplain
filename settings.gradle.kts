@@ -16,11 +16,11 @@ plugins {
 }
 
 dependencyResolutionManagement {
-    // Configure all projects' repositories
+    // 配置所有项目使用的依赖仓库。
     repositories {
         mavenCentral()
 
-        // IntelliJ Platform Gradle Plugin Repositories Extension - read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin-repositories-extension.html
+        // IntelliJ Platform Gradle 插件的仓库扩展：https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin-repositories-extension.html
         intellijPlatform {
             defaultRepositories()
         }

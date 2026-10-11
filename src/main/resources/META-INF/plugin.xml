@@ -1,31 +1,27 @@
-<!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
+<!-- 插件配置文件，更多说明：https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
 <idea-plugin>
-    <!-- Unique identifier of the plugin. It should be FQN. It cannot be changed between the plugin versions. -->
+    <!-- 插件唯一标识应使用全限定名，插件版本之间不能随意修改。 -->
     <id>com.master.lessplain.lessplain</id>
 
-    <!-- Public plugin name should be written in Title Case.
-     Guidelines: https://plugins.jetbrains.com/docs/marketplace/best-practices-for-listing.html#plugin-name -->
+    <!-- 公开插件名称使用标题式大小写，规范：https://plugins.jetbrains.com/docs/marketplace/best-practices-for-listing.html#plugin-name -->
     <name>Lessplain</name>
 
-    <!-- A displayed Vendor name or Organization ID displayed on the Plugins Page. -->
+    <!-- 在插件页面显示的厂商名称或组织 ID。 -->
     <vendor>Lessplain</vendor>
 
-    <!-- Description of the plugin displayed on the Plugin Page and IDE Plugin Manager.
-         Guidelines: https://plugins.jetbrains.com/docs/marketplace/best-practices-for-listing.html#plugin-description -->
+    <!-- 插件页面和 IDE 插件管理器中的描述，规范：https://plugins.jetbrains.com/docs/marketplace/best-practices-for-listing.html#plugin-description -->
     <description><![CDATA[
         Lessplain stores code comprehension graphs, source evidence, and follow-up answers inside IntelliJ IDEA projects.
         ]]></description>
 
-    <!-- Product and plugin compatibility requirements.
-         Read more: https://plugins.jetbrains.com/docs/intellij/plugin-compatibility.html -->
+    <!-- 产品和插件兼容要求，更多说明：https://plugins.jetbrains.com/docs/intellij/plugin-compatibility.html -->
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.modules.compose</depends>
     <depends>com.intellij.mcpServer</depends>
 
     <resource-bundle>messages.MyMessageBundle</resource-bundle>
 
-    <!-- Extensions defined by the plugin.
-         Read more: https://plugins.jetbrains.com/docs/intellij/plugin-extension-points.html -->
+    <!-- 插件定义的扩展，更多说明：https://plugins.jetbrains.com/docs/intellij/plugin-extension-points.html -->
     <extensions defaultExtensionNs="com.intellij">
         <projectService serviceImplementation="com.master.lessplain.ide.UnderstandingService"/>
         <fileEditorProvider implementation="com.master.lessplain.diagram.UnderstandingFileEditorProvider"/>

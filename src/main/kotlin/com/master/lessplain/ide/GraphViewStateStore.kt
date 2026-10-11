@@ -12,13 +12,13 @@ import java.util.Base64
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 
-/** Settings belong to a particular root graph or a particular node's question canvas. */
+/** 设置属于特定根图或特定节点的追问画布。 */
 internal data class GraphLayerKey(val recordId: String, val questionNodeId: String? = null) {
     val canvasId: String get() = questionNodeId?.let { "questions:$recordId:$it" } ?: recordId
 
     internal fun propertyName(): String {
         val identity = Gson().toJson(listOf(recordId, questionNodeId))
-        return "master.understanding.graph." + Base64.getUrlEncoder().withoutPadding()
+        return "lessplain.graph." + Base64.getUrlEncoder().withoutPadding()
             .encodeToString(identity.toByteArray(StandardCharsets.UTF_8))
     }
 }
@@ -53,7 +53,7 @@ internal enum class GraphLayoutPreference { AUTO, VERTICAL, HORIZONTAL }
 
 internal data class GraphNodePosition(val x: Double, val y: Double)
 
-/** Project-local persistence, shared by the tool window and editor tab. */
+/** 项目内持久化，由工具窗口和编辑器标签页共用。 */
 internal class GraphViewStateStore(
     private val read: (String) -> String?,
     private val write: (String, String) -> Unit,

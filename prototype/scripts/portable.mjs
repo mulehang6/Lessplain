@@ -1,6 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 
-// Also emit a self-contained preview that can be opened without a development server.
+// 同时生成可独立打开的预览，不依赖开发服务器。
 let html = await readFile(
   new URL("../dist/index.html", import.meta.url),
   "utf8",

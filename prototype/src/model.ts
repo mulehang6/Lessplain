@@ -49,7 +49,7 @@ export type Frame = {
 export type Visit = { nodeId: string; cursor: number; file: string };
 export type SourceMode = "original" | "moved" | "missing" | "ambiguous";
 
-/** Text matching simulates the future PSI resolver; ambiguity must never silently pick a line. */
+/** 文本匹配模拟未来的 PSI 定位器；存在歧义时不能默认选择某一行。 */
 export function resolveAnchor(anchor: Anchor, source: Source) {
   const matches =
     source.id === anchor.file && source.symbol === anchor.symbol
@@ -73,7 +73,7 @@ export function resolveAnchor(anchor: Anchor, source: Source) {
   } as const;
 }
 
-/** Values belong to a hit, not a node. Only observations up to the current cursor are visible. */
+/** 值属于一次命中，不属于节点；仅显示当前游标及之前的观测。 */
 export function replay(trace: Trace | undefined, cursor: number) {
   const hits = trace?.hits.slice(0, Math.max(0, cursor + 1)) ?? [];
   const latest = new Map<string, Hit>();
@@ -106,7 +106,7 @@ export function validateTrace(frame: Frame, trace: Trace) {
   });
 }
 
-/** Layout stays on the viewer side. Visited nodes make cycles safe and render as feedback edges. */
+/** 布局由查看端负责；通过已访问节点处理循环，并绘制反馈边。 */
 export function layout(nodes: GraphNode[], edges: Edge[]) {
   const positions = new Map<string, { x: number; y: number }>();
   const depth = new Map<string, number>();

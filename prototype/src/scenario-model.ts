@@ -6,7 +6,7 @@ import {
   type Frame,
 } from "./model";
 
-/** A prepared Agent response for this exact scene; never relabel old runtime evidence. */
+/** 仅用于当前场景的预设 Agent 回答，不能把旧运行证据改称新证据。 */
 export function updatedBranchScene(): Frame {
   const frame = structuredClone(initialFrames[0]);
   const source = currentSources("missing")[0];
