@@ -62,6 +62,7 @@ internal fun parseGraphSubmission(json: String, schemaVersion: Int): GraphSubmis
                 coverage = item.optionalString("coverage"),
                 evidenceIds = item.optionalStrings("evidenceIds"),
                 inferred = item.optionalBoolean("inferred"),
+                summary = item.optionalStrictString("summary")?.takeIf(String::isNotBlank),
             )
         },
         evidence = root.optionalArray("evidence").map { it.asObject("evidence").toEvidence() },

@@ -42,6 +42,7 @@ class UnderstandingSchemaTest {
             assertEquals(UNDERSTANDING_SCHEMA_VERSION, copied["protocolVersion"].asString)
             assertEquals(true, payload["capabilities"].asJsonObject["anchorValidation"].asBoolean)
             assertEquals(true, payload["capabilities"].asJsonObject["inferredEdges"].asBoolean)
+            assertEquals(true, payload["capabilities"].asJsonObject["edgeSummaries"].asBoolean)
             assertEquals(String::class.java, UnderstandingToolset::class.java.declaredMethods
                 .single { it.name == "presentUnderstanding" }.parameterTypes.first())
         }
@@ -56,6 +57,26 @@ class UnderstandingSchemaTest {
         assertFailsWith<UnderstandingInputException> { parsed.copy(edges = parsed.edges.map { it.copy(coverage = null) }).validate() }
         assertFailsWith<UnderstandingInputException> { parseGraphSubmission(json.replace("\"inferred\":true", "\"inferred\":\"true\""), 4) }
         assertEquals(null, parseGraphSubmission(json.replace("\"inferred\":true,", ""), 4).graph.edges.single().inferred)
+    }
+
+    @Test
+    fun `edge summary is optional strictly typed and persists independently of complete coverage`() {
+        val json = """{"nodes":[{"id":"a","label":"A"},{"id":"b","label":"B"}],"edges":[{"id":"ab","from":"a","to":"b","relation":"call","summary":"传递结果","coverage":"完整依据"}]}"""
+        val parsed = parseGraphSubmission(json, 4).graph
+        assertEquals("传递结果", parsed.edges.single().summary)
+        for (value in listOf("null", "\"\"", "\"  \"")) {
+            assertEquals(null, parseGraphSubmission(json.replace("\"传递结果\"", value), 4).graph.edges.single().summary)
+        }
+        for (value in listOf("true", "42", "[]", "{}")) {
+            assertFailsWith<UnderstandingInputException> {
+                parseGraphSubmission(json.replace("\"传递结果\"", value), 4)
+            }
+        }
+        UnderstandingRepository(root).use { repository ->
+            val record = UnderstandingCore(repository).present(4, "summary", "关系", parsed, "root")
+            assertEquals(parsed, repository.getRecord(record.id).graph)
+            assertEquals("完整依据", repository.getRecord(record.id).graph.edges.single().coverage)
+        }
     }
 
     @Test

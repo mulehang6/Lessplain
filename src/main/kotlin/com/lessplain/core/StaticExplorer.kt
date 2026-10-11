@@ -1,5 +1,6 @@
 package com.lessplain.core
 
+import com.lessplain.core.IncomingRouteResolver
 import com.lessplain.model.GraphEdge
 import com.lessplain.model.RouteNavigationState
 import com.lessplain.model.TRAVERSABLE_RELATIONS

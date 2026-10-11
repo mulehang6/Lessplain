@@ -19,13 +19,8 @@ fun UnderstandingRepository.pendingNoteBatch(scopeRecordId: String): PendingNote
         val items = mutableListOf<PendingNoteItem>()
         val records = linkedMapOf<String, UnderstandingRecord>()
         db.prepareStatement(
-            "WITH RECURSIVE scope(id) AS (SELECT id FROM records WHERE id=? UNION " +
-                "SELECT r.id FROM records r JOIN scope s ON r.parent_id=s.id) " +
-                "SELECT q.data, c.data, v.data FROM scope s JOIN contexts c " +
-                "ON json_extract(c.data, '$.recordId')=s.id JOIN questions q ON q.context_token=c.token " +
-                "JOIN records r ON r.id=s.id JOIN record_versions v " +
-                "ON v.record_id=r.id AND v.revision=r.current_revision " +
-                "WHERE q.status='pending' AND json_extract(c.data, '$.nodeId') IS NOT NULL ORDER BY q.rowid",
+            PENDING_NOTE_SCOPE_SQL + "SELECT q.data, c.data, v.data " +
+                PENDING_NOTE_FROM_SQL + "ORDER BY q.rowid",
         ).use { statement ->
             statement.setString(1, scopeRecordId)
             statement.executeQuery().use { rows ->

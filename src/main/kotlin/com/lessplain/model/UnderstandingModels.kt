@@ -33,6 +33,8 @@ data class GraphEdge(
     val evidenceIds: List<String> = emptyList(),
     /** true 表示关系由证据推断；缺省保留旧图的呈现方式。 */
     val inferred: Boolean? = null,
+    /** 面向悬浮阅读的一句关系说明；完整源码依据仍放在 coverage。 */
+    val summary: String? = null,
 )
 
 data class Evidence(
