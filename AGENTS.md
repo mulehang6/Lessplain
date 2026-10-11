@@ -2,7 +2,7 @@
 
 ## 项目结构与模块
 
-插件源码位于 `src/main/kotlin/com/master/lessplain/`，按 `core`、`diagram`、`ide`、`mcp`、`model`、`storage` 和 `ui` 分模块。平台描述、图标和消息资源在 `src/main/resources/`；测试位于 `src/test/kotlin/`，并按主代码包路径组织。`docs/` 保存设计文档，`skills/` 保存 Agent 工作流。`prototype/` 是独立的交互原型，不属于插件源码。
+插件源码位于 `src/main/kotlin/com/lessplain/`，按 `core`、`diagram`、`ide`、`mcp`、`model`、`storage` 和 `ui` 分模块。平台描述、图标和消息资源在 `src/main/resources/`；测试位于 `src/test/kotlin/`，并按主代码包路径组织。`docs/` 保存设计文档，`skills/` 保存 Agent 工作流。`prototype/` 是独立的交互原型，不属于插件源码。
 
 ## 文档职责
 

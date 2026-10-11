@@ -23,14 +23,14 @@
 
     <!-- 插件定义的扩展，更多说明：https://plugins.jetbrains.com/docs/intellij/plugin-extension-points.html -->
     <extensions defaultExtensionNs="com.intellij">
-        <projectService serviceImplementation="com.master.lessplain.ide.UnderstandingService"/>
-        <fileEditorProvider implementation="com.master.lessplain.diagram.UnderstandingFileEditorProvider"/>
-        <editorTabTitleProvider implementation="com.master.lessplain.diagram.UnderstandingTabTitleProvider"/>
-        <toolWindow id="Understanding" factoryClass="com.master.lessplain.MyToolWindowFactory"
+        <projectService serviceImplementation="com.lessplain.ide.UnderstandingService"/>
+        <fileEditorProvider implementation="com.lessplain.diagram.UnderstandingFileEditorProvider"/>
+        <editorTabTitleProvider implementation="com.lessplain.diagram.UnderstandingTabTitleProvider"/>
+        <toolWindow id="Understanding" factoryClass="com.lessplain.MyToolWindowFactory"
                     icon="AllIcons.Toolwindows.ToolWindowPalette"/>
         <notificationGroup id="code.comprehension.results" displayType="BALLOON"/>
     </extensions>
     <extensions defaultExtensionNs="com.intellij.mcpServer">
-        <mcpToolset implementation="com.master.lessplain.mcp.UnderstandingToolset"/>
+        <mcpToolset implementation="com.lessplain.mcp.UnderstandingToolset"/>
     </extensions>
 </idea-plugin>

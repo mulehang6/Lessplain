@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Lessplain IDE" type="GradleRunConfiguration" factoryName="Gradle">
-    <log_file alias="idea.log" path="$PROJECT_DIR$/Lessplain/.intellijPlatform/sandbox/*/*/log_runIdeLatest/idea.log" show_all="true" />
+    <log_file alias="idea.log" path="$PROJECT_DIR$/Lessplain/.intellijPlatform/sandbox/Lessplain/*/log_runIdeLatest/idea.log" show_all="true" />
     <ExternalSystemSettings>
       <option name="executionName" />
       <option name="externalProjectPath" value="$PROJECT_DIR$/Lessplain" />
