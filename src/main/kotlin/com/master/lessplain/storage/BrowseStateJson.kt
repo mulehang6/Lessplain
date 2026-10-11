@@ -5,7 +5,7 @@ import com.google.gson.JsonElement
 import com.master.lessplain.model.BrowseState
 import com.master.lessplain.model.RouteNavigationState
 
-/** Reads optional route fields independently so a corrupt route cannot discard a valid selected node. */
+/** 分别读取可选路线字段，避免损坏路线丢弃有效的选中节点。 */
 internal fun decodeBrowseState(source: JsonElement?, recordId: String, gson: Gson): BrowseState? {
     if (source == null || source.isJsonNull) return null
     val json = runCatching { source.asJsonObject.deepCopy() }.getOrNull() ?: return null

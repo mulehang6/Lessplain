@@ -22,10 +22,10 @@ class DeleteRecordSessionTest {
         session.show("first", "第一张")
         assertEquals("first", handles[0].state.recordId)
         assertEquals("第一张", handles[0].state.title)
-        handles[0].cancel() // Esc/cancel button use the same cancellation policy.
+        handles[0].cancel() // Esc 和取消按钮使用相同取消规则。
         assertEquals(1, handles[0].releases)
         session.show("second", "第二张")
-        handles[1].close() // Window close reports disposal through the same ownership policy.
+        handles[1].close() // 窗口关闭按同一生命周期规则报告释放。
         session.show("third", "第三张")
         session.show("fourth", "第四张")
         assertEquals(1, handles[2].releases)

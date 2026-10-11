@@ -25,7 +25,7 @@ internal fun UnderstandingDiagram.bindGraphState(store: GraphViewStateStore, key
     bindStateSubscription(store.listen(key, ::applyGraphState))
 }
 
-/** Initial binding and live updates apply the same direction-specific state. */
+/** 初次绑定和实时更新应用相同的方向独立状态。 */
 private fun UnderstandingDiagram.applyGraphState(state: GraphViewState) {
     navigationPinned = state.navigationPinned
     autoFollowNode = state.autoFollowNode

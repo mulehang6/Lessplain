@@ -1,6 +1,6 @@
 package com.master.lessplain.ide
 
-/** Transient canvas owners for source-inlay stepping; never serialized with graph preferences. */
+/** 用于源码 inline 逐步阅读的临时画布对象，不随图偏好序列化。 */
 internal class CanvasNavigationSessions {
     private val registrations = mutableListOf<Registration>()
     private var active: Registration? = null
@@ -8,7 +8,7 @@ internal class CanvasNavigationSessions {
 
     private data class Waiting(val recordId: String, val nodeId: String, val ready: () -> Unit)
 
-    /** Compose can attach the visible canvas after the tool-window show callback has completed. */
+    /** 工具窗口显示回调结束后，Compose 仍可能稍后才绑定可见画布。 */
     fun whenAvailable(recordId: String, nodeId: String, ready: () -> Unit): AutoCloseable {
         val request = Waiting(recordId, nodeId, ready)
         waiting += request

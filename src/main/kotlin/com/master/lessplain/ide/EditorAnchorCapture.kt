@@ -9,7 +9,7 @@ import com.master.lessplain.model.SourceAnchor
 import com.master.lessplain.storage.sha256
 import java.nio.file.Path
 
-/** Captures the live editor document, including unsaved edits. */
+/** 捕获当前编辑器文档，包含未保存的编辑。 */
 internal fun captureEditorAnchor(project: Project): SourceAnchor? = ApplicationManager.getApplication().runReadAction<SourceAnchor?> {
     val editor = FileEditorManager.getInstance(project).selectedTextEditor ?: return@runReadAction null
     val file = FileDocumentManager.getInstance().getFile(editor.document) ?: return@runReadAction null

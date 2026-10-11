@@ -6,7 +6,7 @@ import java.awt.Color
 import javax.swing.UIManager
 import kotlin.math.roundToInt
 
-/** Resolves graph and navigation colors from the same Swing theme used by Jewel's IDE bridge. */
+/** 从 Jewel 的 IDE 桥所用的同一 Swing 主题中读取图与导航颜色。 */
 internal object UnderstandingUiStyle {
     val NODE_ARC: Int get() = JBUI.scale(UnderstandingUiMetrics.INNER_RADIUS * 2)
     val GROUP_ARC: Int get() = JBUI.scale(UnderstandingUiMetrics.OUTER_RADIUS * 2)
@@ -19,7 +19,7 @@ internal object UnderstandingUiStyle {
     val foreground: Color get() = color(0x1E1F22, 0xDFE1E5, "Label.foreground")
     val muted: Color get() = color(0x6C707E, 0x9DA0A8, "Label.infoForeground", "Label.disabledForeground")
     val border: Color get() = color(0xD3D5DB, 0x4E5157, "Component.borderColor", "Separator.foreground")
-    // The generic component focus border can match the surface in Dark and Islands themes.
+    // 通用组件焦点边框在 Dark 和 Islands 主题下可能与背景色相同。
     val accent: Color get() = listOf("ActionButton.focusedBorderColor", "Component.focusColor", "Link.activeForeground")
         .firstNotNullOfOrNull { key -> colorOr(key)?.takeIf { it.alpha == 255 } }
         ?: JBColor(Color(0x3574F0), Color(0x548AF7))

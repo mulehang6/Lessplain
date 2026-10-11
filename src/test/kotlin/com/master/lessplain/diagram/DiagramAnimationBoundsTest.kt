@@ -38,7 +38,7 @@ class DiagramAnimationBoundsTest {
                     diagram.layout = UnderstandingGraphLayout(emptyMap(), listOf(edge), edge.paintBounds)
                     diagram.zoom = scale
                     diagram.centerX = 80.0
-                    // The line is just outside the bottom; the upper arrow wing is visible.
+                    // 线位于底部边界外，箭头上翼仍然可见。
                     diagram.centerY = -51.0 / scale
                     for (upstreamOnly in listOf(false, true)) {
                         diagram.showUnderstandingPath(if (upstreamOnly) emptyList() else listOf("flow"), "b", false)

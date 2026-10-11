@@ -6,7 +6,7 @@ import javax.swing.JPopupMenu
 
 internal data class DiagramTitleState(var hovered: String? = null, var pressed: String? = null, var selected: String? = null)
 
-/** Canvas-owned transient overlays and feedback, separate from graph layout and browse state. */
+/** 画布管理临时覆盖层和反馈，与图布局及浏览状态分开。 */
 internal class DiagramOverlayInteraction(private val diagram: UnderstandingDiagram) : AutoCloseable {
     val titles = DiagramTitleState()
     val clusterTargets = mutableMapOf<String, String>()

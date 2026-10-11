@@ -3,7 +3,7 @@ package com.master.lessplain.diagram
 import java.awt.Point
 import java.awt.geom.Point2D
 
-/** Graph-coordinate hit targets shared by pointer input and tooltips. */
+/** 指针输入和提示共用图坐标下的命中区域。 */
 internal fun UnderstandingDiagram.screenToWorld(point: Point): Point2D.Double = Point2D.Double(
     centerX + (point.x - width / 2.0) / zoom,
     centerY + (point.y - height / 2.0) / zoom,
@@ -82,7 +82,7 @@ internal fun UnderstandingDiagram.noteActionAt(point: Point): String? {
     }?.node?.id
 }
 
-/** Place note previews below the painted badge, leaving it available for click-to-pin. */
+/** 注释预览放在气泡下方，使气泡仍可点击固定预览。 */
 internal fun UnderstandingDiagram.notePopupAnchor(point: Point): Point {
     val node = noteActionAt(point)?.let(layout.nodes::get) ?: return Point(point)
     val bounds = DiagramNodePainter.noteBounds(node.bounds)

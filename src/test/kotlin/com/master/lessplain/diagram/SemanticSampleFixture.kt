@@ -2,7 +2,7 @@ package com.master.lessplain.diagram
 
 import com.master.lessplain.model.UnderstandingGraph
 
-/** Source-reviewed business boundaries in the existing samples; visual forks come from graph successors. */
+/** 已有样例中经源码核实的业务边界，可视分叉由图后继决定。 */
 internal fun semanticSampleFixture(name: String): UnderstandingGraph {
     val (base, _) = groupedFlowFixture(name)
     val success = if (name == "article-publish-clusters")

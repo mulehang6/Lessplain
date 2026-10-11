@@ -6,7 +6,7 @@ import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
 
-/** The arrow geometry is shared by painting, clipping and local routing reservations. */
+/** 绘制、裁剪和局部布线预留共用箭头几何。 */
 internal fun edgeArrowPath(edge: PlacedEdge): Path2D.Double {
     val angle = atan2(edge.arrowDy, edge.arrowDx)
     return Path2D.Double().apply {
@@ -17,7 +17,7 @@ internal fun edgeArrowPath(edge: PlacedEdge): Path2D.Double {
     }
 }
 
-/** Legacy paths without ELK label bounds use the same measured font as the painter. */
+/** 没有 ELK 标签边界的旧路径使用与绘制器相同的字体测量。 */
 internal fun edgeLabelBounds(edge: PlacedEdge): Rectangle2D.Double? {
     val label = edge.edge.condition?.takeIf(String::isNotBlank) ?: return null
     edge.labelBounds?.let { return it }
@@ -25,7 +25,7 @@ internal fun edgeLabelBounds(edge: PlacedEdge): Rectangle2D.Double? {
     return Rectangle2D.Double(edge.labelX - width / 2, edge.labelY - height / 2, width, height)
 }
 
-/** Non-degenerate bounds include the largest animated stroke and an antialiasing margin. */
+/** 非退化边界包含最宽的动画描边及抗锯齿余量。 */
 internal fun edgePaintBounds(edge: PlacedEdge): Rectangle2D.Double {
     val bounds = Rectangle2D.Double().apply { setRect(edge.path.bounds2D) }
     bounds.add(edge.arrowPath.bounds2D)

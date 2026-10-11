@@ -5,7 +5,7 @@ import java.awt.geom.Rectangle2D
 import java.util.PriorityQueue
 import kotlin.math.abs
 
-/** Visibility-grid fallback for a fixed pair of ports when one-channel doglegs cannot clear groups. */
+/** 单通道折线无法绕开分组时，为固定端口对使用可见性网格回退。 */
 internal fun routeOrthogonalCorridor(
     start: Point2D.Double,
     end: Point2D.Double,

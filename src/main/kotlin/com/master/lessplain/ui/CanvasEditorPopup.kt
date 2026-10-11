@@ -15,7 +15,7 @@ import java.awt.Rectangle
 import java.awt.Toolkit
 import javax.swing.SwingUtilities
 
-/** Native editor popup permits temporary IME-window activation and owns all input listeners. */
+/** 原生编辑弹层允许输入法窗口临时激活，并管理所有输入监听器。 */
 internal class CanvasEditorPopup(
     owner: Component,
     point: Point,
@@ -115,7 +115,7 @@ internal class CanvasEditorPopup(
     }
 }
 
-/** Keeps the current top-left point while resizing, including on monitors left of the primary display. */
+/** 调整大小时保留当前左上位置，也适用于位于主屏左侧的显示器。 */
 internal fun clampPopupBounds(location: Point, size: Dimension, screen: Rectangle): Rectangle {
     val width = size.width.coerceAtLeast(1).coerceAtMost(screen.width.coerceAtLeast(1))
     val height = size.height.coerceAtLeast(1).coerceAtMost(screen.height.coerceAtLeast(1))
@@ -126,7 +126,7 @@ internal fun clampPopupBounds(location: Point, size: Dimension, screen: Rectangl
     return Rectangle(x, y, width, height)
 }
 
-/** Public AWT monitor bounds shared by native popup hosts, excluding taskbars. */
+/** 原生弹层共用公开 AWT 显示器边界，并排除任务栏。 */
 internal fun usableScreenBoundsAt(point: Point): Rectangle {
     val environment = GraphicsEnvironment.getLocalGraphicsEnvironment()
     val configuration = environment.screenDevices

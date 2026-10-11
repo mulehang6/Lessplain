@@ -31,7 +31,7 @@ internal fun sourceInlayControlBounds(left: Int, top: Int, height: Int, textWidt
     )
 }
 
-/** Measures and paints the source caption and its navigation controls. */
+/** 测量和绘制源码说明及其导航控件。 */
 internal class InsightInlayRenderer(
     private val label: String,
     private val start: Int,
@@ -136,7 +136,7 @@ internal class InsightInlayRenderer(
 
 }
 
-/** Wrap by measured editor glyph widths, retaining every character for expansion. */
+/** 按编辑器实际字形宽度折行，保留全部字符供展开查看。 */
 internal fun wrapSourceInlayLabel(value: String, width: Int, measure: (String) -> Int): List<String> {
     val result = mutableListOf<String>()
     value.split('\n').forEach { paragraph ->

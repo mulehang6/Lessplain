@@ -9,7 +9,7 @@ import java.awt.geom.Path2D
 import java.awt.geom.Rectangle2D
 import kotlin.math.ceil
 
-/** Semantic colors and the graph-fork glyph share no navigation or hit-test state. */
+/** 语义颜色和分叉图标不持有导航或命中状态。 */
 internal object DiagramNodeSemantics {
     val successFill get() = UnderstandingUiStyle.successSurface
     val successBorder get() = UnderstandingUiStyle.success
@@ -39,7 +39,7 @@ internal object DiagramNodeSemantics {
         return Rectangle2D.Double(bounds.x + 12, bounds.y + 14 + (ascent + descent - size) / 2, size, size)
     }
 
-    /** Fixed left-to-right fork; drawing dimensions follow the label font before the camera transform. */
+    /** 分叉方向固定为从左到右，绘制尺寸在相机变换前跟随标签字体。 */
     fun paintBranch(g: Graphics2D, bounds: Rectangle2D) {
         val icon = g.create() as Graphics2D
         try {

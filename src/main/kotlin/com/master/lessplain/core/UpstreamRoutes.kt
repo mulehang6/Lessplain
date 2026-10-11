@@ -4,7 +4,7 @@ import com.master.lessplain.model.GraphEdge
 import com.master.lessplain.model.TRAVERSABLE_RELATIONS
 import com.master.lessplain.model.UnderstandingGraph
 
-/** Computes entry-to-target highlights within the source record without enumerating routes. */
+/** 在来源记录内计算入口到目标的高亮范围，不枚举路线。 */
 class UpstreamRoutes(graph: UnderstandingGraph, scopes: Map<String, String> = emptyMap()) {
     private val nodeIds = graph.nodes.map { it.id }.filter { scopes.isEmpty() || it in scopes }.toSet()
     private val edges = graph.edges.filter {
@@ -18,7 +18,7 @@ class UpstreamRoutes(graph: UnderstandingGraph, scopes: Map<String, String> = em
 
     fun isEntry(nodeId: String): Boolean = nodeId in entryNodeIds
 
-    /** All eligible edges are highlighted once; no candidate count or pagination limit applies. */
+    /** 所有符合条件的边只高亮一次，不设置候选数量或分页限制。 */
     fun edgesTo(targetNodeId: String): Set<String> {
         if (targetNodeId !in nodeIds) return emptySet()
         val ancestors = ancestorsOf(targetNodeId)

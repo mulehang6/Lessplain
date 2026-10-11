@@ -5,14 +5,14 @@ import java.awt.Dimension
 import java.awt.Rectangle
 import java.awt.Point
 
-/** JBPopup reports its content origin; clamping requires the whole native window origin. */
+/** JBPopup 返回内容原点，限制位置时需使用整个原生窗口的原点。 */
 internal fun nativePopupLocation(popup: JBPopup): Point {
     val location = popup.locationOnScreen
     val insets = popup.content.insets
     return Point(location.x - insets.left, location.y - insets.top)
 }
 
-/** Public size/location setters use content coordinates; callers constrain the native window. */
+/** 公开尺寸和位置设置使用内容坐标，调用方负责约束原生窗口。 */
 internal fun setNativePopupBounds(popup: JBPopup, bounds: Rectangle) {
     val insets = popup.content.insets
     popup.size = Dimension(

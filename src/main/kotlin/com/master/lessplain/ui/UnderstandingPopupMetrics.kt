@@ -6,7 +6,7 @@ import java.awt.Dimension
 import java.awt.Font
 import javax.swing.JLabel
 
-/** Measures record popup rows in native pixels using the current IDE UI font. */
+/** 使用当前 IDE 界面字体，以原生像素测量记录弹层行。 */
 internal fun recentRecordPopupSize(titles: List<String>, font: Font = JBFont.regular()): Dimension {
     val metrics = JLabel().getFontMetrics(font)
     val rows = titles.size.coerceIn(1, UnderstandingUiMetrics.POPUP_VISIBLE_ROWS)

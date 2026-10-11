@@ -25,7 +25,7 @@ import com.master.lessplain.model.UnderstandingRecord
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.component.Text
 
-/** The same compact record treatment is used on welcome and history pages. */
+/** 欢迎页和历史页使用同样紧凑的记录外观。 */
 @Composable
 internal fun RecordCandidateRow(
     record: UnderstandingRecord,

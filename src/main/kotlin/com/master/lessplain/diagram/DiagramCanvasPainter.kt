@@ -24,7 +24,7 @@ internal data class DiagramPaintState(
     val pendingNoteCounts: Map<String, Int>,
     val startIds: Set<String>,
     val endIds: Set<String>,
-    /** Upstream and selected path highlights share a single rendering set. */
+    /** 上游高亮与已选路径高亮共用一个渲染集合。 */
     val routeEdgeIds: Set<String>,
     val choiceTargets: Set<String>,
     val choicePhase: Float,
@@ -40,7 +40,7 @@ internal data class DiagramPaintState(
     val focusedChoiceNodeId: String? = null,
 )
 
-/** Paints the canvas from a snapshot; input and navigation remain in the diagram view. */
+/** 按快照绘制画布，输入和导航仍由图视图处理。 */
 internal object DiagramCanvasPainter {
     private val background get() = UnderstandingUiStyle.canvas
     private val clusterFill get() = UnderstandingUiStyle.group

@@ -8,7 +8,7 @@ import java.awt.geom.Point2D
 import java.awt.geom.Rectangle2D
 import kotlin.math.max
 
-/** Local group coordinates reserve titles, node actions and examples before group arrangement. */
+/** 排列分组前，组内坐标为标题、节点动作和示例预留空间。 */
 internal data class DiagramClusterContent(
     val cluster: PlacedCluster,
     val nodes: Map<String, PlacedNode>,
@@ -48,7 +48,7 @@ internal fun layoutClusterContent(graph: UnderstandingGraph, group: DiagramClust
         layout.edges.map { it.translated(offsetX, offsetY) })
 }
 
-/** Extend ELK's inter-group corridors to the actual node ports; repair resolves local obstructions. */
+/** 将 ELK 跨组通道延伸到实际节点端口，再修复局部遮挡。 */
 internal fun connectClusterContent(edge: GraphEdge, elk: ElkEdge, nodes: Map<String, PlacedNode>,
     direction: LayoutDirection, ports: DiagramEdgePorts? = null): PlacedEdge {
     val corridor = ElkGraphLayoutAdapter.placedEdge(edge, elk)

@@ -4,7 +4,7 @@ import com.master.lessplain.model.GraphEdge
 import com.master.lessplain.model.TRAVERSABLE_RELATIONS
 import com.master.lessplain.model.UnderstandingGraph
 
-/** Indexed reverse traversal. Reachability filters choices without enumerating complete routes. */
+/** 通过索引反向遍历，按可达性筛选选择项，不枚举完整路线。 */
 internal class IncomingRouteResolver(graph: UnderstandingGraph, scopes: Map<String, String>) {
     private val nodes = graph.nodes.associateBy { it.id }
     val edges = graph.edges.filter { edge ->
@@ -55,7 +55,7 @@ internal class IncomingRouteResolver(graph: UnderstandingGraph, scopes: Map<Stri
         if (isEntry(nodeId)) return emptyList()
         val reachable = reachable(entries, setOf(nodeId))
         val candidates = incoming(nodeId).filter { it.from in reachable }
-        // A deliberate backward step may explore an isolated loop; auto-fill never adds a lap.
+        // 用户主动后退可以探索孤立循环，自动补全不会增加一轮循环。
         return candidates.ifEmpty { incoming(nodeId) }
     }
 
@@ -72,7 +72,7 @@ internal class IncomingRouteResolver(graph: UnderstandingGraph, scopes: Map<Stri
         return seen
     }
 
-    /** A transient completion transaction; its forced choices become memory only on success. */
+    /** 临时的路径补全事务，只有成功时才记住其中的强制选择。 */
     inner class Fill internal constructor(
         val target: String,
         private val origins: Set<String>,

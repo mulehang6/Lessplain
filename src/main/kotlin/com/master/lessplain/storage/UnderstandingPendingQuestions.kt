@@ -3,7 +3,7 @@ package com.master.lessplain.storage
 import com.master.lessplain.model.UnderstandingQuestion
 import com.master.lessplain.model.requireInput
 
-/** Cancellation keeps referenced context snapshots and cannot remove an answered child graph. */
+/** 取消保留引用的上下文快照，不能删除已回答的子图。 */
 fun UnderstandingRepository.cancelPendingQuestion(questionId: String) = write { db ->
     db.prepareStatement("UPDATE questions SET status='cancelled' WHERE id=? AND status='pending'").use { statement ->
         statement.setString(1, questionId)
@@ -11,7 +11,7 @@ fun UnderstandingRepository.cancelPendingQuestion(questionId: String) = write { 
     }
 }
 
-/** Pending node notes reuse the existing question rows and context snapshots. */
+/** 待答节点注释复用已有问题行和上下文快照。 */
 fun UnderstandingRepository.pendingQuestionsForNode(recordId: String, nodeId: String): List<UnderstandingQuestion> =
     connect().use { db ->
         val result = mutableListOf<UnderstandingQuestion>()

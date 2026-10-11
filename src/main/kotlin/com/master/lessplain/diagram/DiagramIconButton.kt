@@ -10,7 +10,7 @@ import javax.swing.BorderFactory
 import javax.swing.Icon
 import javax.swing.JButton
 
-/** Keeps native Swing button input and accessibility while using the graph's theme-aware control style. */
+/** 保留原生 Swing 按钮输入和无障碍能力，外观跟随图表主题。 */
 internal class DiagramIconButton(icon: Icon, private val quiet: Boolean = false) : JButton(icon) {
     init {
         isOpaque = false

@@ -168,7 +168,7 @@ class DiagramEdgeRouteRepairTest {
             assertTrue(layout.nodes.getValue(edge.edge.to).bounds.intersects(
                 edge.arrowX - 0.5, edge.arrowY - 0.5, 1.0, 1.0))
         }
-        // Independent pairwise checks guard against regressions in the production conflict classifier itself.
+        // 独立的两两检查用于防止生产冲突分类器自身发生回归。
         layout.edges.forEachIndexed { index, edge ->
             layout.edges.drop(index + 1).forEach { other ->
                 if (edge.labelBounds != null && other.labelBounds != null) {

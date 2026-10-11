@@ -1,6 +1,6 @@
 package com.master.lessplain.ui
 
-/** The target is immutable even if history selection changes during confirmation. */
+/** 即使确认期间历史选择改变，操作目标也保持不变。 */
 internal class DeleteRecordState(val recordId: String, val title: String) {
     var busy = false
         private set

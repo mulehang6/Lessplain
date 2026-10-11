@@ -7,7 +7,7 @@ import kotlin.math.min
 
 internal data class DiagramCrossing(val firstEdgeId: String, val secondEdgeId: String, val point: Point2D.Double)
 
-/** A crossing is an interior intersection, never a shared endpoint or a logical branch. */
+/** 交叉仅指线段内部相交，不包含共用端点或逻辑分支。 */
 internal fun diagramCrossings(edges: List<PlacedEdge>): List<DiagramCrossing> = buildList {
     for (firstIndex in edges.indices) {
         val first = edges[firstIndex]

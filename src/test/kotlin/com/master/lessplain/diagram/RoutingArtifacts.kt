@@ -7,7 +7,7 @@ import java.nio.file.Path
 import java.util.Locale
 import kotlin.math.abs
 
-/** Vector copies retain original geometry for zooming beyond the raster overview's resolution. */
+/** 矢量副本保留原始几何，缩放可超出栅格概览的分辨率。 */
 internal object RoutingArtifacts {
     fun writeSvg(layout: UnderstandingGraphLayout, destination: Path) {
         val b = layout.bounds

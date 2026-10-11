@@ -9,7 +9,7 @@ import com.master.lessplain.diagram.openRecordInEditor
 import com.master.lessplain.ide.UnderstandingService
 import com.master.lessplain.ide.PanelPage
 
-/** Opens the selected record from the tool window title bar. */
+/** 从工具窗口标题栏打开选中记录。 */
 internal class OpenUnderstandingInEditorAction(
     private val project: Project,
     private val service: UnderstandingService,

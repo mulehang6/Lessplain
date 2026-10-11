@@ -3,7 +3,7 @@ package com.master.lessplain.core
 import com.master.lessplain.model.TRAVERSABLE_RELATIONS
 import com.master.lessplain.model.UnderstandingGraph
 
-/** Computes the finite union of entry-to-target walks, stopping on the first arrival at the target. */
+/** 计算入口到目标路线的有限并集，首次到达目标即停止。 */
 internal class UpstreamPathResolver(private val graph: UnderstandingGraph, scopes: Map<String, String> = emptyMap()) {
     private val nodeIds = graph.nodes.map { it.id }.filter { scopes.isEmpty() || it in scopes }.toSet()
     private val edges = graph.edges.filter {
@@ -28,7 +28,7 @@ internal class UpstreamPathResolver(private val graph: UnderstandingGraph, scope
             .mapTo(linkedSetOf()) { it.id }
     }
 
-    /** Iterative Kosaraju keeps closed upstream components usable without choosing an arbitrary entry. */
+    /** 迭代式 Kosaraju 保留封闭上游分量的可读性，不随意选择入口。 */
     private fun sourceComponents(ancestors: Set<String>): List<String> {
         val visited = hashSetOf<String>()
         val finished = mutableListOf<String>()

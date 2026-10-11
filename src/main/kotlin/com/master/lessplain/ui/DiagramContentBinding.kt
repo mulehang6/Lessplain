@@ -5,7 +5,7 @@ import com.master.lessplain.diagram.setDraftNoteNodes
 import com.master.lessplain.ide.UnderstandingService
 import com.master.lessplain.model.UnderstandingRecord
 
-/** Question-group provenance always resolves a real child record. */
+/** 追问组的来源始终解析为真实子记录。 */
 internal data class SourceCluster(val record: UnderstandingRecord)
 
 internal fun UnderstandingDiagram.bindContentActions(

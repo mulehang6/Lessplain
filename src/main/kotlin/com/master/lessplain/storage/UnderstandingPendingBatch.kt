@@ -8,7 +8,7 @@ import com.master.lessplain.model.UnderstandingRecord
 data class PendingNoteItem(val questionId: String, val question: String, val context: UnderstandingContext)
 data class PendingNoteBatch(val scopeRecordId: String, val items: List<PendingNoteItem>, val records: List<UnderstandingRecord>)
 
-/** One read snapshot of pending notes within this record and descendants, never an implicit project-wide queue. */
+/** 在同一读取快照中取得本记录及后代的待答注释，不隐式读取整个项目队列。 */
 fun UnderstandingRepository.pendingNoteBatch(scopeRecordId: String): PendingNoteBatch = connect().use { db ->
     db.autoCommit = false
     try {

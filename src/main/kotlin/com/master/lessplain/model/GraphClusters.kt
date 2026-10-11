@@ -1,9 +1,9 @@
 package com.master.lessplain.model
 
-/** A single semantic partition of a root graph, independent of coordinates and routing. */
+/** 根图的单层语义分组，不依赖坐标和布线。 */
 data class GraphCluster(val id: String, val title: String, val nodeIds: List<String>)
 
-/** Omitted/null input preserves a revision's partition; an explicit empty replacement clears it. */
+/** 省略或 null 保留原版本分组，显式空替换则清除分组。 */
 sealed interface ClusterUpdate {
     data object Keep : ClusterUpdate
     data class Replace(val clusters: List<GraphCluster>) : ClusterUpdate

@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import java.util.concurrent.TimeUnit
 
-/** Run with `-PgraphBenchmark`; timings are recorded, never used as assertions. */
+/** 使用 -PgraphBenchmark 运行，耗时只记录，不用作断言。 */
 @Tag("benchmark")
 class GraphPerformanceBenchmarkTest {
     @Test

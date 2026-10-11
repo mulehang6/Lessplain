@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-/** Verifies that the packaged ELK algorithm can route the shapes used by the plugin. */
+/** 验证打包的 ELK 算法能为插件使用的图形布线。 */
 class ElkIntegrationTest {
     @Test
     fun `layered layout routes a cross cluster edge in a compound graph`() {

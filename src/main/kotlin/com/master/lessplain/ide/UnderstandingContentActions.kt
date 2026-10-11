@@ -8,7 +8,7 @@ import java.awt.Component
 import java.awt.KeyboardFocusManager
 import java.awt.Point
 
-/** Source-bound mutations shared by tool-window and editor canvases; sessions own transient UI. */
+/** 工具窗口和编辑器画布共用与来源绑定的修改操作；会话管理临时界面状态。 */
 internal class UnderstandingContentActions(private val service: UnderstandingService) : AutoCloseable {
     private val sessions = mutableMapOf<Component, CanvasContentSession>()
 

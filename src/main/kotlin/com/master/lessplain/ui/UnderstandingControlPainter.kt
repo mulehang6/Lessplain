@@ -8,7 +8,7 @@ import java.awt.geom.Rectangle2D
 import java.awt.geom.RoundRectangle2D
 import kotlin.math.min
 
-/** Shared control states for Swing graph buttons and editor-painted navigation buttons. */
+/** Swing 图按钮与编辑器绘制的导航按钮共用控件状态。 */
 internal object UnderstandingControlPainter {
     fun paintBackground(
         g: Graphics2D,
@@ -36,7 +36,7 @@ internal object UnderstandingControlPainter {
         g.draw(shape)
     }
 
-    /** Chevron dimensions follow the existing hit region, independent of editor font glyphs. */
+    /** 箭头尺寸跟随已有命中区域，不依赖编辑器字体字形。 */
     fun paintNavigation(g: Graphics2D, bounds: Rectangle2D, next: Boolean, enabled: Boolean, hovered: Boolean) {
         val graphics = g.create() as Graphics2D
         try {

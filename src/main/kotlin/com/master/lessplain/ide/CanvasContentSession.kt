@@ -19,7 +19,7 @@ import java.awt.Point
 import java.awt.event.HierarchyEvent
 import java.awt.event.HierarchyListener
 
-/** Owns clicked notes and unsaved drafts for the lifetime of exactly one canvas. */
+/** 在单个画布生命周期内管理已打开注释和未保存草稿。 */
 internal class CanvasContentSession(
     private val service: UnderstandingService,
     private val owner: Component,
@@ -156,7 +156,7 @@ internal class CanvasContentSession(
         draftListeners.toList().forEach { it(snapshot) }
     }
 
-    /** Let a canvas badge press perform its own toggle before the platform dismisses the popup. */
+    /** 平台关闭弹层前，先让画布气泡完成自己的切换操作。 */
     private fun mayDismissNotes(): Boolean {
         val event = java.awt.EventQueue.getCurrentEvent() as? java.awt.event.MouseEvent ?: return true
         if (event.id != java.awt.event.MouseEvent.MOUSE_PRESSED || owner !is UnderstandingDiagram) return true
@@ -201,7 +201,7 @@ internal data class CanvasNoteDraftEntry(
     val text: String,
 )
 
-/** Keeps canvas drafts separate from repository state and from saved pending-note counts. */
+/** 画布草稿与仓库存储状态、已保存待答注释计数分开。 */
 internal class CanvasContentDrafts {
     private val values = linkedMapOf<String, String>()
 

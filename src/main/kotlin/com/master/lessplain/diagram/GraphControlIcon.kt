@@ -13,7 +13,7 @@ internal enum class GraphControlIconKind {
     COPY, COPIED, QUESTIONS, NOTE, ADD,
 }
 
-/** Simple vector glyphs so the controls remain visible in IDE themes and preview rendering. */
+/** 使用简单矢量图标，使控件在 IDE 主题和预览绘制中保持可见。 */
 internal class GraphControlIcon(private val kind: GraphControlIconKind) : Icon {
     override fun getIconWidth(): Int = 16
     override fun getIconHeight(): Int = 16

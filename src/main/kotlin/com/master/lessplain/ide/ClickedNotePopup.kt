@@ -1,6 +1,6 @@
 package com.master.lessplain.ide
 
-/** Click-only selection with generations so an old popup cannot dismiss its replacement. */
+/** 仅通过点击选择，并用代次防止旧弹层关闭其替代弹层。 */
 internal class ClickedNotePopup {
     var target: Pair<String, String>? = null
         private set

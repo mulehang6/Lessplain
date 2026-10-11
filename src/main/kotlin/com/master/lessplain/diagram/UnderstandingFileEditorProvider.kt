@@ -36,7 +36,7 @@ import javax.swing.JComponent
 import javax.swing.JButton
 import javax.swing.JPanel
 
-/** The editor tab and tool window each render the same immutable record revision. */
+/** 编辑器标签页和工具窗口分别绘制同一个不可变记录版本。 */
 class UnderstandingVirtualFile(record: UnderstandingRecord, val questionNodeId: String? = null) :
     LightVirtualFile(understandingTabTitle(record, questionNodeId), PlainTextFileType.INSTANCE, "") {
     val recordId: String = record.id

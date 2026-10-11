@@ -10,7 +10,7 @@ import javax.swing.Timer
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-/** Moves an already visible source editor without reopening its file or changing global scroll settings. */
+/** 移动已可见的源码编辑器，不重新打开文件或修改全局滚动设置。 */
 internal class SourceScrollAnimation : Disposable {
     private var timer: Timer? = null
 

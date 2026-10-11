@@ -20,7 +20,7 @@ import com.master.lessplain.model.UnderstandingRecord
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.component.Text
 
-/** An empty or reopened tool window starts from a compact, centered home. */
+/** 空的或重新打开的工具窗口从紧凑居中的首页开始。 */
 @Composable
 internal fun UnderstandingWelcome(
     service: UnderstandingService,

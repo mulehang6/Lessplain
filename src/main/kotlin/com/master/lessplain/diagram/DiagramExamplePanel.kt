@@ -9,7 +9,7 @@ import java.awt.RenderingHints
 import java.awt.geom.Rectangle2D
 import java.awt.image.BufferedImage
 
-/** A hypothetical request object shown beside an explanation flow. */
+/** 在解释流程旁展示一个假设的请求对象。 */
 internal data class DiagramExamplePanel(
     val clusterId: String,
     val parameterName: String,
@@ -41,7 +41,7 @@ internal object DiagramExamplePainter {
         } finally { graphics.dispose() }
     }
 
-    /** Layout and painting share font-derived row heights, including when the IDE font grows. */
+    /** 布局和绘制共用随字体变化的行高，IDE 字体增大时也保持一致。 */
     private fun paintContent(g: Graphics2D, bounds: Rectangle2D.Double, panel: DiagramExamplePanel, focusedNodeId: String?) {
         val x = bounds.x.toInt()
         val y = bounds.y.toInt()

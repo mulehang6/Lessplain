@@ -5,7 +5,7 @@ import com.master.lessplain.model.UnderstandingQuestion
 import com.master.lessplain.model.UnderstandingRecord
 import java.sql.Connection
 
-/** Answered questions are reconstructed from the answer graph, without retaining a second note row. */
+/** 从回答图还原已回答问题，不额外保留注释行。 */
 internal fun UnderstandingRepository.readQuestion(db: Connection, id: String): UnderstandingQuestion =
     readQuestions(db, "q.id=?", id).firstOrNull()
         ?: answerQuestions(db, "json_extract(v.data, '$.questionId')=?", id).firstOrNull()

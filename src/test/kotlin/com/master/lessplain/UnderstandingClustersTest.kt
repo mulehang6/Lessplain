@@ -18,7 +18,7 @@ import java.nio.file.Path
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
-/** Protocol 3 remains supported without the new root-group field. */
+/** 协议 3 继续受支持，不包含新的根图分组字段。 */
 class UnderstandingClustersTest {
     @TempDir lateinit var root: Path
     private val plain = UnderstandingGraph(listOf(GraphNode("a", "开始"), GraphNode("b", "结束")),

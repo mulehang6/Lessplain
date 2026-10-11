@@ -1,13 +1,13 @@
 package com.master.lessplain.ide
 
-/** Only a hint can start a reveal; a cancelled reveal must wait for a fresh hint entry. */
+/** 仅悬停提示可以开始渐显；取消后需重新进入提示区域才能触发。 */
 internal class SourceHighlightHoverState {
     private enum class State { IDLE, ACTIVE, SUPPRESSED, DISPOSED }
 
     private var state = State.IDLE
     val active: Boolean get() = state == State.ACTIVE
 
-    /** Coordinates are classified against the full painted code area, not the animated sweep. */
+    /** 坐标按完整绘制代码区域分类，不按动画当前覆盖范围分类。 */
     fun move(inHint: Boolean, inBlock: Boolean): Boolean {
         state = when (state) {
             State.IDLE -> if (inHint) State.ACTIVE else State.IDLE
@@ -18,7 +18,7 @@ internal class SourceHighlightHoverState {
         return active
     }
 
-    /** Any mouse button, including the start of a selection drag, dismisses the reveal. */
+    /** 任何鼠标按键，包括开始选择拖动，都会关闭渐显。 */
     fun press(inHint: Boolean, inBlock: Boolean): Boolean {
         if (state != State.DISPOSED && (inHint || inBlock)) {
             state = if (inHint) State.SUPPRESSED else State.IDLE
@@ -26,19 +26,19 @@ internal class SourceHighlightHoverState {
         return active
     }
 
-    /** Dragging may keep an existing reveal, but cannot start one during a text selection. */
+    /** 拖动可维持已有渐显，但文字选择期间不能触发新的渐显。 */
     fun drag(inHint: Boolean, inBlock: Boolean): Boolean {
         if (active) return move(inHint, inBlock)
         if (state == State.SUPPRESSED && !inHint) state = State.IDLE
         return false
     }
 
-    /** Leaving the editor arms the next hint entry without starting a reveal. */
+    /** 离开编辑器后允许下次进入提示时触发，不立即开始渐显。 */
     fun exit() {
         if (state != State.DISPOSED) state = State.IDLE
     }
 
-    /** Late queued events cannot revive a released marker. */
+    /** 延迟的队列事件不能重新激活已释放的提示。 */
     fun dispose() {
         state = State.DISPOSED
     }

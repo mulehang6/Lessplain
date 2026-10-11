@@ -25,7 +25,7 @@ class DiagramPathHighlightsTest {
                 diagram.selectUnderstandingNode("target", notify = true)
                 assertTrue(diagram.routeEdgeIds.isEmpty())
                 assertEquals(setOf("at", "bt"), diagram.highlightedEdgeIds)
-                // An offscreen canvas must not keep an animation timer running.
+                // 离屏画布不应持续运行动画计时器。
                 assertFalse(diagram.flowTimer.isRunning)
             } finally { diagram.dispose() }
         }

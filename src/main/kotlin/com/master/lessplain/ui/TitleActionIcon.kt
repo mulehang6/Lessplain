@@ -11,7 +11,7 @@ import javax.swing.Icon
 
 internal enum class TitleActionKind { HOME, RECENT, HISTORY }
 
-/** Small theme-aware icons for tool-window title actions. */
+/** 工具窗口标题动作使用的小型主题图标。 */
 internal class TitleActionIcon(private val kind: TitleActionKind) : Icon {
     override fun getIconWidth(): Int = 20
     override fun getIconHeight(): Int = 20

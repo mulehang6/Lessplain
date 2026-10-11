@@ -24,7 +24,7 @@ import javax.swing.text.JTextComponent
 import javax.swing.text.View
 import kotlin.math.ceil
 
-/** Drafts are independent of the UI toolkit; dismiss retains, explicit cancel discards. */
+/** 草稿不依赖界面工具包；关闭保留，明确取消才丢弃。 */
 internal class CanvasTextDraft(initial: String) {
     var text = initial
     var error: String? = null
@@ -47,7 +47,7 @@ internal class CanvasTextDraft(initial: String) {
     }
 }
 
-/** Tracks preedit separately from committed text; it never consumes input-method events. */
+/** 分别跟踪输入法预编辑和已提交文字，不消费输入法事件。 */
 internal class EditorComposition {
     var active = false
         private set
@@ -57,7 +57,7 @@ internal class EditorComposition {
     }
 }
 
-/** Native text components keep the IDE's input-method chain, outside Compose's event bridge. */
+/** 原生文字组件保留 IDE 输入法链路，不经过 Compose 事件桥。 */
 internal class CanvasTextEditor(
     title: String,
     private val draft: CanvasTextDraft,
@@ -145,7 +145,7 @@ internal class CanvasTextEditor(
         fonts.refresh()
     }
 
-    /** Measures wrapped Swing rows and keeps the input area between one and eight visible rows. */
+    /** 测量 Swing 折行行数，使输入区显示一至八行。 */
     internal fun preferredSizeFor(width: Int, availableHeight: Int): Dimension {
         val editorWidth = width.coerceAtLeast(1)
         val maxHeight = availableHeight.coerceAtLeast(1)

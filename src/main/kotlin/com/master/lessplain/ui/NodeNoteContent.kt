@@ -79,7 +79,7 @@ internal fun NodeNoteContent(
     }
 }
 
-/** A retained draft belongs to its note and shares the island surface. */
+/** 保留草稿属于其注释，并共用 Islands 表面样式。 */
 @Composable
 private fun NoteDraftText(title: String, text: String) {
     val shape = RoundedCornerShape(UnderstandingUiMetrics.INNER_RADIUS.dp)

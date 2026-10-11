@@ -1,6 +1,6 @@
 package com.master.lessplain.ui
 
-/** Shared logical dimensions; Swing applies JBUI scaling and Compose uses dp at the call site. */
+/** 共用逻辑尺寸，Swing 应用 JBUI 缩放，Compose 在调用处使用 dp。 */
 internal object UnderstandingUiMetrics {
     const val INNER_RADIUS = 8
     const val OUTER_RADIUS = 12

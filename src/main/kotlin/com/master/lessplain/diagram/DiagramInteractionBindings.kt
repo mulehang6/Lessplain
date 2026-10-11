@@ -4,7 +4,7 @@ import java.awt.event.ComponentAdapter
 import java.awt.event.ComponentEvent
 import java.awt.event.HierarchyEvent
 
-/** Installs input handlers and retries layout requests deferred while the canvas has no size. */
+/** 安装输入处理器；画布尚无尺寸时推迟的布局请求在就绪后重试。 */
 internal fun UnderstandingDiagram.installDiagramInteractions() {
     DiagramKeyboardActions.install(this, { DiagramKeyboardActions.move(this, it) },
         onCopy = { currentNodeId?.let { id -> copyCallbacks.toList().forEach { it(id) } } },

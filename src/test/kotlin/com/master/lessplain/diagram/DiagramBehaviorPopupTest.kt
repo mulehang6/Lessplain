@@ -131,7 +131,7 @@ class DiagramBehaviorPopupTest {
         assertEquals("恢复 100% 缩放", (popup.focus as AbstractButton).text)
         val radio = buttons.filterIsInstance<JRadioButton>()
         assertEquals(1, radio.count { it.isSelected })
-        // The standard Space action uses the same listeners as mouse input without closing the panel.
+        // 标准空格动作与鼠标输入共用监听器，不关闭面板。
         val flow = buttons.single { it.text == "路径流动" }
         val event = KeyEvent(flow, KeyEvent.KEY_PRESSED, 0, 0, KeyEvent.VK_SPACE, ' ')
         val pressKey = flow.getInputMap(JComponent.WHEN_FOCUSED).get(javax.swing.KeyStroke.getKeyStrokeForEvent(event))
@@ -173,7 +173,7 @@ class DiagramBehaviorPopupTest {
         init { anchor.addActionListener { controller.toggle() } }
     }
 
-    /** Only the public popup contract is simulated; no native window or IDE is opened. */
+    /** 只模拟公开弹层契约，不打开原生窗口或 IDE。 */
     private class TestPopup(val content: JComponent, val focus: JComponent, private val mayCancel: () -> Boolean) {
         val listeners = mutableListOf<JBPopupListener>()
         var visible = false

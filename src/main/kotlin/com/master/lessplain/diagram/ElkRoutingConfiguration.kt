@@ -7,7 +7,7 @@ import org.eclipse.elk.core.options.Direction
 import org.eclipse.elk.core.options.EdgeRouting
 import org.eclipse.elk.graph.ElkNode
 
-/** All graph levels reserve the same separate edge lanes and preserve the horizontal mainline. */
+/** 各级图预留相同的独立连线通道，并保留横向主路径。 */
 internal fun ElkNode.configureUnderstandingRouting(direction: LayoutDirection) {
     setProperty(CoreOptions.ALGORITHM, "org.eclipse.elk.layered")
     setProperty(CoreOptions.DIRECTION, if (direction == LayoutDirection.VERTICAL) Direction.DOWN else Direction.RIGHT)

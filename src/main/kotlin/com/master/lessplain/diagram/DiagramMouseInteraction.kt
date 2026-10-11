@@ -9,7 +9,7 @@ import java.awt.event.MouseEvent
 import java.awt.event.MouseWheelEvent
 import kotlin.math.pow
 
-/** Drag, pan, hover, and wheel behavior for one graph surface. */
+/** 处理单张图的拖动、平移、悬停和滚轮交互。 */
 internal class DiagramMouseInteraction(private val diagram: UnderstandingDiagram) : MouseAdapter() {
     private var pressPoint: Point? = null
     private var previousDragPoint: Point? = null

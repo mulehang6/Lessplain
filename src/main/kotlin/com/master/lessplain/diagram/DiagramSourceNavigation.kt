@@ -15,7 +15,7 @@ import com.master.lessplain.ui.projectSourceBrowseToCanvas
 import java.awt.event.HierarchyEvent
 import java.awt.event.HierarchyListener
 
-/** Shares route persistence, source feedback and combined-canvas ID projection across all graph hosts. */
+/** 所有图宿主共用路径持久化、源码反馈和组合画布 ID 映射。 */
 internal fun bindDiagramSourceNavigation(
     service: UnderstandingService,
     key: GraphLayerKey,
@@ -118,7 +118,7 @@ internal fun bindDiagramSourceNavigation(
     }
 }
 
-/** Maps source buttons to the currently explored canvas, including prefixed follow-up IDs. */
+/** 将源码按钮映射到当前探索的画布，包括带前缀的追问 ID。 */
 internal fun UnderstandingDiagram.bindSourceNavigation(
     service: UnderstandingService,
     navigation: DiagramRouteNavigation,

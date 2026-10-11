@@ -46,7 +46,7 @@ internal data class QuestionCanvas(
     val edgeSources: Map<String, CanvasSourceEdge> = emptyMap(),
 )
 
-/** One node's questions share a single canvas, with one navigable cluster per question. */
+/** 同一节点的追问共用单张画布，每个问题对应一个可导航分组。 */
 @Composable
 internal fun QuestionIndexView(
     service: UnderstandingService,
@@ -199,7 +199,7 @@ internal fun buildQuestionCanvas(
     )
 }
 
-/** A reusable request-parameter example; values are explicitly hypothetical. */
+/** 可复用的请求参数示例，明确将值标为假设。 */
 private fun examplePanel(question: UnderstandingQuestion, child: UnderstandingRecord, prefix: String): DiagramExamplePanel? {
     val description = question.text + " " + child.graph.nodes.joinToString(" ") { it.label }
     val parameter = Regex("getParameter\\s*[（(]\\s*[\"']([^\"']+)[\"']\\s*[）)]").find(description)?.groupValues?.get(1)

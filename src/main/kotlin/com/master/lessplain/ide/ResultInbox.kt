@@ -5,7 +5,7 @@ import com.google.gson.reflect.TypeToken
 import com.intellij.ide.util.PropertiesComponent
 import com.intellij.openapi.project.Project
 
-/** Project-local result targets survive IDE restarts without depending on the plugin's display name. */
+/** 项目内的结果目标跨 IDE 重启保留，不依赖插件显示名。 */
 internal data class PendingResult(
     val key: String,
     val recordId: String?,

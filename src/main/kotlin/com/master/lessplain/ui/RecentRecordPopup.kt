@@ -39,7 +39,7 @@ import org.jetbrains.jewel.ui.component.Text
 
 private val recentPopups = WeakHashMap<Component, ThemedCanvasPopup>()
 
-/** Shares Jewel record rows with history; one trigger click always closes an already-open popup. */
+/** 与历史页共用 Jewel 记录行，点击触发按钮总会关闭已打开弹层。 */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 internal fun showRecentRecordPopup(service: UnderstandingService, anchor: Component) {
     recentPopups.remove(anchor)?.let { it.close(); return }

@@ -6,14 +6,14 @@ import com.master.lessplain.core.StaticExplorer
 import com.master.lessplain.model.BrowseState
 import com.master.lessplain.model.RouteNavigationState
 
-/** A prefixed canvas remains valid only while every contributing record keeps its revision. */
+/** 带前缀的组合画布，仅在全部参与记录的版本未变化时有效。 */
 internal fun QuestionCanvas.isCurrent(service: UnderstandingService, owner: UnderstandingRecord): Boolean =
     (sources.values.map { it.record } + owner).distinctBy { it.id }.all { snapshot ->
         runCatching { service.repository.getRecord(snapshot.id).revision == snapshot.revision }.getOrDefault(false)
     }
 
 
-/** Projects a combined-canvas route only when every edge belongs to the selected source record. */
+/** 仅当所有边属于选中的来源记录时，才投影组合画布路线。 */
 internal fun projectCanvasPathToSource(
     canvas: QuestionCanvas,
     canvasPath: List<String>,
@@ -29,7 +29,7 @@ internal fun projectCanvasPathToSource(
     return sourcePath.takeIf { restored.path == sourcePath }
 }
 
-/** Maps a valid source-record route back to its combined-canvas edge IDs. */
+/** 将有效来源记录路线映射回组合画布的边 ID。 */
 internal fun projectSourcePathToCanvas(
     canvas: QuestionCanvas,
     sourcePath: List<String>,
@@ -48,7 +48,7 @@ internal fun projectSourcePathToCanvas(
     return canvasPath.takeIf { restored.path == canvasPath }
 }
 
-/** Keeps the unresolved prefix in its source record's namespace, independently of highlighted edge unions. */
+/** 待确定前缀保留在来源记录命名空间内，不依赖高亮边的并集。 */
 internal fun projectCanvasNavigationToSource(
     canvas: QuestionCanvas,
     navigation: RouteNavigationState,
@@ -59,7 +59,7 @@ internal fun projectCanvasNavigationToSource(
     return RouteNavigationState(prefix.nodeId, path)
 }
 
-/** Maps a saved source route into the canvas, preserving the unresolved upstream prefix on source feedback. */
+/** 将已保存来源路线映射到画布，源码反馈时保留待确定的上游前缀。 */
 internal fun projectSourceBrowseToCanvas(
     canvas: QuestionCanvas,
     browse: BrowseState,

@@ -37,7 +37,7 @@ class GraphControlIconTest {
                         }
                         assertTrue(painted.size >= 45, "主题与缩放下图标必须可见")
                         assertTrue(ink.isNotEmpty())
-                        // Repeated AA compositing rounds fringe colors; dominant ink still follows the theme.
+                        // 重复抗锯齿合成会取整边缘颜色，主要笔画仍应跟随主题。
                         val middle = ink.size / 2
                         assertTrue(kotlin.math.abs(ink.map { it.red }.sorted()[middle] - color.red) <= 2 &&
                             kotlin.math.abs(ink.map { it.green }.sorted()[middle] - color.green) <= 2 &&

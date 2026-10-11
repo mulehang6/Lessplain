@@ -6,7 +6,7 @@ import javax.swing.JComponent
 import javax.swing.SwingUtilities
 import javax.swing.UIManager
 
-/** Native controls use the same UI font as Jewel's IDE bridge, including open-panel settings changes. */
+/** 原生控件与 Jewel 的 IDE 桥使用相同界面字体，包括面板打开时的设置变化。 */
 internal class CanvasUiFonts(
     private val body: List<JComponent>,
     private val onRefreshed: () -> Unit = {},

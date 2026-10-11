@@ -6,7 +6,7 @@ import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.min
 
-/** Shared rounded orthogonal paths keep manual repairs visually consistent with ELK output. */
+/** 共用圆角正交路径，使手动修复与 ELK 输出保持一致。 */
 internal fun roundedEdgePath(raw: List<Point2D.Double>): Path2D.Double {
     val points = mutableListOf<Point2D.Double>()
     raw.forEach { point ->

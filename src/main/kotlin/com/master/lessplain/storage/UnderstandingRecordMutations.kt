@@ -11,7 +11,7 @@ import java.sql.Connection
 
 internal data class DeletedUnderstanding(val recordIds: Set<String>, val questionIds: Set<String>)
 
-/** Replaces only a graph while retaining record identity, history, and attached questions. */
+/** 只替换图，保留记录身份、历史和关联问题。 */
 internal fun UnderstandingRepository.reviseRecordGraph(
     db: Connection,
     recordId: String,
@@ -65,7 +65,7 @@ internal fun UnderstandingRepository.reviseRecordGraph(
     return revised
 }
 
-/** Title revisions keep the original question and graph untouched. */
+/** 标题修订保留原问题和图。 */
 fun UnderstandingRepository.updateDisplayTitle(recordId: String, title: String, expectedRevision: Int? = null): UnderstandingRecord {
     val normalized = title.trim()
     if (normalized.isEmpty()) throw UnderstandingInputException("标题不能为空")
@@ -103,7 +103,7 @@ fun UnderstandingRepository.updateDisplayTitle(recordId: String, title: String, 
     }
 }
 
-/** A pending note is still a question, so editing it does not create parallel annotation storage. */
+/** 待答注释仍是问题，编辑不会建立另一套注释存储。 */
 fun UnderstandingRepository.editPendingQuestion(questionId: String, text: String): UnderstandingQuestion {
     val normalized = text.trim()
     if (normalized.isEmpty()) throw UnderstandingInputException("注释不能为空")

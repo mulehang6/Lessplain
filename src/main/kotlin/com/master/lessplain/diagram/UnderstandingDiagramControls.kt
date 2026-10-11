@@ -10,7 +10,7 @@ import javax.swing.JMenuItem
 import javax.swing.JPanel
 import javax.swing.JPopupMenu
 
-/** Compact controls painted in the same Swing layer as the graph. */
+/** 与图表在同一 Swing 图层绘制的紧凑控件。 */
 internal data class DiagramHierarchyItem(
     val title: String,
     val depth: Int,

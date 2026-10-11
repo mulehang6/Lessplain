@@ -9,7 +9,7 @@ import java.awt.Graphics
 import java.awt.Graphics2D
 import java.awt.Rectangle
 
-/** One rectangular code area, shared by the hint and the hover highlight. */
+/** 源码提示和悬停高亮共用一个矩形代码区域。 */
 internal fun sourceBlockBounds(editor: Editor, startOffset: Int, endOffset: Int): Rectangle? {
     val document = editor.document
     val start = startOffset.coerceIn(0, document.textLength)
@@ -37,7 +37,7 @@ internal fun sourceBlockBounds(editor: Editor, startOffset: Int, endOffset: Int)
     return Rectangle(left - padding, top - 2, (right - left + padding * 2).coerceAtLeast(1), bottom - top + 4)
 }
 
-/** A translucent left-to-right reveal over the resolved evidence, beneath editor text. */
+/** 在编辑器文字下方，对已定位证据从左向右半透明渐显。 */
 internal class SourceSweepRenderer(private val progress: () -> Float) : CustomHighlighterRenderer {
     override fun paint(editor: Editor, highlighter: RangeHighlighter, graphics: Graphics) {
         val amount = progress()

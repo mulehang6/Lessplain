@@ -4,7 +4,7 @@ import com.master.lessplain.diagram.DiagramCluster
 import com.master.lessplain.model.UnderstandingQuestion
 import com.master.lessplain.model.UnderstandingRecord
 
-/** Each question owns exactly one visual group, independent of graph data. */
+/** 每个问题恰好拥有一个可视分组，不依赖图数据。 */
 internal fun questionClusterMapping(question: UnderstandingQuestion, child: UnderstandingRecord,
     prefix: String): List<Pair<DiagramCluster, SourceCluster>> = listOf(
     DiagramCluster(question.id, child.displayTitle ?: question.text,

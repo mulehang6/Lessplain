@@ -2,7 +2,7 @@ package com.master.lessplain.diagram
 
 import java.awt.geom.Point2D
 
-/** The graph camera moves between nodes and can retarget from its current position. */
+/** 图相机在节点间移动，可从当前位置切换目标。 */
 internal class UnderstandingCameraMotion(initialX: Double, initialY: Double) {
     private var startX = initialX
     private var startY = initialY

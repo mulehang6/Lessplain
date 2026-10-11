@@ -14,7 +14,7 @@ import java.awt.Dimension
 import java.awt.Point
 import org.jetbrains.jewel.bridge.JewelComposePanel
 
-/** Public platform popup hosting the IDE's bundled Jewel theme, without native dialog chrome. */
+/** 使用公开平台弹层承载 IDE 内置 Jewel 主题，不显示原生对话框标题栏。 */
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 internal class ThemedCanvasPopup(
     owner: Component,

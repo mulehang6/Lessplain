@@ -18,7 +18,7 @@ import java.awt.event.MouseEvent
 import javax.swing.JComponent
 import javax.swing.SwingUtilities
 
-/** Owns one settings popup and keeps its outside-click cancellation from reopening on its trigger. */
+/** 管理单个设置弹层，避免外部点击取消后又被触发按钮重新打开。 */
 internal class DiagramBehaviorPopup(
     diagram: UnderstandingDiagram,
     private val anchor: JComponent,
@@ -80,7 +80,7 @@ internal class DiagramBehaviorPopup(
         if (closing) return true
         val event = currentEvent() as? MouseEvent ?: return true
         val source = event.source as? Component ?: return true
-        // The trigger action closes it once; the platform's earlier outside press must not close it first.
+        // 触发按钮只关闭一次弹层，平台先处理的外部按下不能提前关闭。
         return source !== anchor && !SwingUtilities.isDescendingFrom(source, anchor)
     }
 
@@ -90,7 +90,7 @@ internal class DiagramBehaviorPopup(
         closing = true
         try {
             if (!current.isDisposed) current.cancel()
-            // Native popups can temporarily veto cancellation just after opening or under a modal window.
+            // 原生弹层刚打开或处于模态窗口下时，可能暂时拒绝取消。
             if (!current.isDisposed) current.dispose()
         } finally {
             listener?.let(current::removeListener)

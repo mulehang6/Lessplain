@@ -5,7 +5,7 @@ import java.nio.file.Path
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 
-/** Captures ordinary and internal grouped-flow geometry and timings without fragile wall-clock assertions. */
+/** 记录普通图和内部流程分组的几何及耗时，不使用脆弱的实际耗时断言。 */
 @Tag("benchmark")
 class ClusterLayoutBenchmarkTest {
     @Test

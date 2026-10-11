@@ -12,7 +12,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-/** Exercises the native document and shortcut layer without opening an IDE or popup window. */
+/** 测试原生文档和快捷键层，不打开 IDE 或弹层窗口。 */
 class CanvasTextEditorTest {
     @Test fun `single line title editor grows with native font and visible error instead of using a fixed height`() {
         val original = UIManager.getFont("Label.font")

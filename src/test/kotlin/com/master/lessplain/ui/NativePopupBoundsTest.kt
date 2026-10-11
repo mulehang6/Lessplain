@@ -18,7 +18,7 @@ class NativePopupBoundsTest {
             }
             var nativeSize = Dimension()
             var nativeLocation = Point()
-            // Platform setters use content coordinates; getSize reports the whole native window.
+            // 平台设置使用内容坐标，getSize 返回整个原生窗口尺寸。
             val popup = Proxy.newProxyInstance(JBPopup::class.java.classLoader, arrayOf(JBPopup::class.java)) {
                     _, method, arguments ->
                 when (method.name) {

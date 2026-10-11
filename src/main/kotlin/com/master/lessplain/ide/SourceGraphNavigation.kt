@@ -8,7 +8,7 @@ import com.master.lessplain.model.RouteNavigationState
 import com.master.lessplain.model.UnderstandingRecord
 import com.master.lessplain.storage.UnderstandingRepository
 
-/** Source inlay controls use the same directional edge choices and saved route as graph views. */
+/** 源码 inline 控件与图视图共用方向选择和已保存路线。 */
 internal class SourceGraphNavigation(
     private val repository: UnderstandingRepository,
     private val graphStates: GraphViewStateStore,
@@ -16,7 +16,7 @@ internal class SourceGraphNavigation(
     private val selectNode: (record: UnderstandingRecord, nodeId: String) -> Unit,
     private val showGraph: (UnderstandingRecord, ready: () -> Unit) -> Unit,
 ) : AutoCloseable {
-    /** Identical source clicks share the tool-window show and canvas-attachment request. */
+    /** 相同源码点击共用工具窗口显示及画布绑定请求。 */
     private data class OpeningChoice(
         val recordId: String,
         val revision: Int,
@@ -54,7 +54,7 @@ internal class SourceGraphNavigation(
                 openingChoice = opening
                 val request = generation
                 val snapshot = route.navigationState
-                // Opening a graph may complete later; never step a changed source context.
+                // 打开图可能稍后才完成，不能继续操作已经变化的源码上下文。
                 fun valid(): Boolean {
                     if (closed || request != generation || !isSelected(recordId, nodeId)) return false
                     val current = repository.getRecord(recordId)

@@ -5,7 +5,7 @@ import javax.swing.AbstractAction
 import javax.swing.JComponent
 import javax.swing.KeyStroke
 
-/** Hover actions have an equivalent path when the canvas has keyboard focus. */
+/** 画布获得键盘焦点时，也能执行悬停动作。 */
 internal object DiagramKeyboardActions {
     fun move(diagram: UnderstandingDiagram, delta: Int) {
         if (diagram.routeNavigation?.moveCandidate(delta) == true) return

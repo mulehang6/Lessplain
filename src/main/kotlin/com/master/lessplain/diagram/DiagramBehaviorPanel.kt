@@ -14,7 +14,7 @@ import javax.swing.JPanel
 import javax.swing.JRadioButton
 import javax.swing.JSeparator
 
-/** Immediate canvas settings use ordinary controls, so editing never accepts or closes the popup. */
+/** 即时画布设置使用普通控件，编辑不会确认或关闭弹层。 */
 internal class DiagramBehaviorPanel(
     private val diagram: UnderstandingDiagram,
     onMetricsChanged: () -> Unit = {},
@@ -62,7 +62,7 @@ internal class DiagramBehaviorPanel(
         refresh()
     }
 
-    /** Programmatic selection does not emit actions or write the shared canvas state again. */
+    /** 程序设置选择时不触发动作，也不再次写入共享画布状态。 */
     fun refresh() {
         directions.forEach { (preference, button) -> button.isSelected = diagram.layoutPreference == preference }
         flow.isSelected = diagram.flowEnabled

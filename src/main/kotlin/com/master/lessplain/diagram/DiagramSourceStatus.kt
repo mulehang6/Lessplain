@@ -9,7 +9,7 @@ import java.awt.BorderLayout
 import javax.swing.JLabel
 import javax.swing.JPanel
 
-/** A quiet, accessible failure message shared by editor and tool-window canvases. */
+/** 编辑器和工具窗口画布共用安静且可访问的源码状态提示。 */
 internal class DiagramSourceStatus : JPanel(BorderLayout()) {
     internal val label = JLabel()
 
@@ -43,7 +43,7 @@ internal class DiagramSourceStatus : JPanel(BorderLayout()) {
     }
 }
 
-/** Only the selected source node owns a location failure; unrelated canvases stay clear. */
+/** 定位提示仅属于选中的源码节点，无关画布保持无提示。 */
 internal fun UnderstandingDiagram.bindSourceLocationFeedback(
     service: UnderstandingService,
     sourceAt: (String) -> SourceNode?,

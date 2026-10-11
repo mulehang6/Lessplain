@@ -14,7 +14,7 @@ import javax.swing.JComponent
 import javax.swing.JPanel
 import javax.swing.JTextArea
 
-/** Uses the IDE's dialog decorations and actions; cancellation is the initial and default action. */
+/** 使用 IDE 对话框外观与动作，取消为初始焦点和默认动作。 */
 internal class DeleteRecordDialog(
     project: Project,
     private val state: DeleteRecordState,

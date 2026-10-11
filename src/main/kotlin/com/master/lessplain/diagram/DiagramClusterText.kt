@@ -8,7 +8,7 @@ import java.awt.geom.Rectangle2D
 import javax.swing.UIManager
 import kotlin.math.min
 
-/** The title is measured before graph placement so long questions do not overlap nodes. */
+/** 放置图形前先测量标题，避免长问题与节点重叠。 */
 internal data class ClusterTextLayout(
     val titleLines: List<String>,
     val titleLineHeight: Int,

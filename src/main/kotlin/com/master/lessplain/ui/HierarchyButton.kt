@@ -9,7 +9,7 @@ internal data class GraphHierarchyEntry(
     val layers: List<FollowUpLayer>,
 )
 
-/** Lists every reachable follow-up layer, including branches below the current depth. */
+/** 列出全部可达追问层，包括当前深度之下的分支。 */
 internal fun graphHierarchyEntries(
     repository: UnderstandingRepository,
     rootRecordId: String?,

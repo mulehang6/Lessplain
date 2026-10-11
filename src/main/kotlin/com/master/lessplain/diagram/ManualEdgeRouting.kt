@@ -1,6 +1,6 @@
 package com.master.lessplain.diagram
 
-/** A drag preserves node coordinates and re-routes incident or newly obstructed local connectors. */
+/** 拖动保留节点坐标，只重新布置关联或新近受阻的局部连线。 */
 internal fun routeMovedEdges(
     base: UnderstandingGraphLayout,
     nodes: Map<String, PlacedNode>,

@@ -21,7 +21,7 @@ import javax.swing.JPanel
 import javax.swing.KeyStroke
 import javax.swing.SwingUtilities
 
-/** Compact viewport overlay. Only the title and its adjacent edit target receive pointer input. */
+/** 紧凑的视口覆盖层，仅标题和相邻编辑入口接收指针输入。 */
 internal class DiagramHeader(title: String) : JPanel(null), AutoCloseable {
     internal val label = JLabel()
     internal val editButton: JButton = DiagramIconButton(AllIcons.Actions.Edit).apply {
@@ -105,7 +105,7 @@ internal class DiagramHeader(title: String) : JPanel(null), AutoCloseable {
         }
     }
 
-    /** Shares the first control row, reserving edit space so hover never shifts the text. */
+    /** 与首行控件共用空间，并预留编辑入口，悬停时不移动文字。 */
     fun arrange(availableWidth: Int, controls: Rectangle, rowHeight: Int) {
         val gap = JBUI.scale(8)
         val iconSize = JBUI.scale(24)
