@@ -1,5 +1,7 @@
 # Islands UI 改造交接
 
+> 历史记录说明：本文中的 `master-understanding` 是 Lessplain 的旧项目名；当时的路径、安装包和验证记录保留原样。
+
 开发分支：`feat/diagram-jewel-ui`。本轮合并前审查与修复见文末。
 
 ## 已完成

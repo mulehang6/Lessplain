@@ -42,7 +42,7 @@ pnpm run check
 ## 设计与边界
 
 - 产品原则、交互、数据契约和实施验证统一维护在 [主设计文档](../docs/code-understanding-design-v0.5.md)。
-- Agent 工作流草案：[配套 skill](../skills/understanding-frames/SKILL.md)，保存在插件工程内，未安装到全局技能目录。
+- Agent 工作流草案：[配套 skill](../skills/SKILL.md)，保存在插件工程内，未安装到全局技能目录。
 - 原始参考：[v8 HTML](code-understanding-prototype-v8-trace-question-tree.html)。旧原型保留原样，里面的按钮与伪代码不代表当前约定。
 - 源码锚点在 React 中只做文本与符号标识的模拟匹配；真实 PSI、文件重命名、符号重载与 AST 指纹等待插件实现。
 - Trace 仅演示单线程、单调用、完整事件序列。并发、协程切换、采集丢失不能通过相邻 seq 推断因果。

@@ -52,7 +52,7 @@ TraceHit 为 {seq, nodeId, values, observationAnchor, executionContext?}。value
 
 ## 3. 存储建议
 
-建议用项目本地 SQLite，位置为 .idea/code-understanding/understanding.db，默认排除版本控制。事务覆盖内容、版本和索引更新，避免全量重写一个不断变大的 JSON 文件。后续渲染器或协议变化不改变存储归属。
+建议用项目本地 SQLite，位置为 .idea/lessplain/understanding.db，默认排除版本控制。事务覆盖内容、版本和索引更新，避免全量重写一个不断变大的 JSON 文件。后续渲染器或协议变化不改变存储归属。
 
 | 数据 | 保存内容 |
 | --- | --- |

@@ -1,5 +1,7 @@
 # 到达节点的路径高亮与双向导航
 
+> 历史记录说明：本文中的 `master-understanding` 是 Lessplain 的旧项目名；当时的路径、安装包和验证记录保留原样。
+
 ## 已完成
 
 实现先在 `feat/incoming-path-highlighting` 独立工作树完成，随后按用户要求整合到主工程的 `feat/incoming-path-main-integration` 分支，基于 `f969389fdd050c7058f245170eec1e972e0e9aff`。本轮以本地 Git 提交交付导航代码及其依赖的多图簇、完整路线选择和源码会话功能；开发 IDE 配置沿用主工程，原工作树保留。

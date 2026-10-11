@@ -1,5 +1,7 @@
 # 节点锚点、全部关系阅读与 schema 1.4
 
+> 历史记录说明：本文中的 `master-understanding` 是 Lessplain 的旧项目名；当时的路径、安装包和验证记录保留原样。
+
 日期：2026-10-10。与同期 UI 改造一并审查；不修改或回答用户的待答节点注释。合并前审查修复见 [Islands UI 交接](../islands-ui-refresh.md)。
 
 ## 已完成

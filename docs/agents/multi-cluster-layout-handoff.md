@@ -1,5 +1,7 @@
 # 多 cluster 排版修复与复杂链路交接
 
+> 历史记录说明：本文中的 `master-understanding` 是 Lessplain 的旧项目名；当时的路径、安装包和验证记录保留原样。
+
 2026-10-01。保留前序未提交改动，本轮未提交 Git、启动 IDE、操作桌面或截图。工具恢复为内置 IDEA MCP 优先，未调用或启用 Index MCP。
 
 ## 排版修复

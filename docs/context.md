@@ -443,7 +443,7 @@ Agent 要持续等待插件里的问题，涉及：
 
 > Plugin 想主动向 Agent 发起下一轮任务。
 
-当前 Code Understanding Plugin 希望尽量避免复制这套架构。
+当前 Lessplain 希望尽量避免复制这套架构。
 
 因此当前可靠链路仍然是：
 
