@@ -22,7 +22,7 @@ class IncomingRouteTest {
         val explorer = StaticExplorer(graph("a" to "b", "b" to "c"))
         assertTrue(explorer.selectNode("c"))
         assertEquals(listOf("e0", "e1"), explorer.path)
-        assertFalse(explorer.canComplete)
+        assertTrue(explorer.canComplete)
         assertTrue(explorer.selectNode("b"))
         assertEquals(listOf("e0"), explorer.path)
     }
@@ -68,7 +68,7 @@ class IncomingRouteTest {
         assertEquals(listOf("e0", "e2", "e4"), explorer.path)
         explorer.selectNode("b")
         explorer.selectNode("final")
-        // A new explicit branch overrides earlier memory at the merge.
+        // 新的显式分支在汇合处覆盖之前记住的选择。
         assertEquals(listOf("e1", "e2", "e4"), explorer.path)
         explorer.completeRoute(reselect = true)
         explorer.cancelIncoming()
@@ -108,9 +108,9 @@ class IncomingRouteTest {
         explorer.choose("e1")
         assertEquals(listOf("e0", "e1", "e2", "e1"), explorer.path)
         explorer.completeRoute()
-        assertEquals(listOf("e0", "e1", "e2", "e1"), explorer.path)
+        assertEquals(listOf("e0", "e1"), explorer.path)
         explorer.selectNode("b")
-        assertEquals(listOf("e0", "e1", "e2"), explorer.path)
+        assertEquals(listOf("e0"), explorer.path)
     }
 
     @Test
@@ -166,7 +166,7 @@ class IncomingRouteTest {
         val explorer = StaticExplorer(graph("outside" to "entry", "entry" to "work", "work" to "entry", starts = setOf("entry")))
         explorer.selectNode("work")
         assertEquals(listOf("e1"), explorer.path)
-        assertFalse(explorer.canComplete)
+        assertTrue(explorer.canComplete)
     }
 
     @Test

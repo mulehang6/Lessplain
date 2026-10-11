@@ -4,7 +4,7 @@ import java.awt.Point
 import java.awt.geom.Line2D
 import java.awt.geom.Point2D
 
-/** Labels take precedence; a shared connector segment never guesses between parallel candidates. */
+/** 优先命中标签，共用连线段不能替用户猜测平行候选。 */
 internal fun candidateEdgeAt(edges: List<PlacedEdge>, ids: Set<String>, point: Point2D, tolerance: Double): String? {
     val candidates = edges.filter { it.edge.id in ids }
     val labels = candidates.filter { it.resolvedLabelBounds?.contains(point) == true }
@@ -22,5 +22,23 @@ internal fun candidateEdgeAt(edges: List<PlacedEdge>, ids: Set<String>, point: P
 
 internal fun UnderstandingDiagram.candidateEdgeAt(point: Point): String? {
     if (nodeAt(point) != null) return null
-    return candidateEdgeAt(layout.edges, routeChoice.edgeIds, screenToWorld(point), 6.0 / zoom)
+    return candidateEdgeAt(layout.edges, routeNavigation?.clickableEdgeIds ?: routeChoice.edgeIds,
+        screenToWorld(point), 6.0 / zoom)
+}
+
+/** 普通边提示与分支选路共用几何消歧，但不扩大可点击的选路范围。 */
+internal fun UnderstandingDiagram.edgeTooltipAt(point: Point): String? {
+    if (nodeAt(point) != null || clusterEditAt(point) != null) return null
+    val id = candidateEdgeAt(layout.edges, layout.edges.mapTo(hashSetOf()) { it.edge.id }, screenToWorld(point), 6.0 / zoom)
+        ?: return null
+    val edge = record.graph.edges.first { it.id == id }
+    val details = listOfNotNull(
+        "推断关系".takeIf { edge.inferred == true },
+        edge.condition?.takeIf(String::isNotBlank),
+        edge.coverage?.takeIf(String::isNotBlank),
+    ).ifEmpty { listOf(edge.relation) }
+    return "<html>" + details.joinToString("<br>") { text ->
+        text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            .replace("\n", "<br>")
+    } + "</html>"
 }

@@ -35,15 +35,15 @@ class RouteNavigationTest {
     }
 
     @Test
-    fun `selected forward branch stays narrow but reselecting the same node expands it`() {
+    fun `selected forward branch stays narrow when clicking the same node again`() {
         val explorer = StaticExplorer(graph)
         assertTrue(explorer.next() is StepResult.Choose)
         explorer.choose("ab")
         explorer.next()
         assertEquals(setOf("ab", "bd"), explorer.highlightedEdgeIds)
         assertTrue(explorer.jumpTo("d"))
-        assertEquals(emptyList(), explorer.path)
-        assertEquals(setOf("ab", "ac", "bd", "cd"), explorer.highlightedEdgeIds)
+        assertEquals(listOf("ab", "bd"), explorer.path)
+        assertEquals(setOf("ab", "bd"), explorer.highlightedEdgeIds)
     }
 
     @Test

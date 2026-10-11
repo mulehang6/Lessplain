@@ -5,7 +5,7 @@ import com.master.lessplain.core.UpstreamRoutes
 import com.master.lessplain.model.RouteNavigationState
 import com.master.lessplain.model.UnderstandingGraph
 
-/** Keeps upstream focus and selected path highlights in sync with graph navigation. */
+/** 使上游聚焦和已选路径高亮与图导航保持同步。 */
 internal class DiagramPathHighlights(
     private val diagram: UnderstandingDiagram,
     private val graph: UnderstandingGraph,
@@ -15,13 +15,13 @@ internal class DiagramPathHighlights(
     var upstreamEdgeIds = emptySet<String>()
         private set
 
-    /** Uses the same record boundaries as the stepping/source-navigation owner. */
+    /** 与逐步阅读和源码导航使用相同的记录边界。 */
     fun configureScopes(scopes: Map<String, String>) {
         routes = UpstreamRoutes(graph, scopes)
         upstream = UpstreamPathResolver(graph, scopes)
     }
 
-    /** Keeps the clicked prefix's upstream union separate from the selected suffix in browse state. */
+    /** 浏览状态分别保存点击前缀的上游并集和已选择的后缀。 */
     fun showNavigation(state: RouteNavigationState, nodeId: String, centerNode: Boolean) {
         if (nodeId !in diagram.nodeIds) return
         upstreamEdgeIds = upstream.edgeIdsTo(state.prefixNodeId)
@@ -49,9 +49,12 @@ internal class DiagramPathHighlights(
         if (nodeId !in diagram.nodeIds) return
         if (notify && diagram.routeNavigation?.selectCandidate(nodeId) == true) return
         if (!notify && nodeId == diagram.currentNodeId) return
-        showPath(emptyList(), nodeId, centerNode = true)
         diagram.overlays.rememberTarget(nodeId)
-        if (notify) diagram.callbacks.toList().forEach { it(nodeId) }
+        if (notify && diagram.routeNavigation != null) diagram.callbacks.toList().forEach { it(nodeId) }
+        else {
+            showPath(emptyList(), nodeId, centerNode = true)
+            if (notify) diagram.callbacks.toList().forEach { it(nodeId) }
+        }
     }
 }
 

@@ -70,7 +70,7 @@ class DiagramRouteNavigationTest {
             assertTrue(diagram.controls.routeButton.icon !== completionIcon)
             assertEquals("取消选路", diagram.controls.routeButton.accessibleContext.accessibleName)
             assertEquals(setOf("email", "wx"), diagram.choiceTargets)
-            assertTrue(diagram.routeChoice.edgeIds.isEmpty())
+            assertEquals(setOf("email-merge", "wx-merge"), diagram.routeChoice.edgeIds)
             assertTrue(diagram.controls.previousButton.isEnabled)
             assertFalse(diagram.controls.nextButton.isEnabled)
             diagram.selectUnderstandingNode("wx", notify = true)
@@ -78,7 +78,7 @@ class DiagramRouteNavigationTest {
             assertEquals(listOf("wx-merge", "merge-save"), route.path)
             assertEquals(listOf("save", "save"), commits)
             assertTrue(diagram.choiceTargets.isEmpty())
-            assertFalse(diagram.controls.routeButton.isVisible)
+            assertTrue(diagram.controls.routeButton.isVisible)
         }
 
     @Test
@@ -255,7 +255,7 @@ class DiagramRouteNavigationTest {
             assertEquals(listOf("center"), commits)
             diagram.controls.previousButton.doClick()
             assertEquals(setOf("before-1", "before-2"), diagram.choiceTargets)
-            assertTrue(diagram.routeChoice.edgeIds.isEmpty())
+            assertEquals(setOf("in-1", "in-2"), diagram.routeChoice.edgeIds)
             nav.stepFromSource(false)
             assertEquals(setOf("after-1", "after-2"), diagram.choiceTargets)
             assertFalse(nav.selectCandidateEdge("in-1"))
@@ -286,6 +286,24 @@ class DiagramRouteNavigationTest {
             GraphEdge("out-2", "center", "after-2", "control_flow"),
         ),
     )
+
+    @Test
+    fun `ordinary incoming line click selects its route without the completion button`() =
+        withCanvas { diagram, route, nav, _ ->
+            nav.select("merge")
+            val edge = diagram.layout.edges.first { it.edge.id == "wx-merge" }
+            val point = edge.segments.map { screen(diagram, (it.x1 + it.x2) / 2, (it.y1 + it.y2) / 2) }
+                .first { diagram.candidateEdgeAt(it) == "wx-merge" }
+            val mouse = diagram.mouseListeners.filterIsInstance<DiagramMouseInteraction>().single()
+            mouse.mousePressed(event(MouseEvent.MOUSE_PRESSED, point, diagram))
+            mouse.mouseReleased(event(MouseEvent.MOUSE_RELEASED, point, diagram))
+            assertEquals("merge", route.currentNodeId)
+            assertEquals(listOf("wx-merge"), route.path)
+            diagram.selectUnderstandingNode("merge", notify = true)
+            assertEquals(listOf("wx-merge"), route.path)
+            diagram.controls.routeButton.doClick()
+            assertEquals(setOf("email-merge", "wx-merge"), diagram.routeChoice.edgeIds)
+        }
 
     private fun parallelGraph() = UnderstandingGraph(
         listOf(GraphNode("a", "支付检查"), GraphNode("b", "返回")),

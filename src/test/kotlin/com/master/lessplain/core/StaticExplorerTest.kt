@@ -147,18 +147,19 @@ class StaticExplorerTest {
     @Test
     fun `loop keeps the one hundred step limit after restoring and stepping back`() {
         val graph = UnderstandingGraph(
-            nodes = listOf(GraphNode("loop", "循环")),
-            edges = listOf(GraphEdge("again", "loop", "loop", "control_flow")),
+            nodes = listOf(GraphNode("a", "循环入口"), GraphNode("b", "循环处理")),
+            edges = listOf(GraphEdge("ab", "a", "b", "control_flow"), GraphEdge("ba", "b", "a", "control_flow")),
         )
         val explorer = StaticExplorer(graph)
 
-        repeat(100) { assertEquals(StepResult.Moved("loop"), explorer.next()) }
-        assertEquals(100, explorer.path.size)
+        repeat(101) { index -> assertEquals(StepResult.Moved(if (index % 2 == 0) "b" else "a"), explorer.next()) }
+        assertEquals(101, explorer.path.size)
         assertEquals(StepResult.Limit, explorer.next())
-        assertTrue(explorer.back())
-        assertEquals(StepResult.Moved("loop"), explorer.next())
-        assertEquals(100, explorer.path.size)
-        assertTrue(explorer.back())
-        assertEquals(99, explorer.path.size)
+        val restored = StaticExplorer(graph, explorer.path, explorer.currentNodeId, explorer.navigationState)
+        assertTrue(restored.back())
+        assertEquals(StepResult.Moved("b"), restored.next())
+        assertEquals(101, restored.path.size)
+        assertTrue(restored.back())
+        assertEquals(100, restored.path.size)
     }
 }

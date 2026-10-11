@@ -5,7 +5,7 @@ import com.master.lessplain.model.RouteNavigationState
 import com.master.lessplain.model.TRAVERSABLE_RELATIONS
 import com.master.lessplain.model.UnderstandingGraph
 
-/** A reading route has an unresolved upstream prefix and a chosen suffix, without claiming runtime facts. */
+/** 阅读路线由待确定的上游前缀和已选择的后缀组成，不代表运行事实。 */
 class StaticExplorer(
     private val graph: UnderstandingGraph,
     savedEdges: List<String> = emptyList(),
@@ -30,7 +30,7 @@ class StaticExplorer(
     private val selectedEdges = mutableListOf<String>()
     private var startNodeId = defaultStartNodeId()
 
-    /** Only the ordered, explicitly selected suffix is exposed as staticPath. */
+    /** staticPath 仅暴露有序且由用户明确选择的后缀。 */
     val path: List<String> get() = selectedEdges.toList()
     val currentNodeId: String
         get() = selectedEdges.lastOrNull()?.let { edgesById[it]?.to } ?: startNodeId
@@ -40,19 +40,20 @@ class StaticExplorer(
     val canNext: Boolean get() = availableEdges().any(::canAppend)
     val canGoBack: Boolean get() = canPrevious
     val isChoosingIncoming: Boolean get() = filling != null
-    val canComplete: Boolean get() = !resolver.isEntry(startNodeId) && resolver.incoming(startNodeId).isNotEmpty()
+    val canComplete: Boolean get() = availableEdges(StepDirection.PREVIOUS).isNotEmpty()
 
     init {
         restorePath(savedEdges, savedNodeId, savedNavigationState)
     }
 
     fun availableEdges(direction: StepDirection = StepDirection.NEXT): List<GraphEdge> = traversableEdges.filter {
-        if (direction == StepDirection.NEXT) it.from == currentNodeId else it.to == currentNodeId
+        it.from != it.to && (if (direction == StepDirection.NEXT) it.from == currentNodeId else it.to == currentNodeId)
     }
 
-    /** Direct selection always unfolds every upstream route, including when reselecting the current node. */
+    /** 聚焦新节点展开其上游；再次点击当前节点保留已选择路线。 */
     fun jumpTo(nodeId: String): Boolean {
         if (nodeId !in nodeIds) return false
+        if (nodeId == currentNodeId) return true
         cancelIncoming()
         routeNotice = null
         selectedEdges.clear()
@@ -61,14 +62,14 @@ class StaticExplorer(
         return true
     }
 
-    /** Keeps the latest selected visit while synchronizing source or capturing a context. */
+    /** 同步源码或捕获上下文时保留最近一次选中的访问位置。 */
     fun synchronizeNode(nodeId: String): Boolean {
         if (nodeId !in nodeIds) return false
         if (nodeId == currentNodeId) return true
         return truncateToVisit(nodeId) || jumpTo(nodeId)
     }
 
-    /** Invalid snapshots retain the selected node and unfold its upstream routes. */
+    /** 快照无效时保留选中节点，并展开其上游路线。 */
     fun restorePath(
         savedEdges: List<String>,
         savedNodeId: String?,
@@ -117,11 +118,11 @@ class StaticExplorer(
         return StepResult.Moved(currentNodeId)
     }
 
-    /** A multi-edge predecessor still requires an explicit previous-direction choice. */
+    /** 存在多条前驱边时，仍需明确选择后退方向。 */
     fun back(): Boolean = previous() is StepResult.Moved
 
     private fun truncateToVisit(nodeId: String): Boolean {
-        // Exclude the terminal visit so stepping back through a loop removes one occurrence.
+        // 排除末尾访问位置，使循环中的后退只移除一次出现。
         val visits = listOf(startNodeId) + selectedEdges.map { edgesById.getValue(it).to }
         val index = visits.dropLast(1).indexOfLast { it == nodeId }
         if (index < 0) return false
@@ -150,7 +151,7 @@ class StaticExplorer(
         return start to savedEdges.toList()
     }
 
-    /** Legacy explicit inference used by completion flows; ordinary graph clicks use jumpTo. */
+    /** 路径补全使用的旧显式推导；普通图节点点击使用 jumpTo。 */
     fun selectNode(nodeId: String): Boolean {
         if (nodeId !in nodeIds) return false
         cancelIncoming()
@@ -165,12 +166,23 @@ class StaticExplorer(
         return true
     }
 
-    /** Explicitly completes a chosen route; its transient choices do not change ordinary stepping. */
-    fun completeRoute(reselect: Boolean = false): StepResult {
+    /** 显式补全选定路线；临时选择不改变普通的逐步阅读。 */
+    fun completeRoute(reselect: Boolean = true): StepResult {
         cancelIncoming()
         val fill = resolver.begin(currentNodeId, if (reselect) emptyMap() else remembered,
             fixedSuffix = if (reselect) emptyList() else path,
             knownStart = startNodeId.takeIf { !reselect && (explicitStart || path.isNotEmpty()) }).advance()
+        filling = fill
+        return fillResult(fill)
+    }
+
+    /** 点击当前节点入边后固定第一段，再逐处分叉选择上游，始终保留目标焦点。 */
+    fun completeViaIncoming(edgeId: String): StepResult {
+        val edge = availableEdges(StepDirection.PREVIOUS).firstOrNull { it.id == edgeId }
+            ?: return StepResult.InvalidChoice
+        cancelIncoming()
+        val fill = resolver.begin(currentNodeId, emptyMap(), fixedSuffix = listOf(edge.id),
+            knownStart = edge.from).advance()
         filling = fill
         return fillResult(fill)
     }
@@ -202,7 +214,7 @@ class StaticExplorer(
         routeNotice = fill.reason
     }
 
-    /** Direct focus shares the same upstream expansion as a graph click. */
+    /** 直接聚焦与图节点点击使用相同的上游展开方式。 */
     fun focusNode(nodeId: String): Boolean = jumpTo(nodeId)
 
     private fun canAppend(edge: GraphEdge): Boolean =
@@ -218,7 +230,7 @@ class StaticExplorer(
     }
 }
 
-/** Direction relative to the current node, independent of visit history. */
+/** 相对于当前节点的方向，不受访问历史影响。 */
 enum class StepDirection { PREVIOUS, NEXT }
 
 sealed interface StepResult {

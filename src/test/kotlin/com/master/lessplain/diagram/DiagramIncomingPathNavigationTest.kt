@@ -33,7 +33,7 @@ class DiagramIncomingPathNavigationTest {
                 assertEquals(setOf("ab", "ac", "bd", "cd"), diagram.highlightedEdgeIds)
                 navigation.stepFromSource(true)
                 assertEquals(setOf("b", "c"), diagram.choiceTargets)
-                assertTrue(diagram.routeChoice.edgeIds.isEmpty())
+                assertEquals(setOf("bd", "cd"), diagram.routeChoice.edgeIds)
                 navigation.cancel()
                 assertEquals("d", explorer.currentNodeId)
                 assertEquals(1, commits)
@@ -79,7 +79,7 @@ class DiagramIncomingPathNavigationTest {
         }
 
     @Test
-    fun `direct reselect unfolds the chosen route and disposal disables its old candidates`() =
+    fun `direct reselect preserves the chosen route and disposal disables its old candidates`() =
         withDiagram { diagram ->
             val explorer = StaticExplorer(graph)
             val navigation = DiagramRouteNavigation(diagram, explorer, {})
@@ -88,7 +88,7 @@ class DiagramIncomingPathNavigationTest {
             navigation.stepFromSource(false)
             assertEquals(setOf("ab", "bd"), diagram.highlightedEdgeIds)
             diagram.selectUnderstandingNode("d", notify = true)
-            assertEquals(setOf("ab", "ac", "bd", "cd"), diagram.highlightedEdgeIds)
+            assertEquals(setOf("ab", "bd"), diagram.highlightedEdgeIds)
             navigation.stepFromSource(true)
             val snapshot = explorer.navigationState
             navigation.close()

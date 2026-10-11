@@ -6,7 +6,7 @@ import com.master.lessplain.core.StepResult
 import com.master.lessplain.model.BrowseState
 import com.master.lessplain.model.GraphEdge
 
-/** Owns ordinary directional choices and explicit completion while publishing one shared route snapshot. */
+/** 处理普通方向选择和显式补全，同时发布统一的路线快照。 */
 internal class DiagramRouteNavigation(
     private val diagram: UnderstandingDiagram,
     val explorer: StaticExplorer,
@@ -33,7 +33,7 @@ internal class DiagramRouteNavigation(
 
     fun focus(nodeId: String) = select(nodeId, centerNode = true)
 
-    /** Direct focus unfolds the upstream view; candidate clicks are resolved before this entry. */
+    /** 直接聚焦展开上游视图；候选点击在进入此流程前处理。 */
     fun select(nodeId: String) = focus(nodeId)
 
     private fun select(nodeId: String, centerNode: Boolean) {
@@ -53,18 +53,18 @@ internal class DiagramRouteNavigation(
         handle(if (direction == StepDirection.PREVIOUS) explorer.previous() else explorer.next(), direction, false)
     }
 
-    /** Source controls use graph candidates; repeating a direction keeps the current preview. */
+    /** 源码控件使用图中的候选，重复选择同一方向保留当前预览。 */
     fun stepFromSource(backward: Boolean) {
         step(if (backward) StepDirection.PREVIOUS else StepDirection.NEXT)
     }
 
-    /** The existing completion button remains an explicit operation with its own staged incoming choices. */
+    /** 已有补全按钮仍是显式操作，拥有独立的分阶段上游选择。 */
     fun complete(reselectNode: String? = null) {
         if (!ready(explorer.currentNodeId)) return
         cancelChoice()
         if (reselectNode != null && reselectNode != explorer.currentNodeId) explorer.jumpTo(reselectNode)
         onActivated()
-        handle(explorer.completeRoute(reselectNode != null), StepDirection.PREVIOUS, true)
+        handle(explorer.completeRoute(reselect = true), StepDirection.PREVIOUS, true)
     }
 
     private fun handle(result: StepResult, direction: StepDirection, completion: Boolean) {
@@ -101,7 +101,7 @@ internal class DiagramRouteNavigation(
         handle(result, direction, completion)
     }
 
-    /** Candidate nodes confirm only a unique relationship; parallel relationships remain explicit. */
+    /** 候选节点仅确认唯一关系，平行关系仍需明确选择。 */
     fun selectCandidate(nodeId: String): Boolean {
         if (!hasChoice || nodeId !in diagram.choiceTargets) return false
         if (!ready(explorer.currentNodeId)) return true
@@ -111,9 +111,18 @@ internal class DiagramRouteNavigation(
         return true
     }
 
+    /** 待选入边和当前节点的普通入边均可直接选择，焦点保持在目标节点。 */
+    val clickableEdgeIds: Set<String> get() = if (hasChoice) diagram.routeChoice.edgeIds
+        else explorer.availableEdges(StepDirection.PREVIOUS).mapTo(linkedSetOf()) { it.id }
+
     fun selectCandidateEdge(edgeId: String): Boolean {
-        if (edgeId !in diagram.routeChoice.edgeIds) return false
-        choose(edgeId)
+        if (edgeId !in clickableEdgeIds || !ready(explorer.currentNodeId)) return false
+        if (hasChoice) choose(edgeId)
+        else {
+            cancelChoice()
+            onActivated()
+            handle(explorer.completeViaIncoming(edgeId), StepDirection.PREVIOUS, true)
+        }
         return true
     }
 
@@ -134,7 +143,7 @@ internal class DiagramRouteNavigation(
     private fun targetOf(edge: GraphEdge): String =
         if (pendingDirection == StepDirection.NEXT) edge.to else edge.from
 
-    /** External source feedback restores the prefix and suffix without another source-selection callback. */
+    /** 外部源码反馈恢复前缀和后缀，不再次触发源码选择回调。 */
     fun synchronize(nodeId: String, state: BrowseState?): Boolean {
         if (!ready(nodeId)) return false
         if (nodeId == explorer.currentNodeId && state?.nodeId == nodeId &&
@@ -197,7 +206,7 @@ internal class DiagramRouteNavigation(
         diagram.setChoiceTargets(emptySet())
     }
 
-    /** Clears graph candidates while retaining the committed route and current viewport. */
+    /** 清除图中候选，但保留已确认路线和当前视口。 */
     fun cancelChoice() {
         val choosing = hasChoice
         if (choosing) diagram.cameraTimer.stop()
