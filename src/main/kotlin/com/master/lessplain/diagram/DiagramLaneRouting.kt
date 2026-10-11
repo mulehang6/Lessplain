@@ -19,7 +19,7 @@ internal data class DiagramEdgePorts(val source: DiagramPort, val target: Diagra
 
 internal const val DIAGRAM_LANE_GAP = 12.0
 
-/** Rip up a conflicting reservation after the first global pass, allowing an earlier edge to yield. */
+/** 首轮全局布线后撤销冲突预留，使先处理的边也能让出通道。 */
 internal fun refineClusterLanes(
     nodes: Map<String, PlacedNode>,
     edges: List<PlacedEdge>,
@@ -28,7 +28,8 @@ internal fun refineClusterLanes(
 ): List<PlacedEdge> {
     val extras = clusterRoutingObstacles(clusters)
     val forbidden = unrelatedClusterObstacles(clusters, edges)
-    val scene = EdgeRoutingObstacles(nodes.values, extras, forbidden, DIAGRAM_LANE_GAP, 0.01)
+    val scene = EdgeRoutingObstacles(nodes.values, extras, forbidden, DIAGRAM_LANE_GAP, 0.01,
+        clusterBorderBounds(clusters, edges))
     val current = edges.associateByTo(linkedMapOf()) { it.edge.id }
     edges.forEach(scene::add)
     val router = LocalEdgeRouter(nodes, edges.sortedBy { it.edge.id }, extras, forbidden, ports)
@@ -52,7 +53,42 @@ internal fun refineClusterLanes(
     return edges.map { current.getValue(it.edge.id) }
 }
 
-/** Reserve capacity before local layout, so a dense node never squeezes distinct ports together. */
+/** 同时释放冲突边再交换布线顺序，避免两条线互相占住唯一的局部通道。 */
+internal fun rerouteClusterConflicts(
+    nodes: Map<String, PlacedNode>,
+    edges: List<PlacedEdge>,
+    clusters: List<PlacedCluster>,
+    ports: Map<String, DiagramEdgePorts>,
+): List<PlacedEdge> {
+    fun scene() = EdgeRoutingObstacles(nodes.values, clusterRoutingObstacles(clusters),
+        unrelatedClusterObstacles(clusters, edges), DIAGRAM_LANE_GAP, 0.01, clusterBorderBounds(clusters, edges))
+    val originalScene = scene().apply { edges.forEach(::add) }
+    val affected = edges.filter { it.edge.id in ports && originalScene.collisionCost(it) > 0 }.map { it.edge.id }.sorted()
+    if (affected.isEmpty()) return edges
+    var best = edges
+    var bestCost = edges.sumOf(originalScene::collisionCost)
+    val byId = edges.associateBy { it.edge.id }
+    val router = LocalEdgeRouter(nodes, edges, clusterRoutingObstacles(clusters),
+        unrelatedClusterObstacles(clusters, edges), ports)
+    for (order in listOf(affected.reversed(), affected)) {
+        val obstacles = scene().apply { edges.filter { it.edge.id !in affected }.forEach(::add) }
+        val replacements = mutableMapOf<String, PlacedEdge>()
+        order.forEach { id ->
+            val replacement = router.route(byId.getValue(id), obstacles, moved = true)
+            replacements[id] = replacement
+            obstacles.add(replacement)
+        }
+        val candidate = edges.map { replacements[it.edge.id] ?: it }
+        val cost = candidate.sumOf(obstacles::collisionCost)
+        if (cost < bestCost) {
+            best = candidate
+            bestCost = cost
+        }
+    }
+    return best
+}
+
+/** 局部布局前预留容量，避免密集节点将独立端口挤在一起。 */
 internal fun reserveDiagramPorts(input: DiagramLayoutInput, fullGraph: UnderstandingGraph): DiagramLayoutInput {
     val outgoing = fullGraph.edges.groupingBy { it.from }.eachCount()
     val incoming = fullGraph.edges.groupingBy { it.to }.eachCount()
@@ -64,10 +100,7 @@ internal fun reserveDiagramPorts(input: DiagramLayoutInput, fullGraph: Understan
     })
 }
 
-/**
- * Allocate all external endpoint ports together, in opposite-endpoint order. Existing local ports
- * are reserved first, and every new port stays twelve logical pixels away on the same face.
- */
+/** 按另一端端点的顺序统一分配外部端口，先预留已有局部端口，同一侧的新端口间隔至少十二个逻辑像素。 */
 internal fun allocateClusterPorts(
     nodes: Map<String, PlacedNode>,
     insideEdges: Collection<PlacedEdge>,
@@ -123,10 +156,11 @@ internal fun allocateClusterPorts(
     return outsideEdges.associate { it.id to DiagramEdgePorts(sources.getValue(it.id), targets.getValue(it.id)) }
 }
 
-/** Count unresolved content/lane defects without treating isolated crossings as failures. */
+/** 统计未解决的内容和通道缺陷，不把孤立交叉当作失败。 */
 internal fun clusterRouteDefects(layout: UnderstandingGraphLayout): Int {
     val scene = EdgeRoutingObstacles(layout.nodes.values, clusterRoutingObstacles(layout.clusters),
-        unrelatedClusterObstacles(layout.clusters, layout.edges), DIAGRAM_LANE_GAP, 0.01)
+        unrelatedClusterObstacles(layout.clusters, layout.edges), DIAGRAM_LANE_GAP, 0.01,
+        clusterBorderBounds(layout.clusters, layout.edges))
     layout.edges.forEach(scene::add)
     return layout.edges.sumOf {
         scene.conflicts(it).size + (if (scene.crossesNode(it)) 1 else 0) + (if (scene.labelCrossesNode(it)) 1 else 0)

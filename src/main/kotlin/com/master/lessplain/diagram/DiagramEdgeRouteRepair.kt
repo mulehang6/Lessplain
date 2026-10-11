@@ -2,7 +2,7 @@ package com.master.lessplain.diagram
 
 import java.awt.geom.Rectangle2D
 
-/** Repairs conflicting connectors; prevalidated group-local edges can remain fixed before mainline routing. */
+/** 修复冲突连线；主路径布线前，可保留已验证的组内边。 */
 internal fun repairEdgeRoutes(
     nodes: Map<String, PlacedNode>,
     edges: List<PlacedEdge>,
@@ -14,12 +14,13 @@ internal fun repairEdgeRoutes(
     laneGap: Double = 8.0,
     minimumSharedRun: Double = 12.0,
     fixedPorts: Map<String, DiagramEdgePorts> = emptyMap(),
+    clusterBorders: Map<String, List<Rectangle2D>> = emptyMap(),
 ): List<PlacedEdge> {
     if (edges.isEmpty()) return edges
     val ordered = edges.sortedWith(compareBy<PlacedEdge> { it.edge.id !in stableEdgeIds }
         .thenBy { it.edge.id !in mainlineIds }.thenBy { it.edge.id })
     val rank = ordered.mapIndexed { index, edge -> edge.edge.id to index }.toMap()
-    val scene = EdgeRoutingObstacles(nodes.values, obstacles, edgeObstacles, laneGap, minimumSharedRun)
+    val scene = EdgeRoutingObstacles(nodes.values, obstacles, edgeObstacles, laneGap, minimumSharedRun, clusterBorders)
     edges.forEach(scene::add)
     val affected = movedEdgeIds.toMutableSet()
     ordered.forEach { edge ->
@@ -40,7 +41,7 @@ internal fun repairEdgeRoutes(
         val id = requireNotNull(pending.pollFirst())
         val edge = byId.getValue(id)
         val result = router.route(edge, scene, edge.edge.id in movedEdgeIds)
-        // A forced route may need a neighbouring connector to yield its lane; expand only that local set.
+        // 强制路线可能要求邻近连线让出通道，仅扩大对应的局部集合。
         scene.conflicts(result).filter { it !in affected && it !in stableEdgeIds }.forEach { other ->
             affected.add(other)
             scene.remove(other)
@@ -52,12 +53,12 @@ internal fun repairEdgeRoutes(
     return edges.map { repaired[it.edge.id] ?: it }
 }
 
-/** Group title and example regions are content obstacles, while group borders remain traversable. */
+/** 分组标题和示例区域是内容障碍，分组边框仍可穿过。 */
 internal fun clusterRoutingObstacles(clusters: List<PlacedCluster>): List<Rectangle2D> = clusters.flatMap {
     listOfNotNull(DiagramClusterText.titleBounds(it), it.exampleBounds)
 }
 
-/** A connector can enter its own endpoint groups, but must travel around every unrelated group. */
+/** 连线可进入自身端点所属的分组，但必须绕开其他分组。 */
 internal fun unrelatedClusterObstacles(clusters: List<PlacedCluster>, edges: List<PlacedEdge>): Map<String, List<Rectangle2D>> =
     edges.associate { edge -> edge.edge.id to clusters.filter {
         edge.edge.from !in it.nodeIds && edge.edge.to !in it.nodeIds

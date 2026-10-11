@@ -7,7 +7,7 @@ import java.awt.geom.Rectangle2D
 import java.awt.geom.Path2D
 import kotlin.math.abs
 
-/** Directed edges and uniform animated flow for every highlighted reading path. */
+/** 绘制有向边，并为所有高亮阅读路径提供一致的流动动画。 */
 internal object DiagramEdgePainter {
     private val background get() = UnderstandingUiStyle.canvas
     private val edgeColor get() = UnderstandingUiStyle.edge
@@ -33,9 +33,10 @@ internal object DiagramEdgePainter {
             val focused = placed.edge.id == focusedChoice
             val active = placed.edge.id in routeIds && !candidate
             g.color = when { focused -> routeColor; candidate -> choiceColor; active -> routeColor; else -> edgeColor }
-            g.stroke = BasicStroke(when { focused -> 4f; candidate -> 2.8f; active -> 2.4f; else -> 1.2f },
-                BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
+            g.stroke = edgeStroke(placed.edge.inferred == true,
+                when { focused -> 4f; candidate -> 2.8f; active -> 2.4f; else -> 1.2f })
             g.draw(placed.path)
+            g.stroke = BasicStroke(1.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
             g.draw(placed.arrowPath)
             if (active && animate) {
                 g.color = flowColor
@@ -54,7 +55,7 @@ internal object DiagramEdgePainter {
         }
     }
 
-    /** A small arc makes geometric crossings visibly distinct from graph junctions. */
+    /** 用小圆弧区分几何交叉和图中的连接点。 */
     private fun paintBridges(g: Graphics2D, edges: List<PlacedEdge>, crossings: List<DiagramCrossing>,
         highlighted: Set<String>, clusters: List<PlacedCluster>, visible: Rectangle2D?,
         choiceIds: Set<String>, focusedChoice: String?) {
@@ -79,11 +80,17 @@ internal object DiagramEdgePainter {
             g.draw(bridge)
             g.color = when (top.edge.id) { focusedChoice -> routeColor; in choiceIds -> choiceColor
                 in highlighted -> routeColor; else -> edgeColor }
-            g.stroke = BasicStroke(when (top.edge.id) { focusedChoice -> 4f; in choiceIds -> 2.8f
-                in highlighted -> 2.4f; else -> 1.2f }, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
+            g.stroke = edgeStroke(top.edge.inferred == true, when (top.edge.id) { focusedChoice -> 4f; in choiceIds -> 2.8f
+                in highlighted -> 2.4f; else -> 1.2f })
             g.draw(bridge)
         }
     }
+
+    /** 推断样式独立于关系类型和活动路径，动画仍使用原有叠加层。 */
+    internal fun edgeStroke(inferred: Boolean, width: Float): BasicStroke =
+        if (inferred) BasicStroke(width, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND,
+            10f, floatArrayOf(5f, 4f), 0f)
+        else BasicStroke(width, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
 
     private fun paintEdgeLabel(g: Graphics2D, label: String, placed: PlacedEdge, active: Boolean,
         candidate: Boolean, focused: Boolean) {

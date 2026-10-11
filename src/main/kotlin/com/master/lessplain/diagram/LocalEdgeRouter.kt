@@ -5,7 +5,7 @@ import java.awt.geom.Rectangle2D
 import kotlin.math.abs
 import kotlin.math.min
 
-/** Repairs connectors in existing free corridors without moving any node or replacing ELK layout. */
+/** 在现有空闲通道中修复连线，不移动节点，也不替换 ELK 布局。 */
 internal class LocalEdgeRouter(
     private val nodes: Map<String, PlacedNode>,
     orderedEdges: List<PlacedEdge>,
@@ -45,7 +45,8 @@ internal class LocalEdgeRouter(
             for ((sourceSide, targetSide) in sidePairs(original)) {
                 for (variant in listOf(0.0, 12.0, -12.0, 24.0, -24.0)) {
                     val shell = candidates(original, variant, sourceSide, targetSide, obstacles).first()
-                    val boxes = nodes.values.map { it.bounds } + extras + edgeObstacles[original.edge.id].orEmpty()
+                    val boxes = nodes.values.map { it.bounds } + extras + edgeObstacles[original.edge.id].orEmpty() +
+                        obstacles.clusterBounds(original.edge.id)
                     val corridor = routeOrthogonalCorridor(shell[1], shell[shell.lastIndex - 1],
                         original.edge.id, boxes, obstacles) ?: continue
                     val points = listOf(shell.first()) + corridor + shell.last()
@@ -53,7 +54,7 @@ internal class LocalEdgeRouter(
                 }
             }
         }
-        // Overlapping user-placed nodes can make a clear route impossible; keep the least obstructed path.
+        // 用户放置的节点重叠时可能无法找到畅通路线，此时保留遮挡最少的路径。
         return best
     }
 
@@ -93,14 +94,15 @@ internal class LocalEdgeRouter(
         val fixed = fixedPorts[edge.edge.id]
         val first = fixed?.source?.point ?: port(source, sourceSide, outgoing.getValue(edge.edge.from), edge, variant)
         val last = fixed?.target?.point ?: port(target, targetSide, incoming.getValue(edge.edge.to), edge, variant)
-        // Distinct departure/arrival lanes can require bends at different distances from a shared node.
+        // 独立的出发和到达通道可能需要在距离共享节点不同的位置转弯。
         val stub = (if (self) 24 else 18) + abs(variant)
         val start = Point2D.Double(first.x + sourceSide.dx * stub, first.y + sourceSide.dy * stub)
         val end = Point2D.Double(last.x + targetSide.dx * stub, last.y + targetSide.dy * stub)
         fun path(vararg middle: Point2D.Double) = listOf(first, start) + middle + listOf(end, last)
         yield(path(Point2D.Double(start.x, end.y)))
         yield(path(Point2D.Double(end.x, start.y)))
-        val boxes = nodes.values.map { it.bounds } + extras + edgeObstacles[edge.edge.id].orEmpty()
+        val boxes = nodes.values.map { it.bounds } + extras + edgeObstacles[edge.edge.id].orEmpty() +
+            obstacles.clusterBounds(edge.edge.id)
         fun channels(horizontal: Boolean): List<Double> {
             val a = if (horizontal) start.y else start.x
             val b = if (horizontal) end.y else end.x

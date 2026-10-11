@@ -8,14 +8,14 @@ import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
 
-/** Straight pieces retain short rounded corners for obstacle checks without flattening the whole canvas. */
+/** 障碍检查保留直线段上的短圆角，不展平整个画布。 */
 internal data class RoutingSegment(val x1: Double, val y1: Double, val x2: Double, val y2: Double) {
     val length: Double get() = kotlin.math.hypot(x2 - x1, y2 - y1)
     val bounds: Rectangle2D.Double get() = Rectangle2D.Double(
         min(x1, x2) - 4, min(y1, y2) - 4, abs(x2 - x1) + 8, abs(y2 - y1) + 8,
     )
 
-    /** Long parallel runs closer than eight graph pixels cannot be followed independently. */
+    /** 间隔小于八个图像素的长平行线段无法独立辨认。 */
     fun sharedRun(other: RoutingSegment, gap: Double = 8.0): Double = when {
         abs(y1 - y2) < 0.01 && abs(other.y1 - other.y2) < 0.01 && abs(y1 - other.y1) < gap - 0.01 ->
             max(0.0, min(max(x1, x2), max(other.x1, other.x2)) - max(min(x1, x2), min(other.x1, other.x2)))
@@ -27,7 +27,7 @@ internal data class RoutingSegment(val x1: Double, val y1: Double, val x2: Doubl
     fun crosses(rectangle: Rectangle2D): Boolean = rectangle.intersectsLine(x1, y1, x2, y2)
 }
 
-/** Geometry shared by conflict detection, label placement and routing quality tests. */
+/** 冲突检测、标签放置和布线质量测试共用的几何规则。 */
 internal fun routingSegments(edge: PlacedEdge): List<RoutingSegment> {
     val iterator = FlatteningPathIterator(edge.path.getPathIterator(null), 1.0)
     val coordinates = DoubleArray(6)
@@ -47,7 +47,7 @@ internal fun routingSegments(edge: PlacedEdge): List<RoutingSegment> {
     }
 }
 
-/** Index individual pieces rather than large edge bounding boxes, keeping dense graph checks local. */
+/** 为独立线段建立索引，避免使用整条边的大边界框，使密集图检查保持局部化。 */
 private class RoutingSpatialIndex<T> {
     private val cells = hashMapOf<Pair<Int, Int>, MutableSet<T>>()
 
@@ -82,14 +82,19 @@ private data class EdgeReservation(
     val label: Boolean = false,
 )
 
-/** Reservations allow necessary crossings but reject hidden labels, arrows and long shared runs. */
+/** 预留允许必要交叉，但拒绝遮住标签、箭头及长距离共线。 */
 internal class EdgeRoutingObstacles(
     nodes: Collection<PlacedNode>,
     private val extras: List<Rectangle2D>,
     private val edgeObstacles: Map<String, List<Rectangle2D>> = emptyMap(),
     private val laneGap: Double = 8.0,
     private val minimumSharedRun: Double = 12.0,
+    clusterBorders: Map<String, List<Rectangle2D>> = emptyMap(),
 ) {
+    private val borders = ClusterBorderClearance(clusterBorders)
+
+    /** 将边框两侧加入候选通道，边框只禁止贴边平行段，不作为实心障碍。 */
+    fun clusterBounds(edgeId: String): List<Rectangle2D> = borders.bounds(edgeId)
     private val nodeIndex = RoutingSpatialIndex<PlacedNode>().apply {
         nodes.forEach { add(it.bounds, it) }
     }
@@ -112,15 +117,17 @@ internal class EdgeRoutingObstacles(
 
     fun crossesNode(edge: PlacedEdge): Boolean = edge.segments.any { segment ->
         nodeIndex.query(segment.bounds).any { node -> segment.crosses(interior(node.bounds)) } ||
-            (extras + edgeObstacles[edge.edge.id].orEmpty()).any(segment::crosses)
+            (extras + edgeObstacles[edge.edge.id].orEmpty()).any(segment::crosses) ||
+            borders.blocks(segment, edge.edge.id)
     }
 
     fun labelCrossesNode(edge: PlacedEdge): Boolean = edge.resolvedLabelBounds?.let { bounds ->
         nodeIndex.query(bounds).any { it.bounds.intersects(bounds) } ||
-            (extras + edgeObstacles[edge.edge.id].orEmpty()).any(bounds::intersects)
+            (extras + edgeObstacles[edge.edge.id].orEmpty()).any(bounds::intersects) ||
+            borders.blocksLabel(bounds, edge.edge.id)
     } == true
 
-    /** Only actual collisions return IDs; an isolated crossing is not a routing defect. */
+    /** 仅实际碰撞返回 ID，孤立交叉不属于布线缺陷。 */
     fun conflicts(edge: PlacedEdge): Set<String> = buildSet {
         edge.segments.forEach { segment ->
             edgeIndex.query(queryBounds(segment)).filter { it.edgeId != edge.edge.id }.forEach { obstacle ->
@@ -141,7 +148,8 @@ internal class EdgeRoutingObstacles(
 
     fun labelCost(bounds: Rectangle2D, edgeId: String): Double {
         val blocked = nodeIndex.query(bounds).count { it.bounds.intersects(bounds) } +
-            (extras + edgeObstacles[edgeId].orEmpty()).count(bounds::intersects)
+            (extras + edgeObstacles[edgeId].orEmpty()).count(bounds::intersects) +
+            if (borders.blocksLabel(bounds, edgeId)) 1 else 0
         val occupied = edgeIndex.query(bounds).count {
             it.edgeId != edgeId && (it.segment?.crosses(bounds) ?: it.bounds.intersects(bounds))
         }
@@ -151,24 +159,26 @@ internal class EdgeRoutingObstacles(
     fun collisionCost(edge: PlacedEdge): Double {
         val blocked = edge.segments.count { segment ->
             nodeIndex.query(segment.bounds).any { segment.crosses(interior(it.bounds)) } ||
-                (extras + edgeObstacles[edge.edge.id].orEmpty()).any(segment::crosses)
+                (extras + edgeObstacles[edge.edge.id].orEmpty()).any(segment::crosses) ||
+                borders.blocks(segment, edge.edge.id)
         }
         return blocked * 1_000_000_000.0 + conflicts(edge).size * 100_000.0 +
             (edge.resolvedLabelBounds?.let { labelCost(it, edge.edge.id) +
                 if (it.intersects(edge.arrowPath.bounds2D)) 100_000.0 else 0.0 } ?: 0.0)
     }
 
-    /** Grid corridors cannot cross content, and prefer crossings over parallel shared runs. */
+    /** 网格通道不能穿过内容，优先允许交叉而非长距离平行共线。 */
     fun corridorCost(segment: RoutingSegment, edgeId: String): Double {
         if (nodeIndex.query(segment.bounds).any { segment.crosses(interior(it.bounds)) } ||
-            (extras + edgeObstacles[edgeId].orEmpty()).any(segment::crosses)) return Double.POSITIVE_INFINITY
+            (extras + edgeObstacles[edgeId].orEmpty()).any(segment::crosses) ||
+            borders.blocks(segment, edgeId)) return Double.POSITIVE_INFINITY
         return edgeIndex.query(queryBounds(segment)).filter { it.edgeId != edgeId }.sumOf { obstacle ->
             if (obstacle.segment?.let { segment.sharedRun(it, laneGap) > 0.01 } ?: segment.crosses(obstacle.bounds))
                 100_000.0 else 0.0
         }
     }
 
-    /** Existing lanes and label borders supply alternate grid channels when simple doglegs fail. */
+    /** 简单折线路径失败时，利用已有通道和标签边界提供替代网格通道。 */
     fun occupiedChannels(edgeId: String, horizontal: Boolean): List<Double> = reservations
         .filterKeys { it != edgeId }.values.flatten().flatMap { reservation ->
             val segment = reservation.segment

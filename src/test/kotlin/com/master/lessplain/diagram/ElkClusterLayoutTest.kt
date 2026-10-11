@@ -11,7 +11,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
 
-/** Group arrangement follows the actual relation graph, not the payload's group order. */
+/** 分组排列依据真实关系图，不依赖提交中的分组顺序。 */
 class ElkClusterLayoutTest {
     private val sizes = linkedMapOf("main" to 10, "search" to 8, "stats" to 2, "rank" to 1, "sitemap" to 2)
     private val groups = sizes.map { (id, count) ->
@@ -96,6 +96,10 @@ class ElkClusterLayoutTest {
         for (direction in LayoutDirection.entries) {
             val layout = layoutUnderstandingClusters(joined, groups, direction = direction)
             assertEquals(joined.edges.map { it.id }, layout.edges.map { it.edge.id })
+            val starts = layout.clusters.filter { it.id != "main" }.map {
+                if (direction == LayoutDirection.VERTICAL) it.bounds.y else it.bounds.x
+            }
+            assertEquals(starts.first(), starts.last(), 0.001, "回边和数据边不能拉散并行阶段")
             assertContentClear(layout)
         }
     }
@@ -115,7 +119,7 @@ class ElkClusterLayoutTest {
                     a.width != b.width || a.height != b.height
                 }
                 if (resized) {
-                    // Dense faces may grow before layout so external edges keep independent ports.
+                    // 布局前可扩大密集节点的侧面，使外部边拥有独立端口。
                     assertTrue(connected.edges.filter { it.edge.from in group.nodeIds && it.edge.to in group.nodeIds }
                         .all { second.contains(it.paintBounds) })
                     return@forEach
@@ -178,7 +182,7 @@ class ElkClusterLayoutTest {
 
     private fun assertContentClear(layout: UnderstandingGraphLayout) {
         val scene = EdgeRoutingObstacles(layout.nodes.values, clusterRoutingObstacles(layout.clusters),
-            unrelatedClusterObstacles(layout.clusters, layout.edges))
+            unrelatedClusterObstacles(layout.clusters, layout.edges), clusterBorders = clusterBorderBounds(layout.clusters, layout.edges))
         layout.edges.forEach(scene::add)
         layout.clusters.forEach { cluster ->
             val title = DiagramClusterText.titleBounds(cluster)

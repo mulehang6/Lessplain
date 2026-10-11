@@ -7,7 +7,7 @@ import java.awt.Graphics2D
 import java.awt.geom.Rectangle2D
 import kotlin.math.sin
 
-/** Shared node appearance and hover actions for root and follow-up canvases. */
+/** 根图与追问画布共用节点外观和悬停动作。 */
 internal object DiagramNodePainter {
     private val nodeFill get() = UnderstandingUiStyle.surface
     private val nodeBorder get() = UnderstandingUiStyle.border
@@ -45,6 +45,7 @@ internal object DiagramNodePainter {
     ) {
         g.font = DiagramTextMetrics.font()
         layout.nodes.values.forEach { placed ->
+            g.font = placed.font ?: DiagramTextMetrics.font()
             val bounds = placed.bounds
             val id = placed.node.id
             if (visible != null && !visible.intersects(bounds.x - 24, bounds.y - 24,
@@ -115,12 +116,8 @@ internal object DiagramNodePainter {
         val inset = DiagramNodeSemantics.textInset(g.font, branch)
         val maxWidth = placed.bounds.width.toInt() - 24 - inset
         val lines = DiagramTextMetrics.lines(placed.node.label, maxWidth, g.font)
-        val visible = lines.take(3).toMutableList()
-        if (lines.size > 3 && visible.isNotEmpty()) {
-            var last = visible.last()
-            while (last.isNotEmpty() && metrics.stringWidth("$last…") > maxWidth) last = last.dropLast(1)
-            visible[visible.lastIndex] = "$last…"
-        }
+        // 节点在布局时已为全文预留高度，不以固定行数截断内容。
+        val visible = lines
         val startY = placed.bounds.y + 14 + metrics.ascent
         if (branch) DiagramNodeSemantics.paintBranch(g,
             DiagramNodeSemantics.iconBounds(placed.bounds, g.font, metrics.ascent, metrics.descent))

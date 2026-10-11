@@ -1,9 +1,10 @@
 package com.master.lessplain.diagram
 
 import com.master.lessplain.model.UnderstandingGraph
+import com.master.lessplain.model.GraphEdge
 
-/** Chooses one stable, longest continuation from each entry node for ELK straightness hints. */
-internal fun mainlineEdgeIds(graph: UnderstandingGraph): Set<String> {
+/** 保留所有前向阅读分支，循环内按 Agent 给出的节点顺序识别回向关系。 */
+internal fun forwardReadingEdges(graph: UnderstandingGraph): List<GraphEdge> {
     val nodeOrder = graph.nodes.mapIndexed { index, node -> node.id to index }.toMap()
     val edges = graph.edges.filter { edge ->
         edge.relation in setOf("control_flow", "call") &&
@@ -45,11 +46,16 @@ internal fun mainlineEdgeIds(graph: UnderstandingGraph): Set<String> {
     }
     graph.nodes.forEach { if (it.id !in indices) visit(it.id) }
 
-    // Within a cycle, retain the reading-order continuation and leave the back edge unhinted.
-    val forward = edges.filter { edge ->
+    // 循环内保留符合阅读顺序的后续路线，不为回边设置提示。
+    return edges.filter { edge ->
         component[edge.from] != component[edge.to] ||
             nodeOrder.getValue(edge.from) < nodeOrder.getValue(edge.to)
     }
+}
+
+/** 从每个入口选择稳定的最长后续路线，为 ELK 提供直线提示。 */
+internal fun mainlineEdgeIds(graph: UnderstandingGraph): Set<String> {
+    val forward = forwardReadingEdges(graph)
     val forwardById = forward.associateBy { it.id }
     val choices = forward.groupBy { it.from }
     val length = mutableMapOf<String, Int>()

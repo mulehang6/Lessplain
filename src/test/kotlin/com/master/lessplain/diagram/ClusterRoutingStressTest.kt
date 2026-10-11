@@ -7,7 +7,7 @@ import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-/** Generated topology guards against tuning only the two saved business examples. */
+/** 生成拓扑用于防止只针对两个已保存业务样例调优。 */
 class ClusterRoutingStressTest {
     @Test fun `unseen multi entry mixed relations joins parallel edges and cycles keep independent lanes`() {
         val failures = mutableListOf<String>()
@@ -18,7 +18,8 @@ class ClusterRoutingStressTest {
             val defects = clusterRouteDefects(layout)
             if (defects != 0) {
                 val scene = EdgeRoutingObstacles(layout.nodes.values, clusterRoutingObstacles(layout.clusters),
-                    unrelatedClusterObstacles(layout.clusters, layout.edges), DIAGRAM_LANE_GAP, 0.01)
+                    unrelatedClusterObstacles(layout.clusters, layout.edges), DIAGRAM_LANE_GAP, 0.01,
+                    clusterBorderBounds(layout.clusters, layout.edges))
                 layout.edges.forEach(scene::add)
                 failures += "$seed/$direction: " + layout.edges.filter {
                     scene.conflicts(it).isNotEmpty() || scene.crossesNode(it) || scene.labelCrossesNode(it)

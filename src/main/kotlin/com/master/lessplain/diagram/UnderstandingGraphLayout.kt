@@ -7,7 +7,8 @@ import java.awt.geom.Path2D
 import java.awt.geom.Point2D
 import java.awt.geom.Rectangle2D
 
-internal data class PlacedNode(val node: GraphNode, val bounds: Rectangle2D.Double)
+/** 节点携带布局时的字体快照，测量和绘制必须使用同一字体。 */
+internal data class PlacedNode(val node: GraphNode, val bounds: Rectangle2D.Double, val font: java.awt.Font? = null)
 
 internal data class PlacedEdge(
     val edge: GraphEdge,
@@ -51,7 +52,7 @@ internal data class PlacedCluster(
 
 internal fun examplePositionKey(clusterId: String): String = "@example-panel:$clusterId"
 
-/** Preserve follow-up groups while ELK routes all relations, including cross-group edges. */
+/** ELK 为全部关系布线时保留追问分组，包括跨组连线。 */
 internal fun layoutUnderstandingClusters(
     graph: UnderstandingGraph,
     clusters: List<DiagramCluster>,
@@ -60,14 +61,14 @@ internal fun layoutUnderstandingClusters(
     routingVersion: ClusterRoutingVersion = ClusterRoutingVersion.SEPARATE_LANES,
 ): UnderstandingGraphLayout = ElkClusterLayoutAdapter.layout(graph, clusters, examplePanels, direction, routingVersion)
 
-/** Layout entry point for a standalone graph. */
+/** 独立图的布局入口。 */
 internal fun layoutUnderstandingGraph(graph: UnderstandingGraph): UnderstandingGraphLayout =
     ElkGraphLayoutAdapter.layout(graph, LayoutDirection.VERTICAL)
 
 internal fun layoutUnderstandingGraph(graph: UnderstandingGraph, direction: LayoutDirection): UnderstandingGraphLayout =
     ElkGraphLayoutAdapter.layout(graph, direction)
 
-/** Re-route connectors after a node is dragged, while retaining the automatic layout as the reset point. */
+/** 节点拖动后重新布线，保留自动布局作为整理时的恢复依据。 */
 internal fun positionUnderstandingNodes(
     graph: UnderstandingGraph,
     base: UnderstandingGraphLayout,

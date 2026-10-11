@@ -18,7 +18,7 @@ import java.awt.geom.Rectangle2D
 
 internal enum class LayoutDirection { VERTICAL, HORIZONTAL }
 
-/** Keeps all ELK objects inside this adapter; the rest of the plugin uses AWT geometry. */
+/** 所有 ELK 对象仅存在于此适配器，其余插件代码使用 AWT 几何。 */
 internal object ElkGraphLayoutAdapter {
     fun layout(graph: UnderstandingGraph, direction: LayoutDirection): UnderstandingGraphLayout =
         layout(DiagramLayoutInput.prepare(graph, direction))
@@ -34,7 +34,7 @@ internal object ElkGraphLayoutAdapter {
             configureUnderstandingRouting(direction)
             setProperty(CoreOptions.SPACING_NODE_NODE, 52.0)
             setProperty(LayeredOptions.SPACING_NODE_NODE_BETWEEN_LAYERS,
-                if (direction == LayoutDirection.VERTICAL) 78.0 else 64.0)
+                if (direction == LayoutDirection.VERTICAL) 78.0 else if (separateLanes) DIAGRAM_LANE_GAP * 8 else 64.0)
             setProperty(CoreOptions.SPACING_COMPONENT_COMPONENT, 64.0)
         }
         val elkNodes = graph.nodes.associate { node ->
@@ -54,7 +54,7 @@ internal object ElkGraphLayoutAdapter {
         RecursiveGraphLayoutEngine().layout(root, BasicProgressMonitor())
         val placedNodes = graph.nodes.associateTo(linkedMapOf()) { node ->
             val elk = elkNodes.getValue(node.id)
-            node.id to PlacedNode(node, Rectangle2D.Double(elk.x, elk.y, elk.width, elk.height))
+            node.id to PlacedNode(node, Rectangle2D.Double(elk.x, elk.y, elk.width, elk.height), input.nodeFont)
         }
         val placedEdges = repairEdgeRoutes(placedNodes, elkEdges.map { (edge, elk) -> placedEdge(edge, elk) }, mainline,
             laneGap = if (separateLanes) DIAGRAM_LANE_GAP else 8.0, minimumSharedRun = if (separateLanes) 0.01 else 12.0)
@@ -119,7 +119,7 @@ internal object ElkGraphLayoutAdapter {
         val nodes = input.graph.nodes.mapIndexed { index, node ->
             val (width, height) = input.nodeSizes.getValue(node.id)
             node.id to PlacedNode(node, Rectangle2D.Double((index % 2) * 370.0, (index / 2) * 130.0,
-                width, height))
+                width, height), input.nodeFont)
         }.toMap(LinkedHashMap())
         return UnderstandingGraphLayout(nodes, emptyList(), graphBounds(nodes.values, emptyList()))
     }

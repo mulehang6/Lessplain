@@ -21,7 +21,7 @@ import javax.swing.ToolTipManager
 import kotlin.math.max
 import kotlin.math.min
 
-/** A single graph surface shared by the tool window and the editor. */
+/** 工具窗口和编辑器共用的单张图表面。 */
 internal class UnderstandingDiagram(
     internal val record: UnderstandingRecord,
     internal val initialState: BrowseState?,
@@ -73,7 +73,7 @@ internal class UnderstandingDiagram(
     internal var currentNodeId = selectedNodeId
     internal var routeEdgeIds = emptySet<String>()
     internal val pathHighlights = DiagramPathHighlights(this, record.graph)
-    /** Every highlighted edge uses the same flow rendering and repaint eligibility. */
+    /** 所有高亮边使用相同的流动绘制方式和重绘规则。 */
     internal val highlightedEdgeIds: Set<String> get() = routeEdgeIds + pathHighlights.upstreamEdgeIds
     internal var choiceTargets = emptySet<String>()
     internal val routeChoice = DiagramRouteChoiceState()
@@ -292,6 +292,7 @@ internal class UnderstandingDiagram(
     private val uiFonts = CanvasUiFonts(listOf(this, sourceStatus.label)) {
         if (!disposed) {
             header.refreshAppearance()
+            layoutCoordinator.invalidateMeasurements()
             doLayout()
             requestLayout()
             repaint()
@@ -348,17 +349,14 @@ internal class UnderstandingDiagram(
     }
 
     override fun getToolTipText(event: MouseEvent): String? {
-        candidateEdgeAt(event.point)?.let { id ->
-            val edge = record.graph.edges.first { it.id == id }
-            return edge.condition?.takeIf(String::isNotBlank) ?: edge.relation
-        }
         noteActionAt(event.point)?.let { return if (hasNodeNote(it)) null else "添加注释" }
         clusterEditAt(event.point)?.let { return "编辑标题" }
         copyActionAt(event.point)?.let { return "复制" }
         questionActionAt(event.point)?.let { return "查看 ${questionCounts.getValue(it)} 个追问" }
-        return nodeAt(event.point)?.takeIf { it == hoveredNodeId }?.let { id ->
-            layout.nodes[id]?.node?.label
+        nodeAt(event.point)?.let { id ->
+            return if (id == hoveredNodeId) layout.nodes[id]?.node?.label else null
         }
+        return edgeTooltipAt(event.point)
     }
 
     internal fun retryFailedLayout(): Boolean {

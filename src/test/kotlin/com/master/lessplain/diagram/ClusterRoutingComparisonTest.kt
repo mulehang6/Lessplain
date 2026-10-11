@@ -15,14 +15,14 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-/** Fixed inputs produce comparable geometry and offscreen artifacts, without launching an IDE. */
+/** 固定输入生成可比较的几何和离屏产物，不启动 IDE。 */
 class ClusterRoutingComparisonTest {
     @Test fun `compare ordinary legacy and separate lanes on identical graphs and groups`() {
         val output = Path.of("build/reports/cluster-routing")
         Files.createDirectories(output)
         val results = mutableListOf<RoutingComparison>()
         val failures = mutableListOf<String>()
-        // Initialize ELK and font services outside every sample's timing.
+        // 每个样本计时前先初始化 ELK 和字体服务。
         layoutUnderstandingGraph(UnderstandingGraph(listOf(GraphNode("warmup", "预热")), emptyList()))
         val samples = listOf(
             "article-publish" to groupedFlowFixture("article-publish-clusters"),
@@ -69,7 +69,8 @@ class ClusterRoutingComparisonTest {
 
     private fun quality(layout: UnderstandingGraphLayout): RoutingQuality {
         val scene = EdgeRoutingObstacles(layout.nodes.values, clusterRoutingObstacles(layout.clusters),
-            unrelatedClusterObstacles(layout.clusters, layout.edges), DIAGRAM_LANE_GAP, 0.01)
+            unrelatedClusterObstacles(layout.clusters, layout.edges), DIAGRAM_LANE_GAP, 0.01,
+            clusterBorderBounds(layout.clusters, layout.edges))
         layout.edges.forEach(scene::add)
         val content = layout.edges.count { scene.crossesNode(it) || scene.labelCrossesNode(it) ||
             it.resolvedLabelBounds?.intersects(it.arrowPath.bounds2D) == true }
@@ -95,7 +96,7 @@ class ClusterRoutingComparisonTest {
         ImageIO.write(image, "png", output.toFile())
     }
 
-    /** Merge consumers or payment coordination responsibilities, retaining independent read requests. */
+    /** 合并消费者或支付协调职责，保留独立读取请求。 */
     private fun regroup(name: String, groups: List<DiagramCluster>): List<DiagramCluster> {
         val mergedIds = when (name) {
             "article-publish" -> setOf("search", "author-statistics", "activity", "sitemap")

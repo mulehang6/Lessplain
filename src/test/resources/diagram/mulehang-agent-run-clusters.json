@@ -1,0 +1,768 @@
+{
+  "nodes": [
+    {
+      "id": "send",
+      "label": "接受发送请求",
+      "flowRoles": [
+        "start"
+      ]
+    },
+    {
+      "id": "cancel",
+      "label": "取消运行并清理等待",
+      "flowRoles": [
+        "start"
+      ]
+    },
+    {
+      "id": "sendDraft",
+      "label": "保存用户轮次\n收集运行事件"
+    },
+    {
+      "id": "applyEvent",
+      "label": "归并事件并更新会话"
+    },
+    {
+      "id": "reduce",
+      "label": "更新进度或归并内容"
+    },
+    {
+      "id": "reduceContent",
+      "label": "更新消息与运行终态"
+    },
+    {
+      "id": "useCase",
+      "label": "校验输入并调用网关"
+    },
+    {
+      "id": "gateway",
+      "label": "建立事件流\n编排运行与清理"
+    },
+    {
+      "id": "prepare",
+      "label": "执行前置 Hook\n整理用户输入"
+    },
+    {
+      "id": "stopHooks",
+      "label": "停止 Hook 可阻断\n继续下一轮执行"
+    },
+    {
+      "id": "retry",
+      "label": "溢出后压缩重试\n工具已启动则拒绝"
+    },
+    {
+      "id": "koogRun",
+      "label": "配置 Koog 运行\n保存或中断检查点"
+    },
+    {
+      "id": "strategy",
+      "label": "连接模型与工具节点\n工具结果回到执行"
+    },
+    {
+      "id": "stream",
+      "label": "流式生成消息\n落盘状态快照"
+    },
+    {
+      "id": "registry",
+      "label": "注册桌面工具\n包装扩展 Hook"
+    },
+    {
+      "id": "approvalGuard",
+      "label": "匹配自动审批\n等待人工批准"
+    },
+    {
+      "id": "shell",
+      "label": "审批后执行 Shell\n逐段发送工具输出"
+    },
+    {
+      "id": "bridge",
+      "label": "保存交互请求\n转发审批与问答事件"
+    },
+    {
+      "id": "approvalWait",
+      "label": "登记 Deferred\n等待桌面审批"
+    },
+    {
+      "id": "approvalSubmit",
+      "label": "完成对应审批等待"
+    },
+    {
+      "id": "approvalAnswer",
+      "label": "提交用户审批答案",
+      "flowRoles": [
+        "start"
+      ]
+    },
+    {
+      "id": "pendingAnswer",
+      "label": "先保存答案\n再释放等待并更新 UI"
+    },
+    {
+      "id": "approvalRecord",
+      "label": "持久化待审批请求"
+    },
+    {
+      "id": "interactionAnswer",
+      "label": "保存已回答交互"
+    },
+    {
+      "id": "snapshot",
+      "label": "生成待保存状态快照"
+    },
+    {
+      "id": "snapshotPersist",
+      "label": "写入会话状态消息"
+    },
+    {
+      "id": "beginRun",
+      "label": "绑定运行与用户轮次\n登记运行状态"
+    },
+    {
+      "id": "finishRun",
+      "label": "保存最终输出\n清理可恢复状态",
+      "flowRoles": [
+        "end"
+      ],
+      "endOutcome": "success"
+    },
+    {
+      "id": "interruptRun",
+      "label": "标记运行中断\n保留恢复记录"
+    },
+    {
+      "id": "journal",
+      "label": "按工具事件分派\n写入运行日志"
+    },
+    {
+      "id": "journalInterrupt",
+      "label": "中断未完成工具调用"
+    },
+    {
+      "id": "journalStart",
+      "label": "保存工具名与参数"
+    },
+    {
+      "id": "journalOutput",
+      "label": "追加部分工具输出"
+    },
+    {
+      "id": "journalFinish",
+      "label": "保存结果或失败原因"
+    },
+    {
+      "id": "pause",
+      "label": "取消运行 Job\n切换为暂停",
+      "flowRoles": [
+        "start"
+      ]
+    },
+    {
+      "id": "resume",
+      "label": "核对恢复条件\n重启原用户轮次",
+      "flowRoles": [
+        "start"
+      ]
+    },
+    {
+      "id": "recoverFind",
+      "label": "查询可恢复运行"
+    },
+    {
+      "id": "abandon",
+      "label": "放弃运行并中断日志"
+    },
+    {
+      "id": "adapt",
+      "label": "修复中断工具检查点\n保留待消费审批"
+    }
+  ],
+  "edges": [
+    {
+      "id": "send-sendDraft",
+      "from": "send",
+      "to": "sendDraft",
+      "relation": "call",
+      "coverage": "send 更新草稿后直接调用 sendDraft。"
+    },
+    {
+      "id": "sendDraft-useCase",
+      "from": "sendDraft",
+      "to": "useCase",
+      "relation": "call",
+      "coverage": "持久化已接受的用户轮次并装配资源后，调用 SendMessageUseCase.invoke(request)。"
+    },
+    {
+      "id": "sendDraft-applyEvent",
+      "from": "sendDraft",
+      "to": "applyEvent",
+      "relation": "call",
+      "coverage": "collect 回调将该会话的每个 AgentStreamEvent 交给 applyAgentEvent。"
+    },
+    {
+      "id": "useCase-gateway",
+      "from": "useCase",
+      "to": "gateway",
+      "relation": "call",
+      "coverage": "推断：用例调用注入的 AgentGateway.run，本图采用生产 KoogAgentGateway 实现。",
+      "inferred": true
+    },
+    {
+      "id": "gateway-prepare",
+      "from": "gateway",
+      "to": "prepare",
+      "relation": "call",
+      "coverage": "准备 MCP 工具后调用 prepareRequestForHooks；Hook 拒绝时不继续运行。"
+    },
+    {
+      "id": "prepare-stopHooks",
+      "from": "prepare",
+      "to": "stopHooks",
+      "relation": "data_flow",
+      "coverage": "gateway 将 Hook 准备后的请求传给 runWithStopHooks。"
+    },
+    {
+      "id": "gateway-stopHooks",
+      "from": "gateway",
+      "to": "stopHooks",
+      "relation": "call",
+      "coverage": "gateway 直接调用 runWithStopHooks。"
+    },
+    {
+      "id": "gateway-bridge",
+      "from": "gateway",
+      "to": "bridge",
+      "relation": "call",
+      "coverage": "创建包装交互桥，将事件写入运行队列。"
+    },
+    {
+      "id": "gateway-registry",
+      "from": "gateway",
+      "to": "registry",
+      "relation": "call",
+      "coverage": "构造 DesktopToolRegistryFactory 并调用 create 注册桌面工具。"
+    },
+    {
+      "id": "registry-shell",
+      "from": "registry",
+      "to": "shell",
+      "relation": "dependency",
+      "coverage": "推断：registry 使用 tools(DesktopToolSet(...)) 注册 @Tool 方法；模型能否调用 run_shell 由运行时选择。",
+      "inferred": true
+    },
+    {
+      "id": "stopHooks-retry",
+      "from": "stopHooks",
+      "to": "retry",
+      "relation": "call",
+      "coverage": "未注入测试 agentRunner 时执行 runWithContextOverflowRetry。"
+    },
+    {
+      "id": "stopHooks-stopHooks",
+      "from": "stopHooks",
+      "to": "stopHooks",
+      "relation": "control_flow",
+      "coverage": "repeat(STOP_RETRY_LIMIT+1) 的内部循环继续执行下一轮，不是递归调用。",
+      "condition": "Stop Hook 阻断且未超上限"
+    },
+    {
+      "id": "retry-koogRun-initial",
+      "from": "retry",
+      "to": "koogRun",
+      "relation": "call",
+      "coverage": "推断：首轮调用 run 回调，runWithStopHooks 将该回调绑定到 runWithKoogAgent。",
+      "inferred": true
+    },
+    {
+      "id": "retry-koogRun-compacted",
+      "from": "retry",
+      "to": "koogRun",
+      "relation": "call",
+      "coverage": "推断：上下文溢出且尚未启动工具，压缩确实缩短历史后，再次通过 run 回调执行同一运行。",
+      "inferred": true
+    },
+    {
+      "id": "koogRun-strategy",
+      "from": "koogRun",
+      "to": "strategy",
+      "relation": "call",
+      "coverage": "构建 graphStrategy，随后交给 Koog agent 执行。"
+    },
+    {
+      "id": "strategy-stream",
+      "from": "strategy",
+      "to": "stream",
+      "relation": "call",
+      "coverage": "call_llm_streaming 和 send_tool_results_streaming 节点的回调都调用 requestStreamingAssistantMessage。"
+    },
+    {
+      "id": "stream-strategy",
+      "from": "stream",
+      "to": "strategy",
+      "relation": "data_flow",
+      "coverage": "推断：模型返回 Message.Assistant，由 Koog 策略边条件选择结束或工具节点；静态图不代表实际工具选择。",
+      "inferred": true
+    },
+    {
+      "id": "strategy-shell",
+      "from": "strategy",
+      "to": "shell",
+      "relation": "control_flow",
+      "coverage": "推断：Koog 以模型消息中的工具调用选择注册的 run_shell；这是可能路径，并非实测。",
+      "condition": "模型请求 run_shell",
+      "inferred": true
+    },
+    {
+      "id": "shell-strategy",
+      "from": "shell",
+      "to": "strategy",
+      "relation": "data_flow",
+      "coverage": "推断：工具执行结果由 Koog nodeExecuteTools 交给 send_tool_results_streaming，再请求模型；是否继续工具调用由模型输出决定。",
+      "inferred": true
+    },
+    {
+      "id": "shell-approvalGuard",
+      "from": "shell",
+      "to": "approvalGuard",
+      "relation": "call",
+      "coverage": "run_shell 在执行命令前调用 ensureExecuteApproval；硬规则拒绝或未批准时返回拒绝消息。"
+    },
+    {
+      "id": "approvalGuard-bridge",
+      "from": "approvalGuard",
+      "to": "bridge",
+      "relation": "call",
+      "coverage": "推断：需要人工审批时调用注入的 interactionBridge.requestApproval，其生产包装器在 eventEmittingBridge 中创建。",
+      "inferred": true
+    },
+    {
+      "id": "bridge-approvalRecord",
+      "from": "bridge",
+      "to": "approvalRecord",
+      "relation": "call",
+      "coverage": "人工审批且会话/运行 ID 非空时先调用 recordApproval。"
+    },
+    {
+      "id": "bridge-approvalWait",
+      "from": "bridge",
+      "to": "approvalWait",
+      "relation": "call",
+      "coverage": "推断：包装桥调用其底层 DesktopToolInteractionBridge.requestApproval，桌面实现为 DesktopToolInteractionCoordinator。",
+      "inferred": true
+    },
+    {
+      "id": "bridge-gateway",
+      "from": "bridge",
+      "to": "gateway",
+      "relation": "data_flow",
+      "coverage": "推断：ApprovalRequested、QuestionRequested 和输出事件经 emitEvent=eventQueue::send 回到 gateway 转发协程。",
+      "inferred": true
+    },
+    {
+      "id": "gateway-applyEvent",
+      "from": "gateway",
+      "to": "applyEvent",
+      "relation": "data_flow",
+      "coverage": "推断：gateway Flow 经用例与 sendDraft/resume 的 collect 传给 UI applyAgentEvent；不是网关直接调用桌面类。",
+      "inferred": true
+    },
+    {
+      "id": "approvalAnswer-pendingAnswer",
+      "from": "approvalAnswer",
+      "to": "pendingAnswer",
+      "relation": "call",
+      "coverage": "审批入口把 ApprovalResponse 转交 ChatPendingInteractionController.answerApproval。"
+    },
+    {
+      "id": "pendingAnswer-interactionAnswer",
+      "from": "pendingAnswer",
+      "to": "interactionAnswer",
+      "relation": "call",
+      "coverage": "先持久化审批答复，保证暂停后仍有可消费答案。"
+    },
+    {
+      "id": "pendingAnswer-approvalSubmit",
+      "from": "pendingAnswer",
+      "to": "approvalSubmit",
+      "relation": "call",
+      "coverage": "随后调用 submitApproval 完成活跃审批 Deferred。"
+    },
+    {
+      "id": "approvalSubmit-approvalWait",
+      "from": "approvalSubmit",
+      "to": "approvalWait",
+      "relation": "data_flow",
+      "coverage": "complete 将结果送入 requestApproval 所等待的同一 pendingApproval Deferred。"
+    },
+    {
+      "id": "approvalWait-approvalGuard",
+      "from": "approvalWait",
+      "to": "approvalGuard",
+      "relation": "data_flow",
+      "coverage": "审批 Boolean 经包装桥返回 ensureExecuteApproval，保存审计结果并返回给工具。"
+    },
+    {
+      "id": "approvalGuard-shell",
+      "from": "approvalGuard",
+      "to": "shell",
+      "relation": "data_flow",
+      "coverage": "已批准才继续执行命令，未批准会使 run_shell 拒绝执行。"
+    },
+    {
+      "id": "pendingAnswer-cancel",
+      "from": "pendingAnswer",
+      "to": "cancel",
+      "relation": "control_flow",
+      "coverage": "推断：拒绝且仍有活跃等待时，经 ChatWindowState.cancelActiveRun 转交运行控制器。",
+      "condition": "拒绝且仍在运行",
+      "inferred": true
+    },
+    {
+      "id": "pendingAnswer-abandon",
+      "from": "pendingAnswer",
+      "to": "abandon",
+      "relation": "control_flow",
+      "coverage": "没有活跃等待时，拒绝答复会终结已中断运行。",
+      "condition": "拒绝且运行已中断"
+    },
+    {
+      "id": "pendingAnswer-resume",
+      "from": "pendingAnswer",
+      "to": "resume",
+      "relation": "control_flow",
+      "coverage": "推断：答复已落盘但没有活跃 Deferred，当前会话经 ChatWindowState.resumeActiveRun 恢复。",
+      "condition": "批准且当前会话已中断",
+      "inferred": true
+    },
+    {
+      "id": "pendingAnswer-recoverFind",
+      "from": "pendingAnswer",
+      "to": "recoverFind",
+      "relation": "call",
+      "coverage": "拒绝且无活跃等待时先查对应会话的 interruptedRun。"
+    },
+    {
+      "id": "stream-snapshot",
+      "from": "stream",
+      "to": "snapshot",
+      "relation": "call",
+      "coverage": "流式请求前读取 pendingSnapshot，指纹未变时不重复写入。"
+    },
+    {
+      "id": "stream-snapshotPersist",
+      "from": "stream",
+      "to": "snapshotPersist",
+      "relation": "call",
+      "coverage": "有新快照时追加模型提示词，并调用 persist。"
+    },
+    {
+      "id": "snapshot-snapshotPersist",
+      "from": "snapshot",
+      "to": "snapshotPersist",
+      "relation": "data_flow",
+      "coverage": "stream 将新 snapshot 与 messageText 原样传给 persist。"
+    },
+    {
+      "id": "snapshotPersist-applyEvent",
+      "from": "snapshotPersist",
+      "to": "applyEvent",
+      "relation": "data_flow",
+      "coverage": "推断：stream 在 persist 后发出 StatusSnapshotUpdated，经运行事件流送到 UI。",
+      "inferred": true
+    },
+    {
+      "id": "koogRun-beginRun",
+      "from": "koogRun",
+      "to": "beginRun",
+      "relation": "call",
+      "coverage": "创建持久化 Provider 时登记本次运行与用户轮次。"
+    },
+    {
+      "id": "koogRun-finishRun",
+      "from": "koogRun",
+      "to": "finishRun",
+      "relation": "control_flow",
+      "coverage": "agent 正常返回后调用 finishRun(COMPLETED)。",
+      "condition": "正常返回"
+    },
+    {
+      "id": "koogRun-interruptRun",
+      "from": "koogRun",
+      "to": "interruptRun",
+      "relation": "control_flow",
+      "coverage": "取消异常和其他异常都调用 interruptRun，随后继续抛出。",
+      "condition": "取消或异常"
+    },
+    {
+      "id": "gateway-journal",
+      "from": "gateway",
+      "to": "journal",
+      "relation": "call",
+      "coverage": "转发协程逐条先 eventJournal.record(event)，再发送给 Flow 收集者。"
+    },
+    {
+      "id": "koogRun-journal",
+      "from": "koogRun",
+      "to": "journal",
+      "relation": "call",
+      "coverage": "恢复时为适配器返回的 unknownCalls 构造 ToolCallInterrupted 并直接记录。"
+    },
+    {
+      "id": "journal-journalStart",
+      "from": "journal",
+      "to": "journalStart",
+      "relation": "control_flow",
+      "coverage": "record 按事件类型分派。",
+      "condition": "ToolCallStarted"
+    },
+    {
+      "id": "journal-journalOutput",
+      "from": "journal",
+      "to": "journalOutput",
+      "relation": "control_flow",
+      "coverage": "record 按事件类型分派。",
+      "condition": "ToolOutputDelta"
+    },
+    {
+      "id": "journal-journalFinish",
+      "from": "journal",
+      "to": "journalFinish",
+      "relation": "control_flow",
+      "coverage": "record 将完成或失败事件分派到 finish，分别传入终态。",
+      "condition": "工具完成或失败"
+    },
+    {
+      "id": "journal-journalInterrupt",
+      "from": "journal",
+      "to": "journalInterrupt",
+      "relation": "control_flow",
+      "coverage": "record 按事件类型分派。",
+      "condition": "ToolCallInterrupted"
+    },
+    {
+      "id": "applyEvent-reduce",
+      "from": "applyEvent",
+      "to": "reduce",
+      "relation": "call",
+      "coverage": "applyAgentEvent 用 reduceAgentEvent 更新该会话。"
+    },
+    {
+      "id": "reduce-reduceContent",
+      "from": "reduce",
+      "to": "reduceContent",
+      "relation": "call",
+      "coverage": "Status 更新进度消息后返回；其他事件进入 reduceContentEvent。"
+    },
+    {
+      "id": "reduceContent-sendDraft",
+      "from": "reduceContent",
+      "to": "sendDraft",
+      "relation": "data_flow",
+      "coverage": "推断：归并后的 UI 状态影响下一次发送是否允许，sendDraft 会读取 executionState、activeRunJob 和历史消息。",
+      "inferred": true
+    },
+    {
+      "id": "cancel-gateway",
+      "from": "cancel",
+      "to": "gateway",
+      "relation": "data_flow",
+      "coverage": "推断：activeRunJob.cancel 取消 useCase Flow 收集并传播到 gateway 协程；不是直接调用 gateway。",
+      "inferred": true
+    },
+    {
+      "id": "pause-gateway",
+      "from": "pause",
+      "to": "gateway",
+      "relation": "data_flow",
+      "coverage": "推断：暂停通过 activeRunJob.cancel 取消同一运行链，UI 保留 Paused 状态。",
+      "inferred": true
+    },
+    {
+      "id": "pause-resume",
+      "from": "pause",
+      "to": "resume",
+      "relation": "control_flow",
+      "coverage": "推断：用户暂停后可手动继续；resume 校验 Paused/Interrupted 状态及是否仍有活跃 Job。",
+      "condition": "用户继续暂停轮次",
+      "inferred": true
+    },
+    {
+      "id": "resume-recoverFind",
+      "from": "resume",
+      "to": "recoverFind",
+      "relation": "call",
+      "coverage": "在资源 dispatcher 中查询当前会话最近的中断运行。"
+    },
+    {
+      "id": "resume-abandon",
+      "from": "resume",
+      "to": "abandon",
+      "relation": "control_flow",
+      "coverage": "查到无检查点且尚未调用工具的运行时，终结空记录并创建新的 traceId。",
+      "condition": "无检查点且未调用工具"
+    },
+    {
+      "id": "resume-useCase",
+      "from": "resume",
+      "to": "useCase",
+      "relation": "control_flow",
+      "coverage": "恢复条件允许后装配资源、调用用例；有 checkpoint 时沿用原 runId，无 checkpoint 且已有工具则拒绝。",
+      "condition": "恢复校验通过"
+    },
+    {
+      "id": "resume-applyEvent",
+      "from": "resume",
+      "to": "applyEvent",
+      "relation": "call",
+      "coverage": "恢复链 collect 仍将事件交给同一个 applyAgentEvent。"
+    },
+    {
+      "id": "koogRun-adapt",
+      "from": "koogRun",
+      "to": "adapt",
+      "relation": "control_flow",
+      "coverage": "resumeRunId 非空时读 checkpoint，调用 adapt 后从检查点恢复。",
+      "condition": "存在 resumeRunId"
+    },
+    {
+      "id": "interruptRun-recoverFind",
+      "from": "interruptRun",
+      "to": "recoverFind",
+      "relation": "data_flow",
+      "coverage": "interruptRun 写入 INTERRUPTED 状态，interruptedRun 读取该状态及检查点、工具日志。"
+    },
+    {
+      "id": "journalStart-recoverFind",
+      "from": "journalStart",
+      "to": "recoverFind",
+      "relation": "data_flow",
+      "coverage": "interruptedRun 的 hasToolCalls 来自同一 run 的工具调用记录。"
+    },
+    {
+      "id": "journalFinish-adapt",
+      "from": "journalFinish",
+      "to": "adapt",
+      "relation": "data_flow",
+      "coverage": "adapt 从持久化已完成/失败工具日志生成结果，避免重复执行。"
+    },
+    {
+      "id": "journalOutput-adapt",
+      "from": "journalOutput",
+      "to": "adapt",
+      "relation": "data_flow",
+      "coverage": "adapt 对不确定结果的中断工具保留 partial_output。"
+    },
+    {
+      "id": "interactionAnswer-adapt",
+      "from": "interactionAnswer",
+      "to": "adapt",
+      "relation": "data_flow",
+      "coverage": "推断：adapt 经 hasUnconsumedAnswerForTool 读取已回答但未消费审批，保留单个工具的可重入检查点。",
+      "inferred": true
+    },
+    {
+      "id": "adapt-strategy",
+      "from": "adapt",
+      "to": "strategy",
+      "relation": "data_flow",
+      "coverage": "推断：修复后的 checkpoint.graphProperties.nodePath/lastOutput 由 Persistence.runFromCheckpoint 恢复 Koog 策略节点。",
+      "inferred": true
+    },
+    {
+      "id": "shell-bridge",
+      "from": "shell",
+      "to": "bridge",
+      "relation": "data_flow",
+      "coverage": "推断：工具执行器通过 DesktopToolSet 包装的输出回调调用 interactionBridge.onToolOutputChunk，桥转换成 ToolOutputDelta。",
+      "inferred": true
+    }
+  ],
+  "clusters": [
+    {
+      "id": "desktop",
+      "title": "桌面发送与状态归并",
+      "nodeIds": [
+        "send",
+        "cancel",
+        "sendDraft",
+        "applyEvent",
+        "reduce",
+        "reduceContent"
+      ]
+    },
+    {
+      "id": "orchestration",
+      "title": "请求校验与 Hook 编排",
+      "nodeIds": [
+        "useCase",
+        "gateway",
+        "prepare",
+        "stopHooks"
+      ]
+    },
+    {
+      "id": "model",
+      "title": "模型循环与溢出重试",
+      "nodeIds": [
+        "retry",
+        "koogRun",
+        "strategy",
+        "stream"
+      ]
+    },
+    {
+      "id": "tools",
+      "title": "工具注册、执行与交互桥",
+      "nodeIds": [
+        "registry",
+        "approvalGuard",
+        "shell",
+        "bridge"
+      ]
+    },
+    {
+      "id": "approvals",
+      "title": "人工审批与暂停后答复",
+      "nodeIds": [
+        "approvalWait",
+        "approvalSubmit",
+        "approvalAnswer",
+        "pendingAnswer",
+        "approvalRecord",
+        "interactionAnswer"
+      ]
+    },
+    {
+      "id": "snapshots",
+      "title": "模型状态快照",
+      "nodeIds": [
+        "snapshot",
+        "snapshotPersist"
+      ]
+    },
+    {
+      "id": "persistence",
+      "title": "运行状态与工具日志",
+      "nodeIds": [
+        "beginRun",
+        "finishRun",
+        "interruptRun",
+        "journal",
+        "journalInterrupt",
+        "journalStart",
+        "journalOutput",
+        "journalFinish"
+      ]
+    },
+    {
+      "id": "recovery",
+      "title": "暂停与检查点恢复",
+      "nodeIds": [
+        "pause",
+        "resume",
+        "recoverFind",
+        "abandon",
+        "adapt"
+      ]
+    }
+  ]
+}

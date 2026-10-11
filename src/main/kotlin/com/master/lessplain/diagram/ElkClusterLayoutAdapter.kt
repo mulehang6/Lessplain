@@ -8,11 +8,14 @@ import org.eclipse.elk.core.options.PortConstraints
 import org.eclipse.elk.core.util.BasicProgressMonitor
 import org.eclipse.elk.graph.util.ElkGraphUtil
 
-/** Layout each group's content first, then arrange fixed-size groups by their actual relations. */
+/** 先布局各组内容，再按实际关系排列尺寸固定的分组。 */
 internal object ElkClusterLayoutAdapter {
     fun layout(graph: UnderstandingGraph, clusters: List<DiagramCluster>,
         examplePanels: List<DiagramExamplePanel>, direction: LayoutDirection,
         routingVersion: ClusterRoutingVersion = ClusterRoutingVersion.SEPARATE_LANES): UnderstandingGraphLayout {
+        if (routingVersion == ClusterRoutingVersion.SEPARATE_LANES) {
+            return ReadingClusterLayout.layout(graph, clusters, examplePanels, direction)
+        }
         var best: UnderstandingGraphLayout? = null
         var bestDefects = Int.MAX_VALUE
         for (attempt in 0..3) {
@@ -71,8 +74,8 @@ internal object ElkClusterLayoutAdapter {
                 elkGroups.getValue(owner.getValue(edge.to)), direction, input.edgeLabelSizes[edge.id], edge.id in mainline,
                 sourceOrders[edge.id], targetOrders[edge.id])
         }
-        // Shared question canvases have independent records, whose reading order must remain stable.
-        // A graph with real cross-group relations must never acquire artificial serial dependencies.
+        // 共享追问画布包含独立记录，必须保留各记录的阅读顺序。
+        // 有真实跨组关系的图不能额外引入人为的串行依赖。
         if (crossEdges.isEmpty()) groups.zipWithNext().forEachIndexed { index, (first, second) ->
             ElkGraphUtil.createSimpleEdge(elkGroups.getValue(first.id), elkGroups.getValue(second.id))
                 .identifier = "@cluster-order:$index"
@@ -94,7 +97,8 @@ internal object ElkClusterLayoutAdapter {
         val initialRoutes = repairEdgeRoutes(nodes, edges, mainline, obstacles = clusterRoutingObstacles(clustersPlaced),
             edgeObstacles = unrelatedClusterObstacles(clustersPlaced, edges), stableEdgeIds = insideEdges.keys,
             laneGap = if (separateLanes) DIAGRAM_LANE_GAP else 8.0,
-            minimumSharedRun = if (separateLanes) 0.01 else 12.0, fixedPorts = ports)
+            minimumSharedRun = if (separateLanes) 0.01 else 12.0, fixedPorts = ports,
+            clusterBorders = if (separateLanes) clusterBorderBounds(clustersPlaced, edges) else emptyMap())
         val repaired = if (separateLanes) refineClusterLanes(nodes, initialRoutes, clustersPlaced, ports) else initialRoutes
         val bounds = graphBounds(nodes.values, repaired)
         clustersPlaced.forEach { bounds.add(it.bounds) }
