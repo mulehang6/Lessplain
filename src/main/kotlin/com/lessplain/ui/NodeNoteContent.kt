@@ -59,7 +59,7 @@ internal fun NodeNoteContent(
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(UnderstandingUiMetrics.GAP.dp)) {
                         if (!readOnly) {
-                            OutlinedButton(onClick = { edit(note) }) { Text("编辑") }
+                            OutlinedButton(onClick = { edit(note) }) { Text("查看／编辑") }
                             OutlinedButton(onClick = { delete(note) }) { Text("删除") }
                         }
                     }

@@ -10,11 +10,17 @@ internal data class DiagramTitleState(var hovered: String? = null, var pressed: 
 internal class DiagramOverlayInteraction(private val diagram: UnderstandingDiagram) : AutoCloseable {
     val titles = DiagramTitleState()
     val clusterTargets = mutableMapOf<String, String>()
+    private var edgeDetails: AutoCloseable? = null
     private val resources = mutableListOf<AutoCloseable>()
     var anchor = Point()
         private set
 
     fun own(resource: AutoCloseable) { resources += resource }
+
+    fun replaceEdgeDetails(resource: AutoCloseable) {
+        edgeDetails?.close()
+        edgeDetails = resource
+    }
 
     fun moved(point: Point) {
         anchor = point
@@ -41,6 +47,8 @@ internal class DiagramOverlayInteraction(private val diagram: UnderstandingDiagr
     }
 
     override fun close() {
+        edgeDetails?.close()
+        edgeDetails = null
         resources.asReversed().forEach { it.close() }
         resources.clear()
         clusterTargets.clear()

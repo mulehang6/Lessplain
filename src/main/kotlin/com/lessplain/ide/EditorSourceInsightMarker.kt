@@ -23,6 +23,7 @@ internal class EditorSourceInsightMarker(
     end: Int,
     label: String,
     private val navigation: SourceInlayNavigation,
+    private val binding: SourceNodeBinding? = null,
 ) : Disposable {
     private val renderer = InsightInlayRenderer(label, start, end, navigation.canPrevious, navigation.canNext)
     private val originalText = editor.document.charsSequence.subSequence(start, end).toString()
@@ -129,6 +130,7 @@ internal class EditorSourceInsightMarker(
     }
 
     init {
+        if (inlay != null && binding != null) editor.putUserData(SOURCE_NODE_BINDING, binding)
         if (inlay != null) editor.document.addDocumentListener(documentListener, documentLifetime)
         if (inlay != null) editor.contentComponent.addMouseMotionListener(mouse)
         if (inlay != null) editor.contentComponent.addMouseListener(mouse)
@@ -160,6 +162,9 @@ internal class EditorSourceInsightMarker(
     override fun dispose() {
         if (disposed) return
         disposed = true
+        if (binding != null && editor.getUserData(SOURCE_NODE_BINDING) === binding) {
+            editor.putUserData(SOURCE_NODE_BINDING, null)
+        }
         Disposer.dispose(documentLifetime)
         navigation.cancelChoices()
         hoverState.dispose()

@@ -22,6 +22,7 @@ internal class SourceInsightMarker(private val project: Project, parent: Disposa
         val end: Int,
         val label: String,
         val navigation: SourceInlayNavigation,
+        val binding: SourceNodeBinding?,
     )
 
     private val factory = EditorFactory.getInstance()
@@ -45,7 +46,8 @@ internal class SourceInsightMarker(private val project: Project, parent: Disposa
     }
 
     /** 不打开源码编辑器即可定位证据。 */
-    fun show(anchor: SourceAnchor?, label: String, navigation: SourceInlayNavigation): LocatedSource? {
+    fun show(anchor: SourceAnchor?, label: String, navigation: SourceInlayNavigation,
+        binding: SourceNodeBinding? = null): LocatedSource? {
         check(SwingUtilities.isEventDispatchThread())
         clear()
         if (anchor == null || disposed) return null
@@ -61,7 +63,7 @@ internal class SourceInsightMarker(private val project: Project, parent: Disposa
         } ?: return located
         val end = (start + anchor.text.length).coerceAtMost(document.textLength)
         if (end <= start) return located
-        target = Target(document, start, end, label.replace('\n', ' '), navigation)
+        target = Target(document, start, end, label.replace('\n', ' '), navigation, binding)
         refreshOpenEditors()
         return located
     }
@@ -81,7 +83,7 @@ internal class SourceInsightMarker(private val project: Project, parent: Disposa
 
     private fun attach(editor: Editor, value: Target) {
         if (editor.project != project || editor.document !== value.document || editor in markers) return
-        EditorSourceInsightMarker(editor, value.start, value.end, value.label, value.navigation).takeIf { it.isInstalled }?.let {
+        EditorSourceInsightMarker(editor, value.start, value.end, value.label, value.navigation, value.binding).takeIf { it.isInstalled }?.let {
             markers[editor] = it
         }
     }

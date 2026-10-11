@@ -54,8 +54,8 @@ class DiagramClusterTextTest {
                     diagram.dispose()
                 }
             }
-            assertEquals(1, visibleSideButtons(listOf(root)))
-            assertEquals(2, visibleSideButtons(listOf(root, DiagramCluster("follow-up", "追问", emptySet()))))
+            assertEquals(2, visibleSideButtons(listOf(root)))
+            assertEquals(3, visibleSideButtons(listOf(root, DiagramCluster("follow-up", "追问", emptySet()))))
         }
     }
 }

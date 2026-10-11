@@ -72,7 +72,7 @@ class UnderstandingService(private val project: Project) : Disposable {
     internal var panelFocusQuestionId: String? = null
     private var pageBeforeHistory = PanelPage.WELCOME
     private var previousLocation: PanelLocation? = null
-    internal val contentActions = UnderstandingContentActions(this)
+    internal val contentActions = UnderstandingContentActions(this, project)
     private val deletionConfirmation = RootDeletionConfirmation(project, ::deleteConfirmedRoot)
     private val resultTimer = Timer(180) { handlePendingResults() }.apply { isRepeats = false }
     private val focusListener = PropertyChangeListener {
@@ -323,7 +323,7 @@ class UnderstandingService(private val project: Project) : Disposable {
             if (anchor == null) {
                 sourceLocationMessage = "当前节点没有源码证据"
                 SwingUtilities.invokeLater {
-                    if (activeRecordId == record.id && activeNodeId == validNode) {
+                    if (activeRecordId == record.id && activeNodeId == validNode && activeRecordRevision == record.revision) {
                         sourceScrollAnimation.cancel()
                         sourceHints.clear()
                     }
@@ -332,7 +332,8 @@ class UnderstandingService(private val project: Project) : Disposable {
             } else {
                 // PSI 文档提交需要平台的写安全上下文，普通 Swing 队列无法提供。
                 ApplicationManager.getApplication().invokeLater({
-                    if (project.isDisposed || activeRecordId != record.id || activeNodeId != validNode) return@invokeLater
+                    if (project.isDisposed || activeRecordId != record.id || activeNodeId != validNode ||
+                        activeRecordRevision != record.revision) return@invokeLater
                     sourceScrollAnimation.cancel()
                     runCatching {
                         val explorer = sourceNavigation.explorer(record, validNode)
@@ -343,14 +344,15 @@ class UnderstandingService(private val project: Project) : Disposable {
                             next = { sourceNavigation.next(record.id, validNode) },
                             cancelChoices = { sourceNavigation.cancelChoices(record.id, validNode) },
                             evidenceChanged = {
-                                if (activeRecordId == record.id && activeNodeId == validNode) {
+                                if (activeRecordId == record.id && activeNodeId == validNode && activeRecordRevision == record.revision) {
                                     sourceHints.clear()
                                     sourceLocationMessage = "原片段已变化"
                                     notifyChanged()
                                 }
                             },
                         )
-                        val located = sourceHints.show(anchor, node.label, navigation)
+                        val located = sourceHints.show(anchor, node.label, navigation,
+                            SourceNodeBinding(record.id, record.revision, validNode, node.label, selectedPath.toList()))
                         if (navigateSource && nodeId != null && located?.offset != null) {
                             navigateToSource(project, anchor, sourceScrollAnimation, located)
                             sourceHints.refreshOpenEditors()

@@ -25,6 +25,7 @@ internal class CanvasEditorPopup(
     multiline: Boolean,
     save: (String) -> Unit,
     private val onClosed: () -> Unit,
+    selectionPreview: SelectedCodePreview? = null,
 ) : AutoCloseable {
     private val width = JBUI.scale(size.width).coerceAtLeast(1)
     private var closed = false
@@ -38,8 +39,10 @@ internal class CanvasEditorPopup(
         dismiss = ::close,
         cancel = { draft.retain = false; close() },
         onMetricsChanged = ::scheduleResize,
+        selectionPreview = selectionPreview,
     )
-    private val popup: JBPopup = JBPopupFactory.getInstance().createComponentPopupBuilder(editor, editor.input)
+    private val popup: JBPopup = try {
+        JBPopupFactory.getInstance().createComponentPopupBuilder(editor, editor.input)
         .setTitle(title)
         .setMovable(true)
         .setResizable(false)
@@ -51,6 +54,10 @@ internal class CanvasEditorPopup(
         .setCancelOnWindowDeactivation(false)
         .setCancelCallback { !editor.composition.active }
         .createPopup()
+    } catch (failure: Throwable) {
+        editor.close()
+        throw failure
+    }
 
     init {
         editor.preferredSize = editor.preferredSizeFor(width, Int.MAX_VALUE)

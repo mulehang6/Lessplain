@@ -10,7 +10,11 @@ import java.awt.event.MouseWheelEvent
 import kotlin.math.pow
 
 /** 处理单张图的拖动、平移、悬停和滚轮交互。 */
-internal class DiagramMouseInteraction(private val diagram: UnderstandingDiagram) : MouseAdapter() {
+internal class DiagramMouseInteraction(
+    private val diagram: UnderstandingDiagram,
+    private val nodeMenu: (String, Point) -> Unit = diagram::showNodeMenu,
+    private val edgeMenu: (com.lessplain.model.GraphEdge, Point) -> Unit = diagram::showEdgeMenu,
+) : MouseAdapter() {
     private var pressPoint: Point? = null
     private var previousDragPoint: Point? = null
     private var draggedNodeId: String? = null
@@ -70,7 +74,9 @@ internal class DiagramMouseInteraction(private val diagram: UnderstandingDiagram
 
     override fun mouseReleased(event: MouseEvent) {
         if (panning && !dragged) {
-            diagram.nodeAt(event.point)?.let { diagram.showNodeMenu(it, event.point) }
+            val node = diagram.nodeAt(event.point)
+            if (node != null) nodeMenu(node, event.point)
+            else diagram.edgeAt(event.point)?.let { edgeMenu(it, event.point) }
         }
         if (event.button == MouseEvent.BUTTON1 && diagram.retryFailedLayout()) return
         if (event.button == MouseEvent.BUTTON1 && !panning && !dragged) {

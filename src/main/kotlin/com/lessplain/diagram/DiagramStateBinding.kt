@@ -11,9 +11,18 @@ internal fun graphBrowseState(service: UnderstandingService, key: GraphLayerKey)
     service.graphStates.get(key).browse ?:
         if (key.questionNodeId == null) service.repository.getBrowseState(key.recordId) else null
 
-internal fun UnderstandingDiagram.bindGraphState(store: GraphViewStateStore, key: GraphLayerKey) {
-    applyGraphState(store.get(key))
-    onPinChanged { value -> store.update(key) { it.copy(navigationPinned = value) } }
+/** 编辑器跳转只属于当前标签页，其余图状态仍按图层共享。 */
+internal enum class NavigationStateScope { SHARED, EDITOR_LOCAL }
+
+internal fun UnderstandingDiagram.bindGraphState(
+    store: GraphViewStateStore,
+    key: GraphLayerKey,
+    navigationScope: NavigationStateScope = NavigationStateScope.SHARED,
+) {
+    val sharedNavigation = navigationScope == NavigationStateScope.SHARED
+    if (!sharedNavigation) navigationPinned = true
+    applyGraphState(store.get(key), sharedNavigation)
+    if (sharedNavigation) onPinChanged { value -> store.update(key) { it.copy(navigationPinned = value) } }
     onAutoFollowChanged { value -> store.update(key) { it.copy(autoFollowNode = value) } }
     onFlowChanged { value -> store.update(key) { it.copy(flowEnabled = value) } }
     onNodePositionsChanged { value ->
@@ -22,12 +31,12 @@ internal fun UnderstandingDiagram.bindGraphState(store: GraphViewStateStore, key
     onLayoutPreferenceChanged { value ->
         store.update(key) { it.copy(layoutPreference = value) }
     }
-    bindStateSubscription(store.listen(key, ::applyGraphState))
+    bindStateSubscription(store.listen(key) { applyGraphState(it, sharedNavigation) })
 }
 
 /** 初次绑定和实时更新应用相同的方向独立状态。 */
-private fun UnderstandingDiagram.applyGraphState(state: GraphViewState) {
-    navigationPinned = state.navigationPinned
+private fun UnderstandingDiagram.applyGraphState(state: GraphViewState, sharedNavigation: Boolean) {
+    if (sharedNavigation) navigationPinned = state.navigationPinned
     autoFollowNode = state.autoFollowNode
     flowEnabled = state.flowEnabled
     setDirectionState(LayoutDirection.VERTICAL, state.verticalViewport, state.verticalPositions)

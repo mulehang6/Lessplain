@@ -24,7 +24,9 @@ import com.lessplain.ui.graphHierarchyEntries
 import com.lessplain.ui.questionsForNode
 import com.lessplain.ui.bindContentActions
 import com.lessplain.ui.SourceNode
-import com.lessplain.storage.pendingQuestionsForNode
+import com.lessplain.ui.GraphHierarchyEntry
+import com.lessplain.ui.dispatchBackgroundRead
+import com.lessplain.core.LatestBackgroundRead
 import com.intellij.util.ui.JBUI
 import com.lessplain.ui.CanvasUiFonts
 import com.lessplain.ui.UnderstandingUiMetrics
@@ -80,7 +82,7 @@ private class UnderstandingFileEditor(private val project: Project, private val 
         createUnderstandingDiagram(canvas.record, graphBrowseState(service, graphKey),
             clusters = canvas.clusters, examplePanels = canvas.examplePanels)
     } ?: createUnderstandingDiagram(record, graphBrowseState(service, graphKey))).apply {
-        bindGraphState(service.graphStates, graphKey)
+        bindGraphState(service.graphStates, graphKey, NavigationStateScope.EDITOR_LOCAL)
     }
     private val explorer = (questionCanvas?.record ?: record).graph.nodes.firstOrNull()?.let {
         val saved = graphBrowseState(service, graphKey)
@@ -102,17 +104,10 @@ private class UnderstandingFileEditor(private val project: Project, private val 
         else if (questionCanvas == null) service.copyNodeContext(record, nodeId)
         builder.showCopied(nodeId)
     }
-    private val content = builder.bindContentActions(service, { nodeId ->
+    private val content = builder.bindContentActions(service, record.id, { nodeId ->
         questionCanvas?.sources?.get(nodeId) ?: if (questionCanvas == null) SourceNode(record, nodeId) else null
-    }, { id -> questionCanvas?.clusterSources?.get(id) }, titleRecord = record.takeIf { questionCanvas == null })
+    }, { id -> questionCanvas?.clusterSources?.get(id) }, titleRecord = record.takeIf { questionCanvas == null }, onStaleSource = navigation::close)
 
-    private val changed = service.onChanged {
-        val records = questionCanvas?.sources?.values?.map { it.record }.orEmpty() + record
-        if (records.any { snapshot ->
-            runCatching { service.repository.getRecord(snapshot.id).revision != snapshot.revision }.getOrDefault(true)
-        }) navigation.close()
-        updateQuestionCounts()
-    }
     private val backButton = JButton("‹ 返回").apply {
         setToolTipText(HtmlChunk.text("返回上一级理解图"))
         addActionListener {
@@ -132,6 +127,8 @@ private class UnderstandingFileEditor(private val project: Project, private val 
     }
     private val fonts = CanvasUiFonts(listOf(backButton), onRefreshed = { panel.revalidate() })
     private var disposed = false
+    private val hierarchyLoader: LatestBackgroundRead<List<GraphHierarchyEntry>>
+    private val hierarchyChanged: AutoCloseable
 
     init {
         val lineage = generateSequence(virtualFile) { it.parentFile }.toList().asReversed()
@@ -139,26 +136,32 @@ private class UnderstandingFileEditor(private val project: Project, private val 
         val currentLayers = lineage.drop(1).mapNotNull { file ->
             file.questionNodeId?.let { FollowUpLayer(file.recordId, it) }
         }
-        val hierarchyEntries = graphHierarchyEntries(service.repository, rootRecordId)
-        builder.setHierarchy(hierarchyEntries.mapIndexed { index, entry ->
-            DiagramHierarchyItem(entry.title, entry.depth, index, entry.layers == currentLayers)
-        }) { index ->
-            hierarchyEntries.getOrNull(index)?.takeIf { it.layers != currentLayers }?.let { destination ->
-                val root = service.repository.getRecord(rootRecordId)
-                var destinationFile = service.editorFile(root).apply { parentFile = null }
-                destination.layers.forEach { layer ->
-                    val child = service.editorFile(service.repository.getRecord(layer.recordId), layer.nodeId)
-                    child.parentFile = destinationFile
-                    destinationFile = child
+        hierarchyLoader = LatestBackgroundRead(::dispatchBackgroundRead) { loaded ->
+            loaded.onSuccess { hierarchyEntries ->
+                builder.setHierarchy(hierarchyEntries.mapIndexed { index, entry ->
+                    DiagramHierarchyItem(entry.title, entry.depth, index, entry.layers == currentLayers)
+                }) { index ->
+                    hierarchyEntries.getOrNull(index)?.takeIf { it.layers != currentLayers }?.let { destination ->
+                        val root = service.repository.getRecord(rootRecordId)
+                        var destinationFile = service.editorFile(root).apply { parentFile = null }
+                        destination.layers.forEach { layer ->
+                            val child = service.editorFile(service.repository.getRecord(layer.recordId), layer.nodeId)
+                            child.parentFile = destinationFile
+                            destinationFile = child
+                        }
+                        if (destinationFile != virtualFile) {
+                            openExistingEditor(project, destinationFile)
+                            FileEditorManager.getInstance(project).closeFile(virtualFile)
+                        }
+                    }
                 }
-                if (destinationFile != virtualFile) {
-                    openExistingEditor(project, destinationFile)
-                    FileEditorManager.getInstance(project).closeFile(virtualFile)
-                }
+
             }
         }
+        fun refreshHierarchy() = hierarchyLoader.request { graphHierarchyEntries(service.repository, rootRecordId) }
+        hierarchyChanged = service.onChanged(::refreshHierarchy)
+        refreshHierarchy()
         refreshHeader()
-        updateQuestionCounts()
     }
 
     private fun refreshHeader() {
@@ -167,31 +170,7 @@ private class UnderstandingFileEditor(private val project: Project, private val 
         panel.repaint()
     }
 
-    private fun updateQuestionCounts() {
-        if (questionCanvas != null) {
-            val counts = questionCanvas.sources.mapNotNull { (id, source) ->
-                if (source.record.id == record.id) return@mapNotNull null
-                val count = questionsForNode(service, source.record, source.nodeId).size
-                id.takeIf { count > 0 }?.let { it to count }
-            }.toMap()
-            builder.setQuestionCounts(counts)
-            builder.setPendingNoteCounts(questionCanvas.sources.mapNotNull { (id, source) ->
-                val count = service.repository.pendingQuestionsForNode(source.record.id, source.nodeId).size
-                id.takeIf { count > 0 }?.let { it to count }
-            }.toMap())
-            return
-        }
-        val counts = service.repository.questionsForRecord(record.id).filter {
-            service.repository.recordForQuestion(it.id) != null
-        }.groupingBy { question ->
-            service.repository.getContext(question.contextToken).nodeId
-        }.eachCount().filterKeys { it != null }.mapKeys { it.key!! }
-        builder.setQuestionCounts(counts)
-        builder.setPendingNoteCounts(record.graph.nodes.mapNotNull { node ->
-            val count = service.repository.pendingQuestionsForNode(record.id, node.id).size
-            node.id.takeIf { count > 0 }?.let { it to count }
-        }.toMap())
-    }
+    fun disableAutomaticSourceNavigation() { builder.navigationPinned = true }
 
     override fun getComponent(): JComponent = panel
     override fun getPreferredFocusedComponent(): JComponent = builder.jComponent
@@ -208,7 +187,8 @@ private class UnderstandingFileEditor(private val project: Project, private val 
         questionSelection.close()
         copySelection.close()
         content.close()
-        changed.close()
+        hierarchyChanged.close()
+        hierarchyLoader.close()
         fonts.close()
         Disposer.dispose(builder)
         panel.removeAll()
@@ -220,6 +200,7 @@ internal fun openRecordInEditor(
     record: UnderstandingRecord,
     questionNodeId: String? = null,
     replace: UnderstandingVirtualFile? = null,
+    resetSourceNavigation: Boolean = false,
 ) {
     val file = project.getService(UnderstandingService::class.java).editorFile(record, questionNodeId)
     if (file == replace) return
@@ -240,13 +221,17 @@ internal fun openRecordInEditor(
         chain.dropLast(1).lastOrNull()
     } else null
     file.parentFile = replace ?: hierarchyParent
-    openExistingEditor(project, file)
+    openExistingEditor(project, file, resetSourceNavigation)
     if (replace != null) FileEditorManager.getInstance(project).closeFile(replace)
 }
 
 private fun openExistingEditor(
     project: Project,
     file: UnderstandingVirtualFile,
+    resetSourceNavigation: Boolean = false,
 ) {
-    FileEditorManager.getInstance(project).openFile(file, true)
+    val editors = FileEditorManager.getInstance(project).openFile(file, true)
+    if (resetSourceNavigation) editors.filterIsInstance<UnderstandingFileEditor>().forEach {
+        it.disableAutomaticSourceNavigation()
+    }
 }

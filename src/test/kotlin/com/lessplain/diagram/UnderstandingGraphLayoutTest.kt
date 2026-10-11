@@ -176,7 +176,7 @@ class UnderstandingGraphLayoutTest {
                 diagram.doLayout()
                 val controls = diagram.components.filterIsInstance<UnderstandingDiagramControls>().single()
                 assertEquals(4, controls.components.filterIsInstance<JButton>().count { it.isVisible })
-                assertEquals(2, controls.sideControls.components.filterIsInstance<JButton>().count { it.isVisible })
+                assertEquals(3, controls.sideControls.components.filterIsInstance<JButton>().count { it.isVisible })
                 diagram.focusCluster("B")
                 assertEquals(diagram.layout.nodes.getValue("b1").bounds.centerY, diagram.center.y, 0.001)
                 diagram.fitContent()
@@ -528,7 +528,7 @@ class UnderstandingGraphLayoutTest {
                 assertTrue(buttons.maxOf { it.y } > buttons.minOf { it.y })
                 val side = controls.sideControls
                 assertTrue(side.x + side.width <= diagram.width)
-                assertEquals(1, side.components.filterIsInstance<JButton>().count { it.isVisible })
+                assertEquals(2, side.components.filterIsInstance<JButton>().count { it.isVisible })
                 diagram.flowEnabled = false
                 assertFalse(diagram.flowEnabled)
             } finally {

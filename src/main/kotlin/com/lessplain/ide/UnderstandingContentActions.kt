@@ -1,5 +1,10 @@
 package com.lessplain.ide
 
+import com.intellij.notification.NotificationGroupManager
+import com.intellij.notification.NotificationType
+import com.intellij.openapi.project.Project
+import com.lessplain.ui.SelectedCodePreview
+import com.lessplain.ui.questionEditorTitle
 import com.lessplain.model.UnderstandingQuestion
 import com.lessplain.model.UnderstandingRecord
 import com.lessplain.storage.editPendingQuestion
@@ -9,7 +14,8 @@ import java.awt.KeyboardFocusManager
 import java.awt.Point
 
 /** 工具窗口和编辑器画布共用与来源绑定的修改操作；会话管理临时界面状态。 */
-internal class UnderstandingContentActions(private val service: UnderstandingService) : AutoCloseable {
+internal class UnderstandingContentActions(private val service: UnderstandingService, private val project: Project) : AutoCloseable {
+    internal val sourceQuestions = SourceSelectionQuestionSession(service)
     private val sessions = mutableMapOf<Component, CanvasContentSession>()
 
     private fun session(owner: Component): CanvasContentSession = sessions.getOrPut(owner) {
@@ -19,7 +25,8 @@ internal class UnderstandingContentActions(private val service: UnderstandingSer
     fun addNodeNote(record: UnderstandingRecord, nodeId: String,
         component: Component? = KeyboardFocusManager.getCurrentKeyboardFocusManager().focusOwner, point: Point = Point()) {
         if (service.repository.readOnly || component == null) return
-        session(component).edit(noteKey(record.id, nodeId, ""), "添加注释", "", point, true) { text ->
+        val label = record.graph.nodes.firstOrNull { it.id == nodeId }?.label ?: return
+        session(component).edit(noteKey(record.id, nodeId, ""), questionEditorTitle(label), "", point, true) { text ->
             val current = service.repository.getRecord(record.id)
             val node = current.graph.nodes.firstOrNull { it.id == nodeId } ?: error("节点已不存在")
             val anchor = node.anchor ?: current.graph.evidence.firstOrNull { it.id in node.evidenceIds }?.anchor
@@ -32,7 +39,9 @@ internal class UnderstandingContentActions(private val service: UnderstandingSer
     private fun editNodeNote(record: UnderstandingRecord, nodeId: String, note: UnderstandingQuestion,
         component: Component, point: Point) {
         if (service.repository.readOnly) return
-        session(component).edit(noteKey(record.id, nodeId, note.id), "编辑注释", note.text, point, true) { text ->
+        val presentation = nodeQuestionPresentation(service.repository, record.id, nodeId, note)
+        session(component).edit(noteKey(record.id, nodeId, note.id), presentation.title, note.text, point, true,
+            selectionPreview = presentation.anchor?.let { SelectedCodePreview(project, it) }) { text ->
             service.repository.editPendingQuestion(note.id, text)
         }
     }
@@ -53,7 +62,14 @@ internal class UnderstandingContentActions(private val service: UnderstandingSer
         }
     }
 
+    fun notifyQuestionCopy(message: String, error: Boolean) {
+        if (!project.isDisposed) NotificationGroupManager.getInstance()
+            .getNotificationGroup("code.comprehension.results")
+            .createNotification(message, if (error) NotificationType.ERROR else NotificationType.INFORMATION).notify(project)
+    }
+
     override fun close() {
+        sourceQuestions.close()
         sessions.values.toList().forEach { it.close() }
         sessions.clear()
     }

@@ -16,7 +16,7 @@ import kotlin.test.assertTrue
 
 class DiagramEdgeEvidenceTest {
     @Test
-    fun `ordinary edges expose coverage at several zooms without becoming route choices`() {
+    fun `legacy edges show relationship at several zooms without exposing coverage or becoming route choices`() {
         SwingUtilities.invokeAndWait {
             val graph = UnderstandingGraph(listOf(GraphNode("a", "入口"), GraphNode("b", "保存")),
                 listOf(GraphEdge("ab", "a", "b", "call", coverage = "由注册关系推断", inferred = true)))
@@ -35,7 +35,9 @@ class DiagramEdgeEvidenceTest {
                         (diagram.height / 2 + (worldY - diagram.center.y) * zoom).toInt())
                     val tip = diagram.getToolTipText(MouseEvent(diagram, MouseEvent.MOUSE_MOVED, 0, 0,
                         point.x, point.y, 0, false))
-                    assertTrue(tip!!.contains("由注册关系推断"))
+                    assertTrue(tip!!.contains("调用：入口 → 保存"))
+                    assertTrue(tip.contains("推断"))
+                    assertFalse(tip.contains("由注册关系推断"))
                     assertEquals(null, diagram.candidateEdgeAt(point))
                 }
                 val node = diagram.layout.nodes.getValue("a").bounds

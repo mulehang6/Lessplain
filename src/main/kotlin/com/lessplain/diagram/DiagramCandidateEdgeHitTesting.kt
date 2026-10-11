@@ -26,19 +26,14 @@ internal fun UnderstandingDiagram.candidateEdgeAt(point: Point): String? {
         screenToWorld(point), 6.0 / zoom)
 }
 
-/** 普通边提示与分支选路共用几何消歧，但不扩大可点击的选路范围。 */
-internal fun UnderstandingDiagram.edgeTooltipAt(point: Point): String? {
+/** 普通边与分支候选共用几何消歧，但不扩大左键选路范围。 */
+internal fun UnderstandingDiagram.edgeAt(point: Point): com.lessplain.model.GraphEdge? {
     if (nodeAt(point) != null || clusterEditAt(point) != null) return null
-    val id = candidateEdgeAt(layout.edges, layout.edges.mapTo(hashSetOf()) { it.edge.id }, screenToWorld(point), 6.0 / zoom)
-        ?: return null
-    val edge = record.graph.edges.first { it.id == id }
-    val details = listOfNotNull(
-        "推断关系".takeIf { edge.inferred == true },
-        edge.condition?.takeIf(String::isNotBlank),
-        edge.coverage?.takeIf(String::isNotBlank),
-    ).ifEmpty { listOf(edge.relation) }
-    return "<html>" + details.joinToString("<br>") { text ->
-        text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-            .replace("\n", "<br>")
-    } + "</html>"
+    val id = candidateEdgeAt(layout.edges, layout.edges.mapTo(hashSetOf()) { it.edge.id },
+        screenToWorld(point), 6.0 / zoom) ?: return null
+    return record.graph.edges.firstOrNull { it.id == id }
+}
+
+internal fun UnderstandingDiagram.edgeTooltipAt(point: Point): String? = edgeAt(point)?.let {
+    edgeTooltip(it, record.graph, getFontMetrics(javax.swing.UIManager.getFont("ToolTip.font") ?: font))
 }

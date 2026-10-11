@@ -67,6 +67,7 @@ internal class CanvasTextEditor(
     private val dismiss: () -> Unit,
     private val cancel: () -> Unit,
     private val onMetricsChanged: () -> Unit = {},
+    selectionPreview: SelectedCodePreview? = null,
 ) : JPanel(BorderLayout(0, JBUI.scale(UnderstandingUiMetrics.SECTION_GAP))), AutoCloseable, UISettingsListener {
     internal val input: JTextComponent = if (multiline) {
         JBTextArea(draft.text).apply {
@@ -100,6 +101,7 @@ internal class CanvasTextEditor(
     } else {
         null
     }
+    private val preview = selectionPreview?.let { SelectedCodePreviewPanel(it, ::scheduleMetricsChanged) }
     private val bottom = JPanel(BorderLayout()).apply {
         add(error, BorderLayout.NORTH)
         add(JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(UnderstandingUiMetrics.GAP), 0)).apply {
@@ -136,6 +138,7 @@ internal class CanvasTextEditor(
         input.addInputMethodListener(inputListener)
         add(scrollPane ?: input, BorderLayout.CENTER)
         add(bottom, BorderLayout.SOUTH)
+        preview?.let { add(it, BorderLayout.NORTH) }
         bind("control ENTER", "save") { if (!composition.active) requestSave() }
         bind("ESCAPE", "dismiss") { if (!composition.active) dismissSafely() }
         if (!multiline) (input as JBTextField).addActionListener { if (!composition.active) requestSave() }
@@ -151,11 +154,15 @@ internal class CanvasTextEditor(
         val maxHeight = availableHeight.coerceAtLeast(1)
         val panelInsets = insets
         updateErrorHeight(editorWidth, panelInsets)
+        val contentWidth = (editorWidth - panelInsets.left - panelInsets.right).coerceAtLeast(1)
+        val gap = JBUI.scale(UnderstandingUiMetrics.SECTION_GAP)
         if (!multiline) {
             visibleRowCount = 1
             scrollRequired = false
-            val height = panelInsets.top + panelInsets.bottom + input.preferredSize.height +
-                bottom.preferredSize.height + JBUI.scale(UnderstandingUiMetrics.SECTION_GAP)
+            val baseHeight = panelInsets.top + panelInsets.bottom + input.preferredSize.height +
+                bottom.preferredSize.height + gap
+            val previewHeight = previewHeightFor(contentWidth, maxHeight - baseHeight, gap)
+            val height = baseHeight + previewHeight
             val size = Dimension(editorWidth, minOf(height, maxHeight))
             preferredSize = size
             return size
@@ -169,8 +176,13 @@ internal class CanvasTextEditor(
         val scrollbarWidth = pane.verticalScrollBar.preferredSize.width.coerceAtLeast(JBUI.scale(12))
         val baseTextWidth = (editorWidth - panelInsets.left - panelInsets.right - paneInsets.left - paneInsets.right -
             textInsets.left - textInsets.right).coerceAtLeast(1)
-        val chromeHeight = panelInsets.top + panelInsets.bottom + bottom.preferredSize.height +
-            JBUI.scale(UnderstandingUiMetrics.SECTION_GAP)
+        val baseChromeHeight = panelInsets.top + panelInsets.bottom + bottom.preferredSize.height + gap
+        val inputInsets = paneInsets.top + paneInsets.bottom + textInsets.top + textInsets.bottom
+        val desiredInputHeight = minOf(MAX_VISIBLE_ROWS, wrappedRows(area, baseTextWidth)) * lineHeight + inputInsets
+        val inputReserve = minOf(desiredInputHeight,
+            maxOf(lineHeight + inputInsets, (maxHeight - baseChromeHeight) / 3))
+        val previewHeight = previewHeightFor(contentWidth, maxHeight - baseChromeHeight - inputReserve, gap)
+        val chromeHeight = baseChromeHeight + previewHeight
         val maxRowsByScreen = ((maxHeight - chromeHeight - paneInsets.top - paneInsets.bottom -
             textInsets.top - textInsets.bottom) / lineHeight).coerceAtLeast(1)
         val visibleRowLimit = minOf(MAX_VISIBLE_ROWS, maxRowsByScreen)
@@ -199,6 +211,13 @@ internal class CanvasTextEditor(
         val size = Dimension(editorWidth, height)
         preferredSize = size
         return size
+    }
+
+    private fun previewHeightFor(width: Int, budget: Int, gap: Int): Int {
+        val panel = preview ?: return 0
+        val height = panel.heightFor(width, (budget - gap).coerceAtLeast(0))
+        panel.isVisible = height > 0
+        return if (height > 0) height + gap else 0
     }
 
     internal fun requestSave() {
@@ -233,6 +252,7 @@ internal class CanvasTextEditor(
         draft.text = input.text
         disposed = true
         fonts.close()
+        preview?.close()
         input.document.removeDocumentListener(documentListener)
         input.removeInputMethodListener(inputListener)
         actionMap.clear()

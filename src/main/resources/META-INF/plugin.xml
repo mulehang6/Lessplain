@@ -33,4 +33,11 @@
     <extensions defaultExtensionNs="com.intellij.mcpServer">
         <mcpToolset implementation="com.lessplain.mcp.UnderstandingToolset"/>
     </extensions>
+    <actions>
+        <action id="Lessplain.AskSelectedCode" class="com.lessplain.ui.AskSelectedCodeAction"
+                text="提问" description="将所选代码的问题添加到当前源码节点" icon="AllIcons.General.QuestionDialog">
+            <add-to-group group-id="Floating.CodeToolbar" anchor="first"/>
+            <add-to-group group-id="EditorPopupMenu" anchor="first"/>
+        </action>
+    </actions>
 </idea-plugin>

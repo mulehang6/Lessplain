@@ -28,7 +28,6 @@ import com.lessplain.model.GraphEdge
 import com.lessplain.model.UnderstandingGraph
 import com.lessplain.model.UnderstandingQuestion
 import com.lessplain.model.UnderstandingRecord
-import com.lessplain.storage.pendingQuestionsForNode
 
 internal data class FollowUpLayer(val recordId: String, val nodeId: String)
 
@@ -59,16 +58,20 @@ internal fun QuestionIndexView(
     onChildQuestions: (UnderstandingRecord, String) -> Unit,
 ) {
     val graphKey = GraphLayerKey(record.id, nodeId)
-    val questions = remember(record.id, nodeId, revision) { questionsForNode(service, record, nodeId) }
-    val contentSignature = remember(record.id, nodeId, revision) {
-        questions.map { question ->
+    val loaded = rememberBackgroundRead(Triple(record.id, record.revision, nodeId), revision) {
+        val questions = questionsForNode(service, record, nodeId)
+        val signature = questions.map { question ->
             val child = service.repository.recordForQuestion(question.id)
             listOf(question.id, child?.id.orEmpty(), child?.revision.toString()).joinToString(":")
         }
+        signature to buildQuestionCanvas(service, record, nodeId, questions, revision)
     }
-    val canvas = remember(record.id, nodeId, contentSignature) {
-        buildQuestionCanvas(service, record, nodeId, questions, revision)
+    val data = loaded?.getOrNull()
+    if (data == null) {
+        org.jetbrains.jewel.ui.component.Text(loaded?.exceptionOrNull()?.let { "图无法加载：${it.message}" } ?: "正在加载…")
+        return
     }
+    val canvas = remember(record.id, record.revision, nodeId, data.first) { data.second }
     val diagram = remember(canvas) {
         createUnderstandingDiagram(canvas.record, graphBrowseState(service, graphKey),
             clusters = canvas.clusters, examplePanels = canvas.examplePanels).apply {
@@ -87,13 +90,6 @@ internal fun QuestionIndexView(
         diagram.setHierarchy(hierarchy, onNavigateIndex)
         onDispose { }
     }
-    val liveQuestionCounts = remember(canvas, revision) {
-        canvas.sources.mapNotNull { (id, source) ->
-            if (source.record.id == record.id) return@mapNotNull null
-            val count = questionsForNode(service, source.record, source.nodeId).size
-            id.takeIf { count > 0 }?.let { it to count }
-        }.toMap()
-    }
     DisposableEffect(diagram, canvas) {
         val saved = graphBrowseState(service, graphKey)
         val explorer = canvas.record.graph.nodes.firstOrNull()?.let {
@@ -107,7 +103,7 @@ internal fun QuestionIndexView(
                 diagram.showCopied(id)
             }
         }
-        val content = diagram.bindContentActions(service, canvas.sources::get, canvas.clusterSources::get)
+        val content = diagram.bindContentActions(service, record.id, canvas.sources::get, canvas.clusterSources::get)
         val questionSelection = diagram.onQuestionBadgeClicked { id ->
             canvas.sources[id]?.takeIf { questionsForNode(service, it.record, it.nodeId).isNotEmpty() }?.let {
                 onChildQuestions(it.record, it.nodeId)
@@ -120,17 +116,6 @@ internal fun QuestionIndexView(
             questionSelection.close()
             Disposer.dispose(diagram)
         }
-    }
-    DisposableEffect(diagram, liveQuestionCounts) {
-        diagram.setQuestionCounts(liveQuestionCounts)
-        onDispose { }
-    }
-    DisposableEffect(diagram, revision, canvas) {
-        diagram.setPendingNoteCounts(canvas.sources.mapNotNull { (id, source) ->
-            val count = service.repository.pendingQuestionsForNode(source.record.id, source.nodeId).size
-            id.takeIf { count > 0 }?.let { it to count }
-        }.toMap())
-        onDispose { }
     }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(UnderstandingUiMetrics.GAP.dp)) {
         key(diagram) {

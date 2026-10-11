@@ -66,9 +66,12 @@ present_understanding --schemaVersion "1.4" --requestId "<新 ID>" --question "<
 用户粘贴插件复制的载荷（含 `contextToken`、`recordId`、`nodeId`、`nodeLabel`），并附上问题；或者说“这里”“这个节点”。
 
 1. 载荷里有 `contextToken` 就带上它调用 `get_understanding_context`。没有就无参调用一次，取当前来源。之后界面选择变了，来源也不变。
-2. 用 `placement=child` 和同一个 token 提交。`question` 填用户的原话。同一节点的多个追问由插件分组，不需要提交分组或坐标。
+2. 如果 `context.anchor.text` 是用户选中的局部代码，围绕该选区回答；归属仍按固定的 `context.recordId` 和 `context.nodeId`，不因选区而改挂其他节点。
+3. 用 `placement=child` 和同一个 token 提交。`question` 填用户的原话。同一节点的多个追问由插件分组，不需要提交分组或坐标。
 
 ### 待答注释
+
+用户粘贴的文本以 `Lessplain 待答批次：<范围标识>` 结尾时，把标识原样作为 `pendingScopeRecordId` 调用 `get_understanding_context`，不要同时传 `contextToken`。文本中的编号列表只是复制时的概览；以工具返回的最新 `pendingBatch.items` 为准，包含复制后新增的注释，排除已完成的注释。范围不存在或无法读取时，报告失败，不猜测其他工程或改用当前图。
 
 `capabilities.pendingNoteBatch=true` 时，一次处理 `pendingBatch.items` 中的全部注释。
 
@@ -110,7 +113,7 @@ present_understanding --schemaVersion "1.4" --requestId "<新 ID>" --question "<
 - **粒度**：跨函数时一个函数一个节点。问题落在单个函数内部时，按逻辑块拆分，一个分支、一个循环或一段做同一件事的语句各算一个节点。除非那一行就是答案，不做单行节点。
 - **label**：一行短语，约 16 字，最多两行。label 会作为 inline 提示贴在代码旁边，写这段代码做什么、得到什么，不复述代码。起点和终点用 `flowRoles` 标，不在 label 里写“开始”“结束”。
 - **数据值**：用具体值说明数据怎么变化。假设的值在第一次出现的节点标“示例：”。来自测试或调试器的值标“实测：”，并写明来源。示例不能写成实测。
-- **连线**：画布只显示 `control_flow` 边的 `condition`。一个节点有多条控制流出边时，每条都写 `condition`。`call` 和 `data_flow` 边没有文字，需要说明的值写进目标节点的 label。`coverage` 只在悬停时显示，用户必须看到的信息不要只放在这里。
+- **连线**：画布只显示 `control_flow` 边的 `condition`。一个节点有多条控制流出边时，每条都写 `condition`。`call` 和 `data_flow` 边没有文字，需要说明的值写进目标节点的 label。`capabilities.edgeSummaries=true` 时，每条边用 `summary` 写一句自然语言，说明两端为什么相连，例如“执行结果或拒绝原因会交给模型继续处理”。悬浮只显示短句、必要条件和推断标记，正文最多三行。`coverage` 写完整源码依据，由用户右键“查看依据”展开；不要把函数名、框架术语和调用链堆到短句里。旧图没有 `summary` 时显示关系类型与两端节点。用户必须看到的信息不要只放在依据中。
 - **推断**：只画源码或 IDE 能证实的关系。依赖注入、事件、反射、框架回调等看不到直接调用的关系，只在连通流程必需时画，标 `inferred: true`，并在 `coverage` 写依据。动机这类源码里没有的事不画节点。证据不足判断职责时，label 用文件名或类名，不编职责名。
 
 ## 锚点

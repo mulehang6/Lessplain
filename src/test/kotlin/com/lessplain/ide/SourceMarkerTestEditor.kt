@@ -28,6 +28,17 @@ internal class SourceMarkerTestEditor {
     var highlighterDisposed = false
     val documentListeners = mutableListOf<DocumentListener>()
     lateinit var renderer: InsightInlayRenderer
+    var selectionStart = 0
+    var selectionEnd = 0
+    private val userData = mutableMapOf<Any, Any?>()
+    private val selection = fake(com.intellij.openapi.editor.SelectionModel::class.java) { name, _ ->
+        when (name) {
+            "hasSelection" -> selectionEnd > selectionStart
+            "getSelectionStart" -> selectionStart
+            "getSelectedText" -> if (selectionEnd > selectionStart) text.substring(selectionStart, selectionEnd) else null
+            else -> null
+        }
+    }
     private val lineStarts = listOf(0, text.indexOf('\n') + 1, text.length)
     private val font = Font(Font.DIALOG, Font.PLAIN, 12)
     private val document = fake(Document::class.java) { name, args ->
@@ -41,6 +52,7 @@ internal class SourceMarkerTestEditor {
                 null
             }
             "removeDocumentListener" -> { documentListeners -= args[0] as DocumentListener; null }
+            "getText" -> text
             "getTextLength" -> text.length
             "getCharsSequence" -> text
             "getLineNumber" -> lineStarts.indexOfLast { it <= args[0] as Int }
@@ -98,6 +110,9 @@ internal class SourceMarkerTestEditor {
     }
     val editor: Editor = fake(Editor::class.java) { name, args ->
         when (name) {
+            "getUserData" -> userData[args[0]]
+            "putUserData" -> { userData[args[0]!!] = args[1]; null }
+            "getSelectionModel" -> selection
             "getDocument" -> document
             "getContentComponent" -> component
             "getInlayModel" -> inlayModel

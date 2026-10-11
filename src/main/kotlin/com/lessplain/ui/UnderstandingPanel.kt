@@ -25,13 +25,12 @@ import com.lessplain.core.StaticExplorer
 import com.lessplain.diagram.DiagramHierarchyItem
 import com.lessplain.diagram.createUnderstandingDiagram
 import com.lessplain.diagram.bindGraphState
-import com.lessplain.diagram.graphBrowseState
 import com.lessplain.diagram.bindDiagramSourceNavigation
 import com.lessplain.ide.GraphLayerKey
 import com.lessplain.ide.UnderstandingService
 import com.lessplain.ide.PanelPage
+import com.lessplain.model.BrowseState
 import com.lessplain.model.UnderstandingRecord
-import com.lessplain.storage.pendingQuestionsForNode
 import com.intellij.openapi.util.Disposer
 import org.jetbrains.jewel.ui.component.OutlinedButton
 import org.jetbrains.jewel.ui.component.Text
@@ -64,22 +63,25 @@ fun UnderstandingPanel(service: UnderstandingService) {
             subscription.close()
         }
     }
-    val recentRecords = remember(revision) { service.repository.recentRootRecords("", 6) }
-    val records = remember(revision, history, search.text.toString()) {
-        service.repository.recentRootRecords(if (history) search.text.toString() else "", if (history) 500 else 6)
+    val request = UnderstandingPanelRequest(service.panelPage, service.activeRecordId, rootRecordId,
+        layers.toList(), if (history) search.text.toString() else "")
+    val loaded = rememberBackgroundRead(request, revision) { readUnderstandingPanelData(service.repository, request) }
+    val data = loaded?.getOrNull()
+    if (data == null) {
+        Box(Modifier.fillMaxSize().background(JewelTheme.globalColors.toolwindowBackground)
+            .padding(UnderstandingUiMetrics.PAGE_PADDING.dp)) {
+            Text(loaded?.exceptionOrNull()?.let { "图无法加载：${it.message}" } ?: "正在加载…")
+        }
+        return
     }
-    val selected = remember(revision, service.activeRecordId) {
-        service.activeRecordId?.let { id -> runCatching { service.repository.getRecord(id) }.getOrNull() }
-    }
+    val recentRecords = data.recent
+    val records = data.history
+    val selected = data.selected
     val currentLayer = layers.lastOrNull()
-    val displayedRecord = currentLayer?.let { service.repository.getRecord(it.recordId) } ?: selected
-    val selectRoot: (UnderstandingRecord) -> Unit = { record ->
-        service.showRoot(record)
-    }
-    val hierarchyRootId = rootRecordId ?: if (layers.isEmpty()) displayedRecord?.id else null
-    val hierarchyEntries = remember(hierarchyRootId, revision) {
-        graphHierarchyEntries(service.repository, hierarchyRootId)
-    }
+    val displayedRecord = data.displayed
+    val selectRoot: (UnderstandingRecord) -> Unit = { record -> service.showRoot(record) }
+    val hierarchyRootId = data.hierarchyRootId
+    val hierarchyEntries = data.hierarchy
     val hierarchyItems = hierarchyEntries.mapIndexed { index, entry ->
         DiagramHierarchyItem(entry.title, entry.depth, index, entry.layers == layers)
     }
@@ -126,7 +128,7 @@ fun UnderstandingPanel(service: UnderstandingService) {
                         service.select(child, nodeId, navigateSource = !service.graphStates.get(GraphLayerKey(child.id, nodeId)).navigationPinned)
                         setLayers(layers + FollowUpLayer(child.id, nodeId))
                     }
-                    null -> RecordView(service, requireNotNull(displayedRecord), revision, Modifier.fillMaxSize(),
+                    null -> RecordView(service, requireNotNull(displayedRecord), data.initialBrowse, Modifier.fillMaxSize(),
                         hierarchyItems, navigateToIndex) { nodeId ->
                         setRootRecordId(displayedRecord.id)
                         service.select(displayedRecord, nodeId, navigateSource = !service.graphStates.get(GraphLayerKey(displayedRecord.id, nodeId)).navigationPinned)
@@ -157,33 +159,20 @@ fun UnderstandingPanel(service: UnderstandingService) {
 private fun RecordView(
     service: UnderstandingService,
     record: UnderstandingRecord,
-    revision: Int,
+    initialBrowse: BrowseState?,
     modifier: Modifier,
     hierarchy: List<DiagramHierarchyItem>,
     onNavigateIndex: (Int) -> Unit,
     onQuestions: (String) -> Unit,
 ) {
     val graphKey = GraphLayerKey(record.id)
-    val questionCounts = remember(record.id, revision) {
-        service.repository.questionsForRecord(record.id).filter {
-            service.repository.recordForQuestion(it.id) != null
-        }.groupingBy { question ->
-            service.repository.getContext(question.contextToken).nodeId
-        }.eachCount().filterKeys { it != null }.mapKeys { it.key!! }
-    }
-    val noteCounts = remember(record.id, revision) {
-        record.graph.nodes.mapNotNull { node ->
-            val count = service.repository.pendingQuestionsForNode(record.id, node.id).size
-            node.id.takeIf { count > 0 }?.let { it to count }
-        }.toMap()
-    }
     val explorer = remember(record.id, record.revision) {
-        val state = graphBrowseState(service, graphKey)
+        val state = service.graphStates.get(graphKey).browse ?: initialBrowse
         StaticExplorer(record.graph, state?.staticPath.orEmpty(), service.activeNodeId ?: state?.nodeId,
             state?.navigationState)
     }
     val diagram = remember(record.id, record.revision) {
-        runCatching { createUnderstandingDiagram(record, graphBrowseState(service, graphKey)).apply {
+        runCatching { createUnderstandingDiagram(record, service.graphStates.get(graphKey).browse ?: initialBrowse).apply {
             bindGraphState(service.graphStates, graphKey)
         } }
     }
@@ -199,7 +188,7 @@ private fun RecordView(
             service.copyNodeContext(record, nodeId)
             builder.showCopied(nodeId)
         }
-        val content = builder?.bindContentActions(service, { SourceNode(record, it) },
+        val content = builder?.bindContentActions(service, record.id, { SourceNode(record, it) },
             { null }, titleRecord = record)
         onDispose {
             navigation?.close()
@@ -208,11 +197,6 @@ private fun RecordView(
             content?.close()
             builder?.let(Disposer::dispose)
         }
-    }
-    DisposableEffect(diagram, questionCounts, noteCounts) {
-        diagram.getOrNull()?.setQuestionCounts(questionCounts)
-        diagram.getOrNull()?.setPendingNoteCounts(noteCounts)
-        onDispose { }
     }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(UnderstandingUiMetrics.GAP.dp)) {
         diagram.onSuccess { builder ->

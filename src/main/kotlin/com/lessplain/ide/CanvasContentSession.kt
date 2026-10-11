@@ -9,6 +9,7 @@ import com.lessplain.storage.cancelPendingQuestion
 import com.lessplain.storage.pendingQuestionsForNode
 import com.lessplain.ui.CanvasTextDraft
 import com.lessplain.ui.CanvasEditorPopup
+import com.lessplain.ui.SelectedCodePreview
 import com.lessplain.ui.NodeNoteContent
 import com.lessplain.ui.NodeNoteContentState
 import com.lessplain.ui.NodeNoteDraft
@@ -134,13 +135,14 @@ internal class CanvasContentSession(
         editorKey?.takeUnless(::mayRetain)?.let { editor?.close() }
     }
 
-    fun edit(key: String, title: String, initial: String, at: Point, multiline: Boolean, save: (String) -> Unit) {
+    fun edit(key: String, title: String, initial: String, at: Point, multiline: Boolean,
+        selectionPreview: SelectedCodePreview? = null, save: (String) -> Unit) {
         if (disposed) return
         editor?.close()
         val draft = CanvasTextDraft(drafts.text(key) ?: initial)
         editorKey = key
         editor = CanvasEditorPopup(owner, at, Dimension(400, if (multiline) 290 else 150), title, draft, multiline,
-            save = save, onClosed = {
+            save = save, selectionPreview = selectionPreview, onClosed = {
                 val retained = !disposed && draft.retain && mayRetain(key)
                 val changed = if (retained) drafts.retain(key, draft.text) else drafts.remove(key)
                 editor = null

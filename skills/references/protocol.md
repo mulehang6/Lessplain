@@ -13,6 +13,7 @@
 | `pendingNoteBatch`    | 使用待答注释批处理                      |
 | `rootClusters`        | 根图提交 `clusters`                     |
 | `anchorValidation`    | 保存前校验锚点，锚点错误会列出全部问题  |
+| `edgeSummaries`       | 边提交自然语言短句 `summary`            |
 | `inferredEdges`       | 边提交 `inferred: true`                 |
 | `feedbackConsumption` | 用 `feedbackQuestionIds` 清理反馈类注释 |
 
@@ -25,7 +26,7 @@
 | 参数                   | 规则                                                                          |
 |------------------------|-------------------------------------------------------------------------------|
 | `contextToken`         | 固定来源。空值表示捕获当前来源                                                |
-| `pendingScopeRecordId` | 复查批处理时传回 `pendingBatch.scopeRecordId`。不能与 `contextToken` 同时指定 |
+| `pendingScopeRecordId` | 读取复制文本末尾的范围标识，或复查时传回 `pendingBatch.scopeRecordId`。不能与 `contextToken` 同时指定 |
 | `feedbackQuestionIds`  | JSON 字符串数组。只能包含本次读取范围内的注释 `questionId`，读取成功后删除    |
 
 `context.staticPath` 是提问时的阅读路径，可能从中间节点开始。它不能证明入口、实际执行或业务条件成立。补全路径时不猜入口。
@@ -63,7 +64,9 @@
 ## graph 字段
 
 - 节点：`id`、`label`、`anchor`，可选 `flowRoles`、`endOutcome`、`evidenceIds`。`kind` 省略即可，默认是 `step`。`placeholder` 和 `question` 是插件保留值。
-- 边：`id`、`from`、`to`、`relation`，`relation` 取 `control_flow`、`call`、`data_flow`、`dependency`、`structure` 之一。可选 `condition`、`inferred`、`coverage`、`evidenceIds`。
+- 边：`id`、`from`、`to`、`relation`，`relation` 取 `control_flow`、`call`、`data_flow`、`dependency`、`structure` 之一。可选 `summary`、`condition`、`inferred`、`coverage`、`evidenceIds`。
+  - `summary` 是一句自然语言关系说明，仅在 `edgeSummaries=true` 时提交。缺省、null 或空白时，悬浮显示中文关系类型和两端节点；不从 `coverage` 截取。悬浮宽度不超过 360 个逻辑像素，正文最多三行。
+  - `coverage` 保留完整依据，右键边的“查看依据”同时展示条件和关联证据；打开详情不改变阅读路径。
   - `condition` 只用于 `control_flow`。调用和数据关系的适用条件写进 `coverage`。
   - `inferred: true` 必须同时有非空的 `coverage`，写明依据。
   - 多条 `dependency` 边不是互斥分支。
@@ -98,14 +101,17 @@
 
 ## 待答注释批处理
 
+复制文本末尾的 `Lessplain 待答批次：<范围标识>` 使用真正的理解根记录 ID。首次调用 `get_understanding_context(pendingScopeRecordId=<范围标识>)` 读取根记录和全部追问图的最新待答注释，不按复制文本的编号列表筛选。复制后、首次读取前新增的注释也包含在内，已完成的注释不再返回。默认连接当前正确的 IDE 工程；范围不存在时报告无法读取，不尝试其他工程。
+
 1. 记下 `pendingBatch.scopeRecordId` 和 `items` 快照。每项包含 `questionId`、原文 `question` 和固定的 `context`。
    - 来源节点是该项的 `context.nodeId`。
    - token 是该项的 `context.token`。
+   - 编辑器选区提问的 `context.anchor` 包含点击“提问”时的代码快照（包括未保存内容），问题正文保持用户原话。优先回答选区，不把整个节点的源码当作选区。
    - 所属记录在 `pendingBatch.records` 中按 `context.recordId` 匹配。
    - 不把顶层的当前节点、其他项的 token 或当前界面选择套用到整批。
 2. 逐项核对源码后，以 `child` 提交回答图，带上各自的 `questionId`、原问题和 token。只有用户明确指定某一条时，才只处理那一条。
 3. 插件在保存回答的同一事务中删除对应注释。失败、取消或证据不足的项保持原样，不用删除或清空来冒充已回答。未保存的草稿不在队列中，不猜测其内容。
-4. 最后用 `get_understanding_context(pendingScopeRecordId=<最初的 scopeRecordId>)` 复查。不依赖回答过程中自动切换的画布。仍未完成的项逐条说明原因。期间新增的注释留到下一批，不自动扩大本次任务。
+4. 最后用 `get_understanding_context(pendingScopeRecordId=<最初的 scopeRecordId>)` 复查。不依赖回答过程中自动切换的画布。仍未完成的项逐条说明原因。首次读取后、处理期间新增的注释留到下一批，不自动扩大本次任务。
 
 ## 修订（placement=revise）
 
