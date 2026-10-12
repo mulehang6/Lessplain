@@ -38,7 +38,7 @@ internal class SourceSelectionQuestion(
 }
 
 internal fun validateSourceSelection(repository: UnderstandingRepository, binding: SourceNodeBinding) {
-    val record = runCatching { repository.getRecord(binding.recordId) }.getOrNull()
+    val record = com.lessplain.core.cancellationAwareResult { repository.getRecord(binding.recordId) }.getOrNull()
     check(record != null && record.revision == binding.recordRevision &&
         record.graph.nodes.any { it.id == binding.nodeId }) {
         "来源节点已删除或记录版本已改变，请重新选择；输入和选区已保留"

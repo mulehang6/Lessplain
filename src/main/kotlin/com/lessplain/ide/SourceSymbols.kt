@@ -8,6 +8,7 @@ import com.intellij.psi.PsiRecursiveElementWalkingVisitor
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.openapi.util.Computable
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.progress.ProgressManager
 
 /** 尽力生成文件内稳定的名称链，不包含文件名。 */
 internal fun symbolPathAt(element: PsiElement?): String? {
@@ -41,6 +42,7 @@ internal fun functionOffsetsForSymbol(file: PsiFile?, expected: String): List<In
     val offsets = mutableListOf<Int>()
     file.accept(object : PsiRecursiveElementWalkingVisitor() {
         override fun visitElement(element: PsiElement) {
+            ProgressManager.checkCanceled()
             if (element is PsiNameIdentifierOwner) {
                 val identifier = element.nameIdentifier
                 val actual = symbolPathAt(element)

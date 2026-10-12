@@ -14,14 +14,14 @@ internal fun graphHierarchyEntries(
     repository: UnderstandingRepository,
     rootRecordId: String?,
 ): List<GraphHierarchyEntry> {
-    val root = rootRecordId?.let { runCatching { repository.getRecord(it) }.getOrNull() }
+    val root = rootRecordId?.let { com.lessplain.core.cancellationAwareResult { repository.getRecord(it) }.getOrNull() }
         ?: return emptyList()
     val entries = mutableListOf(GraphHierarchyEntry(root.displayTitle ?: root.question, 0, emptyList()))
 
     fun visit(record: UnderstandingRecord, path: List<FollowUpLayer>, ancestors: Set<String>) {
         val questionsByNode = repository.questionsForRecord(record.id)
             .filter { repository.recordForQuestion(it.id) != null }.groupBy { question ->
-            runCatching { repository.getContext(question.contextToken).nodeId }.getOrNull()
+            com.lessplain.core.cancellationAwareResult { repository.getContext(question.contextToken).nodeId }.getOrNull()
         }
         record.graph.nodes.forEach { node ->
             val questions = questionsByNode[node.id].orEmpty()

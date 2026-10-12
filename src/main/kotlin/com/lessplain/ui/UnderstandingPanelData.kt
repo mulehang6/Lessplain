@@ -29,7 +29,7 @@ internal fun readUnderstandingPanelData(
     repository: UnderstandingRepository,
     request: UnderstandingPanelRequest,
 ): UnderstandingPanelData {
-    val selected = request.activeRecordId?.let { runCatching { repository.getRecord(it) }.getOrNull() }
+    val selected = request.activeRecordId?.let { com.lessplain.core.cancellationAwareResult { repository.getRecord(it) }.getOrNull() }
     val layer = request.layers.lastOrNull()
     val displayed = if (layer == null) selected else if (layer.recordId == selected?.id) selected
         else repository.getRecord(layer.recordId)

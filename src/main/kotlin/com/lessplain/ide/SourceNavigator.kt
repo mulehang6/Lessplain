@@ -1,9 +1,11 @@
 package com.lessplain.ide
 
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.editor.Document
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
+import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
@@ -21,21 +23,38 @@ data class LocatedSource(
     val offset: Int? = null,
 )
 
+/** 后台读取完成时冻结文档版本；界面应用前必须检查该版本仍然有效。 */
+internal data class SourceResolution(
+    val located: LocatedSource,
+    val file: VirtualFile? = null,
+    val document: Document? = null,
+    val modificationStamp: Long? = null,
+) {
+    fun isCurrent(): Boolean = file?.isValid != false && document?.modificationStamp == modificationStamp
+}
+
 /** 重复文本匹配不能作为锚点已移动的证明。 */
 internal fun locateSource(project: Project, anchor: SourceAnchor): LocatedSource {
-    return commitSourceDocuments(project) {
-        val root = Path.of(project.basePath ?: return@commitSourceDocuments LocatedSource(LocationStatus.UNRESOLVED, EvidenceStatus.UNKNOWN))
-            .toAbsolutePath().normalize()
-        val path = root.resolve(anchor.path).normalize()
-        if (!path.startsWith(root)) return@commitSourceDocuments LocatedSource(LocationStatus.UNRESOLVED, EvidenceStatus.UNKNOWN)
-        val file = LocalFileSystem.getInstance().findFileByNioFile(path)
-            ?: return@commitSourceDocuments LocatedSource(LocationStatus.UNRESOLVED, EvidenceStatus.UNKNOWN)
-        val document = FileDocumentManager.getInstance().getDocument(file)
-            ?: return@commitSourceDocuments LocatedSource(LocationStatus.UNRESOLVED, EvidenceStatus.UNKNOWN)
-        val psi = PsiDocumentManager.getInstance(project).getPsiFile(document)
-        matchAnchorText(anchor, document.text, { offset -> symbolPathAt(psi?.findElementAt(offset)) },
-            { symbol -> functionOffsetsForSymbol(psi, symbol) })
-    }
+    return commitSourceDocuments(project) { resolveSourceInReadAction(project, anchor).located }
+}
+
+/** 调用者提供已提交文档的可取消读操作，不能在 EDT 中执行全文哈希和 PSI 遍历。 */
+internal fun resolveSourceInReadAction(project: Project, anchor: SourceAnchor): SourceResolution {
+    fun unresolved() = SourceResolution(LocatedSource(LocationStatus.UNRESOLVED, EvidenceStatus.UNKNOWN))
+    ProgressManager.checkCanceled()
+    val root = Path.of(project.basePath ?: return unresolved())
+        .toAbsolutePath().normalize()
+    val path = root.resolve(anchor.path).normalize()
+    if (!path.startsWith(root)) return unresolved()
+    val file = LocalFileSystem.getInstance().findFileByNioFile(path)
+        ?: return unresolved()
+    val document = FileDocumentManager.getInstance().getDocument(file)
+        ?: return unresolved()
+    val psi = PsiDocumentManager.getInstance(project).getPsiFile(document)
+    val located = matchAnchorText(
+        anchor, document.text, { offset -> symbolPathAt(psi?.findElementAt(offset)) },
+        { symbol -> functionOffsetsForSymbol(psi, symbol) })
+    return SourceResolution(located, file, document, document.modificationStamp)
 }
 
 /** 其他符号中的文本匹配仅是候选，不能据此确认迁移。 */
@@ -51,7 +70,7 @@ internal fun matchAnchorText(
     val expectedVersion = anchor.version.removePrefix("sha256:").lowercase()
     val normalizedContent = content.replace("\r\n", "\n")
     val versionMatches = sha256(normalizedContent) == expectedVersion ||
-        sha256(normalizedContent.replace("\n", "\r\n")) == expectedVersion
+            sha256(normalizedContent.replace("\n", "\r\n")) == expectedVersion
     val expectedOffset = anchor.lineHint?.let { line ->
         if (line < 1) null else {
             val starts = mutableListOf(0)
@@ -62,6 +81,7 @@ internal fun matchAnchorText(
     val matches = mutableListOf<Int>()
     var index = content.indexOf(anchor.text)
     while (index >= 0) {
+        ProgressManager.checkCanceled()
         matches += index
         index = content.indexOf(anchor.text, index + 1)
     }
@@ -93,8 +113,10 @@ internal fun matchAnchorText(
     if (anchor.symbol != null && !symbolMatches(anchor.symbol, symbolAt(symbolOffset))) {
         return LocatedSource(LocationStatus.UNRESOLVED, EvidenceStatus.UNKNOWN)
     }
-    return LocatedSource(if (versionMatches) LocationStatus.EXACT else LocationStatus.RELOCATED,
-        if (versionMatches) EvidenceStatus.UNCHANGED else EvidenceStatus.UNKNOWN, matches.single())
+    return LocatedSource(
+        if (versionMatches) LocationStatus.EXACT else LocationStatus.RELOCATED,
+        if (versionMatches) EvidenceStatus.UNCHANGED else EvidenceStatus.UNKNOWN, matches.single()
+    )
 }
 
 internal fun navigateToSource(
@@ -102,10 +124,11 @@ internal fun navigateToSource(
     anchor: SourceAnchor,
     animation: SourceScrollAnimation,
     located: LocatedSource = locateSource(project, anchor),
+    resolvedFile: VirtualFile? = null,
 ): LocatedSource {
     val offset = located.offset ?: return located
     val root = Path.of(project.basePath ?: return located).toAbsolutePath().normalize()
-    val file = ApplicationManager.getApplication().runReadAction<VirtualFile?> {
+    val file = resolvedFile ?: ApplicationManager.getApplication().runReadAction<VirtualFile?> {
         LocalFileSystem.getInstance().findFileByNioFile(root.resolve(anchor.path).normalize())
     } ?: return located
     val editor = FileEditorManager.getInstance(project).selectedTextEditor
