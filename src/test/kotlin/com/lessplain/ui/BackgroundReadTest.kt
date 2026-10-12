@@ -1,6 +1,11 @@
 package com.lessplain.ui
 
 import org.junit.jupiter.api.Test
+import com.lessplain.core.BackgroundTasks
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import javax.swing.SwingUtilities
@@ -17,9 +22,11 @@ class BackgroundReadTest {
         var background = false
         var publishedOnEdt = false
         var value = 0
+        val parent = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val tasks = BackgroundTasks(parent) { SwingUtilities.invokeLater(it) }
         try {
             SwingUtilities.invokeAndWait {
-                dispatchBackgroundRead({
+                tasks.dispatch({
                     background = !SwingUtilities.isEventDispatchThread()
                     entered.countDown()
                     check(release.await(10, TimeUnit.SECONDS))
@@ -39,6 +46,6 @@ class BackgroundReadTest {
             assertTrue(background)
             assertTrue(publishedOnEdt)
             assertEquals(42, value)
-        } finally { release.countDown() }
+        } finally { release.countDown(); tasks.close(); parent.cancel() }
     }
 }

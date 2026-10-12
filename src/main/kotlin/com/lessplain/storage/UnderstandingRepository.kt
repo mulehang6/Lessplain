@@ -1,12 +1,7 @@
 package com.lessplain.storage
 
 import com.google.gson.Gson
-import com.lessplain.model.BrowseState
-import com.lessplain.model.UnderstandingAnswer
-import com.lessplain.model.UnderstandingContext
-import com.lessplain.model.UnderstandingInputException
-import com.lessplain.model.UnderstandingQuestion
-import com.lessplain.model.UnderstandingRecord
+import com.lessplain.model.*
 import java.nio.channels.FileChannel
 import java.nio.channels.FileLock
 import java.nio.channels.OverlappingFileLockException
@@ -15,8 +10,7 @@ import java.nio.file.Path
 import java.nio.file.StandardOpenOption
 import java.security.MessageDigest
 import java.sql.Connection
-import java.util.UUID
-import org.sqlite.SQLiteDataSource
+import java.util.*
 
 /** 所有写入，包括请求去重，都在单个 SQLite 事务中完成。 */
 class UnderstandingRepository(
@@ -28,6 +22,7 @@ class UnderstandingRepository(
     private val lockChannel: FileChannel
     private val writerLock: FileLock?
     val readOnly: Boolean
+    private val connections = RepositoryConnections(databasePath)
 
     init {
         Files.createDirectories(databasePath.parent)
@@ -55,15 +50,7 @@ class UnderstandingRepository(
         }
     }
 
-    // IntelliJ 用插件类加载器加载内置依赖，DriverManager 可能无法发现其驱动。
-    internal fun connect(): Connection = SQLiteDataSource().apply {
-        url = "jdbc:sqlite:${databasePath.toAbsolutePath()}"
-    }.connection.apply {
-        createStatement().use { statement ->
-            statement.execute("PRAGMA foreign_keys=ON")
-            statement.execute("PRAGMA busy_timeout=3000")
-        }
-    }
+    internal fun connect(): Connection = connections.open()
 
     private fun migrate() {
         val existing = Files.exists(databasePath) && Files.size(databasePath) > 0
@@ -74,7 +61,8 @@ class UnderstandingRepository(
             if (version > DATABASE_SCHEMA_VERSION) throw IllegalStateException("数据库版本较新：$version")
             if (version == DATABASE_SCHEMA_VERSION) return
             if (existing) {
-                val backup = databasePath.resolveSibling("understanding.db.before-v$version-${System.currentTimeMillis()}.bak")
+                val backup =
+                    databasePath.resolveSibling("understanding.db.before-v$version-${System.currentTimeMillis()}.bak")
                 db.createStatement().use { statement ->
                     statement.execute("VACUUM INTO '${backup.toAbsolutePath().toString().replace("'", "''")}'")
                 }
@@ -108,7 +96,14 @@ class UnderstandingRepository(
             "contexts" to setOf("token", "project_id", "data"),
             "questions" to setOf("id", "context_token", "owner_record_id", "text", "status", "data"),
             "records" to setOf("id", "parent_id", "current_revision", "created_at"),
-            "record_versions" to setOf("record_id", "revision", "question_text", "answer_text", "display_title", "data"),
+            "record_versions" to setOf(
+                "record_id",
+                "revision",
+                "question_text",
+                "answer_text",
+                "display_title",
+                "data"
+            ),
             "answers" to setOf("id", "question_id", "answer_text", "data"),
             "requests" to setOf("request_id", "operation", "payload_hash", "response"),
             "browse_state" to setOf("record_id", "data"),
@@ -167,15 +162,16 @@ class UnderstandingRepository(
     }
 
     fun insertQuestion(db: Connection, question: UnderstandingQuestion) {
-        db.prepareStatement("INSERT INTO questions(id, context_token, owner_record_id, text, status, data) VALUES(?, ?, ?, ?, ?, ?)").use { statement ->
-            statement.setString(1, question.id)
-            statement.setString(2, question.contextToken)
-            statement.setString(3, question.ownerRecordId)
-            statement.setString(4, question.text)
-            statement.setString(5, question.status)
-            statement.setString(6, gson.toJson(question))
-            statement.executeUpdate()
-        }
+        db.prepareStatement("INSERT INTO questions(id, context_token, owner_record_id, text, status, data) VALUES(?, ?, ?, ?, ?, ?)")
+            .use { statement ->
+                statement.setString(1, question.id)
+                statement.setString(2, question.contextToken)
+                statement.setString(3, question.ownerRecordId)
+                statement.setString(4, question.text)
+                statement.setString(5, question.status)
+                statement.setString(6, gson.toJson(question))
+                statement.executeUpdate()
+            }
     }
 
     fun getQuestion(id: String): UnderstandingQuestion = connect().use { readQuestion(it, id) }
@@ -185,14 +181,15 @@ class UnderstandingRepository(
 
     /** 注释成功回答后已删除，仍可从原响应还原当时用于请求哈希的来源。 */
     internal fun requestContextToken(requestId: String): String? = connect().use { db ->
-        db.prepareStatement("SELECT response FROM requests WHERE request_id=? AND operation='present_understanding'").use { statement ->
-            statement.setString(1, requestId)
-            statement.executeQuery().use { rows ->
-                if (!rows.next() || rows.getString(1) == DELETED_REQUEST_RESPONSE) null else
-                    com.google.gson.JsonParser.parseString(rows.getString(1)).asJsonObject
-                        .get("contextToken")?.takeUnless { it.isJsonNull }?.asString
+        db.prepareStatement("SELECT response FROM requests WHERE request_id=? AND operation='present_understanding'")
+            .use { statement ->
+                statement.setString(1, requestId)
+                statement.executeQuery().use { rows ->
+                    if (!rows.next() || rows.getString(1) == DELETED_REQUEST_RESPONSE) null else
+                        com.google.gson.JsonParser.parseString(rows.getString(1)).asJsonObject
+                            .get("contextToken")?.takeUnless { it.isJsonNull }?.asString
+                }
             }
-        }
     }
 
     /** 重放先于准备；源码读取在事务外完成，写入前再次查重。 */
@@ -208,47 +205,50 @@ class UnderstandingRepository(
         lookupRequest(requestId, operation, hash)?.let { return it }
         val prepared = prepare()
         return write { db ->
-            db.prepareStatement("SELECT operation, payload_hash, response FROM requests WHERE request_id=?").use { statement ->
-                statement.setString(1, requestId)
-                statement.executeQuery().use { rows ->
-                    if (rows.next()) {
-                        if (rows.getString(1) != operation || rows.getString(2) != hash) {
-                            throw UnderstandingInputException("requestId 已用于不同内容")
+            db.prepareStatement("SELECT operation, payload_hash, response FROM requests WHERE request_id=?")
+                .use { statement ->
+                    statement.setString(1, requestId)
+                    statement.executeQuery().use { rows ->
+                        if (rows.next()) {
+                            if (rows.getString(1) != operation || rows.getString(2) != hash) {
+                                throw UnderstandingInputException("requestId 已用于不同内容")
+                            }
+                            val response = rows.getString(3)
+                            if (response == DELETED_REQUEST_RESPONSE) throw UnderstandingInputException("该请求的记录已删除")
+                            return@write response
                         }
-                        val response = rows.getString(3)
-                        if (response == DELETED_REQUEST_RESPONSE) throw UnderstandingInputException("该请求的记录已删除")
-                        return@write response
                     }
                 }
-            }
             val result = block(db, prepared)
-            db.prepareStatement("INSERT INTO requests(request_id, operation, payload_hash, response) VALUES(?, ?, ?, ?)").use { statement ->
-                statement.setString(1, requestId)
-                statement.setString(2, operation)
-                statement.setString(3, hash)
-                statement.setString(4, result)
-                statement.executeUpdate()
-            }
+            db.prepareStatement("INSERT INTO requests(request_id, operation, payload_hash, response) VALUES(?, ?, ?, ?)")
+                .use { statement ->
+                    statement.setString(1, requestId)
+                    statement.setString(2, operation)
+                    statement.setString(3, hash)
+                    statement.setString(4, result)
+                    statement.executeUpdate()
+                }
             result
         }
     }
 
     private fun lookupRequest(requestId: String, operation: String, hash: String): String? = connect().use { db ->
-        db.prepareStatement("SELECT operation, payload_hash, response FROM requests WHERE request_id=?").use { statement ->
-            statement.setString(1, requestId)
-            statement.executeQuery().use { rows ->
-                if (!rows.next()) {
-                    null
-                } else {
-                    if (rows.getString(1) != operation || rows.getString(2) != hash) {
-                        throw UnderstandingInputException("requestId 已用于不同内容")
+        db.prepareStatement("SELECT operation, payload_hash, response FROM requests WHERE request_id=?")
+            .use { statement ->
+                statement.setString(1, requestId)
+                statement.executeQuery().use { rows ->
+                    if (!rows.next()) {
+                        null
+                    } else {
+                        if (rows.getString(1) != operation || rows.getString(2) != hash) {
+                            throw UnderstandingInputException("requestId 已用于不同内容")
+                        }
+                        val response = rows.getString(3)
+                        if (response == DELETED_REQUEST_RESPONSE) throw UnderstandingInputException("该请求的记录已删除")
+                        response
                     }
-                    val response = rows.getString(3)
-                    if (response == DELETED_REQUEST_RESPONSE) throw UnderstandingInputException("该请求的记录已删除")
-                    response
                 }
             }
-        }
     }
 
     fun insertRecord(db: Connection, record: UnderstandingRecord) {
@@ -262,22 +262,24 @@ class UnderstandingRepository(
                 }
             }
         }
-        db.prepareStatement("INSERT INTO records(id, parent_id, current_revision, created_at) VALUES(?, ?, ?, ?)").use { statement ->
-            statement.setString(1, record.id)
-            statement.setString(2, record.parentId)
-            statement.setInt(3, record.revision)
-            statement.setLong(4, record.createdAt)
-            statement.executeUpdate()
-        }
-        db.prepareStatement("INSERT INTO record_versions(record_id, revision, question_text, answer_text, data, display_title) VALUES(?, ?, ?, ?, ?, ?)").use { statement ->
-            statement.setString(1, record.id)
-            statement.setInt(2, record.revision)
-            statement.setString(3, record.question)
-            statement.setString(4, record.answer)
-            statement.setString(5, gson.toJson(record))
-            statement.setString(6, record.displayTitle)
-            statement.executeUpdate()
-        }
+        db.prepareStatement("INSERT INTO records(id, parent_id, current_revision, created_at) VALUES(?, ?, ?, ?)")
+            .use { statement ->
+                statement.setString(1, record.id)
+                statement.setString(2, record.parentId)
+                statement.setInt(3, record.revision)
+                statement.setLong(4, record.createdAt)
+                statement.executeUpdate()
+            }
+        db.prepareStatement("INSERT INTO record_versions(record_id, revision, question_text, answer_text, data, display_title) VALUES(?, ?, ?, ?, ?, ?)")
+            .use { statement ->
+                statement.setString(1, record.id)
+                statement.setInt(2, record.revision)
+                statement.setString(3, record.question)
+                statement.setString(4, record.answer)
+                statement.setString(5, gson.toJson(record))
+                statement.setString(6, record.displayTitle)
+                statement.executeUpdate()
+            }
         record.questionId?.let { id ->
             db.prepareStatement("DELETE FROM questions WHERE id=?").use { statement ->
                 statement.setString(1, id)
@@ -287,13 +289,14 @@ class UnderstandingRepository(
     }
 
     fun insertAnswer(db: Connection, answer: UnderstandingAnswer) {
-        db.prepareStatement("INSERT INTO answers(id, question_id, answer_text, data) VALUES(?, ?, ?, ?)").use { statement ->
-            statement.setString(1, answer.id)
-            statement.setString(2, answer.questionId)
-            statement.setString(3, answer.answer)
-            statement.setString(4, gson.toJson(answer))
-            statement.executeUpdate()
-        }
+        db.prepareStatement("INSERT INTO answers(id, question_id, answer_text, data) VALUES(?, ?, ?, ?)")
+            .use { statement ->
+                statement.setString(1, answer.id)
+                statement.setString(2, answer.questionId)
+                statement.setString(3, answer.answer)
+                statement.setString(4, gson.toJson(answer))
+                statement.executeUpdate()
+            }
         db.prepareStatement("UPDATE questions SET status='answered' WHERE id=?").use { statement ->
             statement.setString(1, answer.questionId)
             statement.executeUpdate()
@@ -311,22 +314,23 @@ class UnderstandingRepository(
     }
 
     fun getRecord(id: String): UnderstandingRecord = connect().use { db ->
-        db.prepareStatement("SELECT v.data FROM records r JOIN record_versions v ON v.record_id=r.id AND v.revision=r.current_revision WHERE r.id=?").use { statement ->
-            statement.setString(1, id)
-            statement.executeQuery().use { rows ->
-                if (!rows.next()) throw UnderstandingInputException("理解记录不存在")
-                gson.readUnderstandingRecord(rows.getString(1))
+        db.prepareStatement("SELECT v.data FROM records r JOIN record_versions v ON v.record_id=r.id AND v.revision=r.current_revision WHERE r.id=?")
+            .use { statement ->
+                statement.setString(1, id)
+                statement.executeQuery().use { rows ->
+                    if (!rows.next()) throw UnderstandingInputException("理解记录不存在")
+                    gson.readUnderstandingRecord(rows.getString(1))
+                }
             }
-        }
     }
 
     fun recentRecords(query: String = "", limit: Int = 100): List<UnderstandingRecord> = connect().use { db ->
         val result = mutableListOf<UnderstandingRecord>()
         db.prepareStatement(
             "SELECT v.data FROM records r JOIN record_versions v ON v.record_id=r.id AND v.revision=r.current_revision " +
-                "WHERE (?='' OR v.question_text LIKE ? OR v.display_title LIKE ? OR EXISTS " +
-                "(SELECT 1 FROM questions q WHERE q.owner_record_id=r.id AND q.text LIKE ?)) " +
-                "ORDER BY r.created_at DESC LIMIT ?",
+                    "WHERE (?='' OR v.question_text LIKE ? OR v.display_title LIKE ? OR EXISTS " +
+                    "(SELECT 1 FROM questions q WHERE q.owner_record_id=r.id AND q.text LIKE ?)) " +
+                    "ORDER BY r.created_at DESC LIMIT ?",
         ).use { statement ->
             val pattern = "%${query.trim()}%"
             statement.setString(1, query.trim())
@@ -346,16 +350,16 @@ class UnderstandingRepository(
         val result = mutableListOf<UnderstandingRecord>()
         db.prepareStatement(
             "WITH RECURSIVE descendants(root_id, id) AS (" +
-                "SELECT id, id FROM records WHERE parent_id IS NULL UNION ALL " +
-                "SELECT d.root_id, r.id FROM records r JOIN descendants d ON r.parent_id=d.id) " +
-                "SELECT v.data FROM records root JOIN record_versions v " +
-                "ON v.record_id=root.id AND v.revision=root.current_revision " +
-                "WHERE root.parent_id IS NULL AND (?='' OR EXISTS (" +
-                "SELECT 1 FROM descendants d JOIN records r ON r.id=d.id " +
-                "JOIN record_versions child ON child.record_id=r.id AND child.revision=r.current_revision " +
-                "WHERE d.root_id=root.id AND (child.question_text LIKE ? OR child.display_title LIKE ? " +
-                "OR EXISTS (SELECT 1 FROM questions q WHERE q.owner_record_id=r.id AND q.text LIKE ?)))) " +
-                "ORDER BY root.created_at DESC LIMIT ?",
+                    "SELECT id, id FROM records WHERE parent_id IS NULL UNION ALL " +
+                    "SELECT d.root_id, r.id FROM records r JOIN descendants d ON r.parent_id=d.id) " +
+                    "SELECT v.data FROM records root JOIN record_versions v " +
+                    "ON v.record_id=root.id AND v.revision=root.current_revision " +
+                    "WHERE root.parent_id IS NULL AND (?='' OR EXISTS (" +
+                    "SELECT 1 FROM descendants d JOIN records r ON r.id=d.id " +
+                    "JOIN record_versions child ON child.record_id=r.id AND child.revision=r.current_revision " +
+                    "WHERE d.root_id=root.id AND (child.question_text LIKE ? OR child.display_title LIKE ? " +
+                    "OR EXISTS (SELECT 1 FROM questions q WHERE q.owner_record_id=r.id AND q.text LIKE ?)))) " +
+                    "ORDER BY root.created_at DESC LIMIT ?",
         ).use { statement ->
             val normalized = query.trim()
             val pattern = "%$normalized%"
@@ -372,8 +376,8 @@ class UnderstandingRepository(
     fun recordForQuestion(questionId: String): UnderstandingRecord? = connect().use { db ->
         db.prepareStatement(
             "SELECT v.data FROM records r JOIN record_versions v " +
-                "ON v.record_id=r.id AND v.revision=r.current_revision " +
-                "WHERE json_extract(v.data, '$.questionId')=? ORDER BY r.created_at DESC LIMIT 1",
+                    "ON v.record_id=r.id AND v.revision=r.current_revision " +
+                    "WHERE json_extract(v.data, '$.questionId')=? ORDER BY r.created_at DESC LIMIT 1",
         ).use { statement ->
             statement.setString(1, questionId)
             statement.executeQuery().use { rows ->
@@ -382,25 +386,30 @@ class UnderstandingRepository(
         }
     }
 
-    fun answersForRecord(recordId: String): List<Pair<UnderstandingQuestion, UnderstandingAnswer>> = connect().use { db ->
-        val result = mutableListOf<Pair<UnderstandingQuestion, UnderstandingAnswer>>()
-        db.prepareStatement("SELECT q.data, a.data FROM questions q JOIN answers a ON a.question_id=q.id WHERE q.owner_record_id=? " +
-            "AND NOT EXISTS (SELECT 1 FROM answers newer WHERE json_extract(newer.data, '$.supersedesId')=a.id) ORDER BY a.rowid").use { statement ->
-            statement.setString(1, recordId)
-            statement.executeQuery().use { rows ->
-                while (rows.next()) {
-                    result += gson.fromJson(rows.getString(1), UnderstandingQuestion::class.java) to
-                        gson.fromJson(rows.getString(2), UnderstandingAnswer::class.java)
+    fun answersForRecord(recordId: String): List<Pair<UnderstandingQuestion, UnderstandingAnswer>> =
+        connect().use { db ->
+            val result = mutableListOf<Pair<UnderstandingQuestion, UnderstandingAnswer>>()
+            db.prepareStatement(
+                "SELECT q.data, a.data FROM questions q JOIN answers a ON a.question_id=q.id WHERE q.owner_record_id=? " +
+                        "AND NOT EXISTS (SELECT 1 FROM answers newer WHERE json_extract(newer.data, '$.supersedesId')=a.id) ORDER BY a.rowid"
+            ).use { statement ->
+                statement.setString(1, recordId)
+                statement.executeQuery().use { rows ->
+                    while (rows.next()) {
+                        result += gson.fromJson(rows.getString(1), UnderstandingQuestion::class.java) to
+                                gson.fromJson(rows.getString(2), UnderstandingAnswer::class.java)
+                    }
                 }
             }
+            result
         }
-        result
-    }
 
     fun answersForQuestion(questionId: String): List<UnderstandingAnswer> = connect().use { db ->
         val result = mutableListOf<UnderstandingAnswer>()
-        db.prepareStatement("SELECT a.data FROM answers a WHERE a.question_id=? " +
-            "AND NOT EXISTS (SELECT 1 FROM answers newer WHERE json_extract(newer.data, '$.supersedesId')=a.id) ORDER BY a.rowid").use { statement ->
+        db.prepareStatement(
+            "SELECT a.data FROM answers a WHERE a.question_id=? " +
+                    "AND NOT EXISTS (SELECT 1 FROM answers newer WHERE json_extract(newer.data, '$.supersedesId')=a.id) ORDER BY a.rowid"
+        ).use { statement ->
             statement.setString(1, questionId)
             statement.executeQuery().use { rows ->
                 while (rows.next()) result += gson.fromJson(rows.getString(1), UnderstandingAnswer::class.java)
@@ -419,7 +428,7 @@ class UnderstandingRepository(
         val result = mutableListOf<UnderstandingQuestion>()
         db.prepareStatement(
             "SELECT q.data, q.owner_record_id, q.status FROM questions q WHERE (?='' OR q.text LIKE ? OR EXISTS " +
-                "(SELECT 1 FROM answers a WHERE a.question_id=q.id AND a.answer_text LIKE ?)) ORDER BY q.rowid DESC LIMIT ?",
+                    "(SELECT 1 FROM answers a WHERE a.question_id=q.id AND a.answer_text LIKE ?)) ORDER BY q.rowid DESC LIMIT ?",
         ).use { statement ->
             val pattern = "%${query.trim()}%"
             statement.setString(1, query.trim())
@@ -441,11 +450,12 @@ class UnderstandingRepository(
     fun saveBrowseState(state: BrowseState) {
         getRecord(state.recordId)
         write { db ->
-            db.prepareStatement("INSERT INTO browse_state(record_id, data) VALUES(?, ?) ON CONFLICT(record_id) DO UPDATE SET data=excluded.data").use { statement ->
-                statement.setString(1, state.recordId)
-                statement.setString(2, gson.toJson(state))
-                statement.executeUpdate()
-            }
+            db.prepareStatement("INSERT INTO browse_state(record_id, data) VALUES(?, ?) ON CONFLICT(record_id) DO UPDATE SET data=excluded.data")
+                .use { statement ->
+                    statement.setString(1, state.recordId)
+                    statement.setString(2, gson.toJson(state))
+                    statement.executeUpdate()
+                }
         }
     }
 
@@ -460,7 +470,10 @@ class UnderstandingRepository(
         }
     }
 
+    @Synchronized
     override fun close() {
+        if (connections.isClosed) return
+        connections.close()
         writerLock?.release()
         lockChannel.close()
     }
