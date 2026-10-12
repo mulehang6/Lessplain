@@ -43,7 +43,7 @@ TODO 待补 演示视频 中/英文版
 1. 拿到安装包 ZIP，没有现成的话参考下面“从源码构建”。
 2. 在 IDEA 中打开 Settings → Plugins，点齿轮图标，选 Install Plugin from Disk，选择 ZIP，重启 IDE。
 3. 让 Agent 连上 IDE 的 MCP Server。
-4. 把仓库里的 `skills/`（含 `SKILL.md` 和 `references/`）复制到 Agent 的 skills 目录下的 `understanding-frames/` 中。这个 skill 告诉 Agent 什么时候该画图、图该怎么画、怎么处理待答注释。
+4. 把仓库里的 `skills/lessplain/`（含 `SKILL.md` 和 `references/`）复制到 Agent 的 skills 目录下的 `lessplain/` 中。这个 skill 告诉 Agent 什么时候该画图、图该怎么画、怎么处理待答注释。
 
 > [!TIP]
 > 强烈建议根据个人情况修改一下这个 skill：你是希望尽可能详细地解答（具体到代码逻辑块或者每一行），还是仅链路清晰（一般情况下一个函数就对应一个节点）就够了。
@@ -51,6 +51,8 @@ TODO 待补 演示视频 中/英文版
 > 默认的 skill 只是我个人的偏好，不一定会对你的胃口。
 
 ## 怎么用
+
+想在一项开发任务开始前先学习相关代码、审查修改方案，可以试用 [annoy-me](skills/annoy-me/SKILL.md)。它由用户主动开启，在 Agent 中逐轮提问，并用 Lessplain 呈现必要材料。它目前是个人试验，不随插件 ZIP 自动安装；所有 Agent 使用同一份技能目录，安装与调用方式见 [宿主说明](skills/annoy-me/references/agents.md)。
 
 1. 打开 IDE 右侧的 Understanding 工具窗口，保持项目打开，确保 Agent 已连接 IDE MCP。
 2. 向 Agent 问一个关于代码的问题，比如“这个请求从进来到写库经过哪些步骤”。最好手动触发一下 skill 。Agent 读源码后把图提交给插件，工具窗口里出现新记录。
@@ -116,7 +118,7 @@ TODO 待补 演示视频 中/英文版
 - 分支图标由插件根据后继数量自己算，不要提交 `decision`。
 - 新记录要么设 `placement=root`，要么用 `child`、`sibling` 挂到已有记录下，要么用 `explicit` 加 `parentId`。节点追问和待答注释用 `child`。
 
-字段细节、归属规则、待答注释批处理流程见 [协议细则](skills/references/protocol.md) （也不建议人工阅读）和 [配套 skill](skills/SKILL.md)。
+字段细节、归属规则、待答注释批处理流程见 [协议细则](skills/lessplain/references/protocol.md) （也不建议人工阅读）和 [配套 skill](skills/lessplain/SKILL.md)。
 
 ## 从源码构建
 
