@@ -23,6 +23,7 @@ internal class SourceMarkerTestEditor {
     val component = JPanel().apply { setSize(800, 600) }
     var text = "    foo()\n    bar()\n"
     val inlayBounds = Rectangle(0, 30, 800, 32)
+    var codeGap = 0
     var visibleArea = Rectangle(0, 40, 800, 300)
     var inlayDisposed = false
     var highlighterDisposed = false
@@ -123,7 +124,7 @@ internal class SourceMarkerTestEditor {
             "offsetToXY" -> {
                 val offset = args[0] as Int
                 val line = lineStarts.indexOfLast { it <= offset }
-                Point(40 + (offset - lineStarts[line]) * 8, inlayBounds.y + inlayBounds.height + line * 20)
+                Point(40 + (offset - lineStarts[line]) * 8, inlayBounds.y + inlayBounds.height + codeGap + line * 20)
             }
             else -> null
         }

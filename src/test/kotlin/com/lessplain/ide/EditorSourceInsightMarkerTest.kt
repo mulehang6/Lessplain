@@ -84,6 +84,69 @@ class EditorSourceInsightMarkerTest {
     }
 
     @Test
+    fun `short gap retains existing reveal without triggering or restarting it`() {
+        SwingUtilities.invokeAndWait {
+            val fixture = SourceMarkerTestEditor().apply { codeGap = 4 }
+            val marker = EditorSourceInsightMarker(fixture.editor, 0, fixture.text.length, "提示", navigation())
+            try {
+                val hint = fixture.renderer.hintBounds(fixture.inlay)
+                val caption = Point(hint.x + 8, hint.y + 8)
+                val gap = Point(hint.x + 8, hint.y + hint.height)
+                val block = requireNotNull(sourceBlockBounds(fixture.editor, 0, fixture.text.length))
+                val code = Point(block.x + 10, block.y + 15)
+                assertTrue(gap.y < block.y)
+                move(fixture, gap)
+                move(fixture, code)
+                assertFalse(fixture.renderer.hovered)
+                move(fixture, caption)
+                assertTrue(fixture.renderer.hovered)
+                marker.timer.stop()
+                move(fixture, gap)
+                assertTrue(fixture.renderer.hovered)
+                assertFalse(marker.timer.isRunning, "跨越间隙不能重新开始渐显")
+                move(fixture, code)
+                assertTrue(fixture.renderer.hovered)
+                move(fixture, gap)
+                press(fixture, gap, MouseEvent.BUTTON1)
+                assertFalse(fixture.renderer.hovered)
+                drag(fixture, caption)
+                assertFalse(fixture.renderer.hovered)
+                move(fixture, code)
+                assertFalse(fixture.renderer.hovered)
+                move(fixture, caption)
+                assertTrue(fixture.renderer.hovered)
+                move(fixture, Point(hint.x - 1, gap.y))
+                assertFalse(fixture.renderer.hovered, "间隙两侧空白不能延续高亮")
+            } finally { marker.dispose() }
+        }
+    }
+
+    @Test
+    fun `expanded moved and resized labels use current retention bounds`() {
+        SwingUtilities.invokeAndWait {
+            val fixture = SourceMarkerTestEditor().apply { codeGap = 4 }
+            val marker = EditorSourceInsightMarker(fixture.editor, 0, fixture.text.length,
+                "很长的代码提示".repeat(60), navigation())
+            try {
+                fixture.renderer.expanded = true
+                fixture.inlay.update()
+                fixture.inlayBounds.translate(0, 120)
+                fixture.visibleArea = java.awt.Rectangle(100, 200, 200, 100)
+                fixture.component.dispatchEvent(java.awt.event.ComponentEvent(
+                    fixture.component, java.awt.event.ComponentEvent.COMPONENT_RESIZED,
+                ))
+                val hint = fixture.renderer.hintBounds(fixture.inlay)
+                move(fixture, Point(hint.x + 8, hint.y + 8))
+                move(fixture, Point(hint.x + 8, hint.y + hint.height))
+                assertTrue(fixture.renderer.hovered)
+                fixture.codeGap = 20
+                move(fixture, Point(hint.x + 8, hint.y + hint.height))
+                assertFalse(fixture.renderer.hovered, "另一行提示大小的间隔不能被连成保持区域")
+            } finally { marker.dispose() }
+        }
+    }
+
+    @Test
     fun `navigation and expansion survive dismissal and disposal releases all owned resources`() {
         SwingUtilities.invokeAndWait {
             val fixture = SourceMarkerTestEditor()
@@ -151,6 +214,11 @@ class EditorSourceInsightMarkerTest {
 
     private fun press(fixture: SourceMarkerTestEditor, point: Point, button: Int) = fixture.component.dispatchEvent(
         MouseEvent(fixture.component, MouseEvent.MOUSE_PRESSED, 0, 0, point.x, point.y, 1, false, button),
+    )
+
+    private fun drag(fixture: SourceMarkerTestEditor, point: Point) = fixture.component.dispatchEvent(
+        MouseEvent(fixture.component, MouseEvent.MOUSE_DRAGGED, 0, MouseEvent.BUTTON1_DOWN_MASK,
+            point.x, point.y, 0, false),
     )
 
     private fun click(fixture: SourceMarkerTestEditor, point: Point) {

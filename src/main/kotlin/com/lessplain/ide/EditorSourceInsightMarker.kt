@@ -8,6 +8,7 @@ import com.intellij.openapi.editor.markup.HighlighterLayer
 import com.intellij.openapi.editor.markup.HighlighterTargetArea
 import com.intellij.openapi.editor.markup.TextAttributes
 import com.intellij.openapi.util.Disposer
+import com.intellij.util.ui.JBUI
 import java.awt.Point
 import java.awt.event.ComponentAdapter
 import java.awt.event.ComponentEvent
@@ -15,6 +16,9 @@ import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import javax.swing.SwingUtilities
 import javax.swing.Timer
+
+/** 上方块提示按优先级升序排列，最高优先级使说明紧贴对应代码。 */
+private const val SOURCE_INLAY_PRIORITY = Int.MAX_VALUE
 
 /** 管理单个源码提示的编辑器监听器和渐显计时器。 */
 internal class EditorSourceInsightMarker(
@@ -28,7 +32,7 @@ internal class EditorSourceInsightMarker(
     private val renderer = InsightInlayRenderer(label, start, end, navigation.canPrevious, navigation.canNext)
     private val originalText = editor.document.charsSequence.subSequence(start, end).toString()
     private val lineStart = editor.document.getLineStartOffset(editor.document.getLineNumber(start))
-    private val inlay = editor.inlayModel.addBlockElement(lineStart, false, true, -100, renderer)
+    private val inlay = editor.inlayModel.addBlockElement(lineStart, false, true, SOURCE_INLAY_PRIORITY, renderer)
     val isInstalled: Boolean get() = inlay != null
     private var reveal = 0f
     private var hoverStart = 0L
@@ -71,7 +75,7 @@ internal class EditorSourceInsightMarker(
     private val mouse = object : MouseAdapter() {
         override fun mouseMoved(event: MouseEvent) {
             if (disposed) return
-            setHovered(hoverState.move(inHint(event.point), inBlock(event.point)))
+            setHovered(hoverState.move(inHint(event.point), inRetentionArea(event.point)))
             val button = inlay?.let { renderer.buttonAt(it, event.point) }
             if (renderer.hoveredButton != button) {
                 renderer.hoveredButton = button
@@ -89,12 +93,12 @@ internal class EditorSourceInsightMarker(
 
         override fun mousePressed(event: MouseEvent) {
             if (disposed) return
-            setHovered(hoverState.press(inHint(event.point), inBlock(event.point)))
+            setHovered(hoverState.press(inHint(event.point), inRetentionArea(event.point)))
         }
 
         override fun mouseDragged(event: MouseEvent) {
             if (disposed) return
-            setHovered(hoverState.drag(inHint(event.point), inBlock(event.point)))
+            setHovered(hoverState.drag(inHint(event.point), inRetentionArea(event.point)))
         }
 
         override fun mouseClicked(event: MouseEvent) {
@@ -139,9 +143,14 @@ internal class EditorSourceInsightMarker(
 
     private fun inHint(point: Point): Boolean = inlay?.let { renderer.hintBounds(it).contains(point) } == true
 
-    private fun inBlock(point: Point): Boolean = highlighter?.let {
-        sourceBlockBounds(editor, it.startOffset, it.endOffset)?.contains(point)
-    } == true
+    /** 短间隙只延续已触发的高亮，不参与绘制或独立触发。 */
+    private fun inRetentionArea(point: Point): Boolean {
+        val range = highlighter ?: return false
+        val block = sourceBlockBounds(editor, range.startOffset, range.endOffset) ?: return false
+        if (block.contains(point)) return true
+        val hint = inlay?.takeIf { it.bounds != null }?.let { renderer.hintBounds(it) }
+        return sourceHighlightHoverBridge(hint, block, JBUI.scale(4))?.contains(point) == true
+    }
 
     private fun setHovered(value: Boolean) {
         if (hovered == value) return

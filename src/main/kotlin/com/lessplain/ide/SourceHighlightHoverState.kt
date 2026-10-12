@@ -7,7 +7,7 @@ internal class SourceHighlightHoverState {
     private var state = State.IDLE
     val active: Boolean get() = state == State.ACTIVE
 
-    /** 坐标按完整绘制代码区域分类，不按动画当前覆盖范围分类。 */
+    /** 保持区域包含完整代码和标签下方短间隙，不按动画当前覆盖范围分类。 */
     fun move(inHint: Boolean, inBlock: Boolean): Boolean {
         state = when (state) {
             State.IDLE -> if (inHint) State.ACTIVE else State.IDLE
