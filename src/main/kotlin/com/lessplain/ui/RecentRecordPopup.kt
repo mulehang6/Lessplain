@@ -36,14 +36,25 @@ import java.util.WeakHashMap
 import javax.swing.SwingUtilities
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.component.Text
+import com.lessplain.model.UnderstandingRecord
 
 private val recentPopups = WeakHashMap<Component, ThemedCanvasPopup>()
+private val recentLoads = WeakHashMap<Component, AutoCloseable>()
 
 /** 与历史页共用 Jewel 记录行，点击触发按钮总会关闭已打开弹层。 */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 internal fun showRecentRecordPopup(service: UnderstandingService, anchor: Component) {
     recentPopups.remove(anchor)?.let { it.close(); return }
-    val records = service.repository.recentRootRecords("", 6)
+    recentLoads.remove(anchor)?.let { it.close(); return }
+    recentLoads[anchor] = service.readBackground({ service.repository.recentRootRecords("", 6).also { it.forEach(service.storage::remember) } }) { result ->
+        recentLoads.remove(anchor)
+        if (anchor.isShowing) result.onSuccess { showLoadedRecentRecords(service, anchor, it) }
+            .onFailure { service.contentActions.notifyQuestionCopy(it.message ?: "无法读取历史记录", true) }
+    }
+}
+
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+private fun showLoadedRecentRecords(service: UnderstandingService, anchor: Component, records: List<UnderstandingRecord>) {
     var popup: ThemedCanvasPopup? = null
     val visibility = HierarchyListener { event ->
         if (event.changeFlags and HierarchyEvent.SHOWING_CHANGED.toLong() != 0L && !anchor.isShowing) popup?.close()

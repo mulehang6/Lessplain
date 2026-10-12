@@ -19,7 +19,7 @@ class AskSelectedCodeAction : AnAction("提问", "将所选代码的问题添加
         val project = event.project
         event.presentation.isEnabledAndVisible = project != null && editor != null &&
             editor.project == project && selectedSourceBinding(editor) != null &&
-            !project.getService(UnderstandingService::class.java).repository.readOnly
+            !project.getService(UnderstandingService::class.java).readOnly
     }
 
     override fun actionPerformed(event: AnActionEvent) {
@@ -27,7 +27,7 @@ class AskSelectedCodeAction : AnAction("提问", "将所选代码的问题添加
         val editor = event.getData(CommonDataKeys.EDITOR) ?: return
         val binding = selectedSourceBinding(editor) ?: return
         val anchor = captureEditorAnchor(project, editor) ?: return
-        runCatching {
+        com.lessplain.core.cancellationAwareResult {
             project.getService(UnderstandingService::class.java).contentActions.sourceQuestions.show(editor, binding, anchor)
         }.onFailure {
             com.intellij.openapi.ui.Messages.showErrorDialog(project, it.message ?: "无法打开提问，请重新选择", "提问")

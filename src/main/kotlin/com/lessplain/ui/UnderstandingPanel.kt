@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import com.lessplain.core.StaticExplorer
 import com.lessplain.diagram.DiagramHierarchyItem
 import com.lessplain.diagram.createUnderstandingDiagram
+import com.lessplain.diagram.bindNodeContextCopy
 import com.lessplain.diagram.bindGraphState
 import com.lessplain.diagram.bindDiagramSourceNavigation
 import com.lessplain.ide.GraphLayerKey
@@ -65,7 +66,14 @@ fun UnderstandingPanel(service: UnderstandingService) {
     }
     val request = UnderstandingPanelRequest(service.panelPage, service.activeRecordId, rootRecordId,
         layers.toList(), if (history) search.text.toString() else "")
-    val loaded = rememberBackgroundRead(request, revision) { readUnderstandingPanelData(service.repository, request) }
+    val loaded = rememberBackgroundRead(service, request, revision) {
+        readUnderstandingPanelData(service.repository, request).also { data ->
+            (data.recent + data.history + listOfNotNull(data.selected, data.displayed)).forEach(service.storage::remember)
+            data.hierarchy.flatMap { it.layers }.distinctBy { it.recordId }.forEach { service.storage.loadRecord(it.recordId) }
+            data.hierarchyRootId?.let { service.storage.loadRecord(it) }
+            data.displayed?.let { service.storage.rememberBrowse(it.id, data.initialBrowse ?: service.storage.loadBrowse(it.id)) }
+        }
+    }
     val data = loaded?.getOrNull()
     if (data == null) {
         Box(Modifier.fillMaxSize().background(JewelTheme.globalColors.toolwindowBackground)
@@ -88,8 +96,8 @@ fun UnderstandingPanel(service: UnderstandingService) {
     val navigateToIndex: (Int) -> Unit = { index ->
         hierarchyEntries.getOrNull(index)?.let { destination ->
             val targetLayer = destination.layers.lastOrNull()
-            val target = targetLayer?.let { service.repository.getRecord(it.recordId) }
-                ?: hierarchyRootId?.let(service.repository::getRecord)
+            val target = targetLayer?.let { service.storage.record(it.recordId) }
+                ?: hierarchyRootId?.let(service.storage::record)
             setLayers(destination.layers)
             setRootRecordId(hierarchyRootId.takeIf { destination.layers.isNotEmpty() })
             target?.let { service.select(it, targetLayer?.nodeId,
@@ -104,7 +112,7 @@ fun UnderstandingPanel(service: UnderstandingService) {
             UnderstandingSectionTitle("历史记录")
             TextField(search, modifier = Modifier.fillMaxWidth(), placeholder = { Text("搜索标题或问题") })
         }
-        if (service.repository.readOnly) Text("此项目已在另一 IDE 实例中打开，当前只读",
+        if (service.readOnly) Text("此项目已在另一 IDE 实例中打开，当前只读",
             color = JewelTheme.globalColors.text.info)
         if (service.panelPage == PanelPage.WELCOME || (selected == null && layers.isEmpty() && !history)) {
             UnderstandingWelcome(service, recentRecords, Modifier.weight(1f), selectRoot)
@@ -184,10 +192,7 @@ private fun RecordView(
         val builder = diagram.getOrNull()
         val navigation = builder?.let { bindDiagramSourceNavigation(service, graphKey, it, explorer, record) }
         val questionSelection = builder?.onQuestionBadgeClicked(onQuestions)
-        val copySelection = builder?.onCopyNodeContext { nodeId ->
-            service.copyNodeContext(record, nodeId)
-            builder.showCopied(nodeId)
-        }
+        val copySelection = builder?.bindNodeContextCopy(service) { nodeId -> SourceNode(record, nodeId) }
         val content = builder?.bindContentActions(service, record.id, { SourceNode(record, it) },
             { null }, titleRecord = record)
         onDispose {

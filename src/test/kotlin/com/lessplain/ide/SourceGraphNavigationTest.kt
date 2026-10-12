@@ -37,7 +37,7 @@ class SourceGraphNavigationTest {
             )
             var selectedNodeId = "c"
             val navigation = SourceGraphNavigation(
-                repository = repository,
+                repository = SourceNavigationData(repository),
                 graphStates = graphStates,
                 isSelected = { recordId, nodeId -> recordId == record.id && nodeId == selectedNodeId },
                 selectNode = { _, nodeId -> selectedNodeId = nodeId },
@@ -70,7 +70,7 @@ class SourceGraphNavigationTest {
             val steps = mutableListOf<Boolean>()
             var opens = 0
             var owner: CanvasNavigationSessions.Registration? = null
-            val navigation = SourceGraphNavigation(repository, states,
+            val navigation = SourceGraphNavigation(SourceNavigationData(repository), states,
                 isSelected = { id, node -> id == record.id && node == "d" },
                 selectNode = { _, _ -> error("Candidate highlighting must not commit a source selection") },
                 showGraph = { shown, ready ->
@@ -108,7 +108,7 @@ class SourceGraphNavigationTest {
             var selected = "d"
             var steps = 0
             val callbacks = mutableListOf<() -> Unit>()
-            val navigation = SourceGraphNavigation(repository, states,
+            val navigation = SourceGraphNavigation(SourceNavigationData(repository), states,
                 isSelected = { id, node -> id == record.id && node == selected },
                 selectNode = { _, _ -> error("No source selection expected") },
                 showGraph = { _, ready -> callbacks += ready },
@@ -146,7 +146,7 @@ class SourceGraphNavigationTest {
             val states = GraphViewStateStore(values::get) { key, value -> values[key] = value }
             var ready: (() -> Unit)? = null
             var steps = 0
-            val navigation = SourceGraphNavigation(repository, states, { _, node -> node == "d" }, { _, _ -> },
+            val navigation = SourceGraphNavigation(SourceNavigationData(repository), states, { _, node -> node == "d" }, { _, _ -> },
                 showGraph = { _, callback -> ready = callback })
             navigation.previous(record.id, "d")
             val direct = BrowseState(record.id, "d", listOf("ab", "bd"),
@@ -174,7 +174,7 @@ class SourceGraphNavigationTest {
             var shows = 0
             var steps = 0
             var visible = false
-            val navigation = SourceGraphNavigation(repository, states, { _, n -> n == "d" }, { _, _ -> },
+            val navigation = SourceGraphNavigation(SourceNavigationData(repository), states, { _, n -> n == "d" }, { _, _ -> },
                 showGraph = { _, ready -> shows++; ready() })
             navigation.previous(record.id, "d")
             assertEquals(1, shows)
@@ -201,7 +201,7 @@ class SourceGraphNavigationTest {
             val values = mutableMapOf<String, String>()
             val states = GraphViewStateStore(values::get) { key, value -> values[key] = value }
             var steps = 0
-            val navigation = SourceGraphNavigation(repository, states, { _, n -> n == "d" }, { _, _ -> },
+            val navigation = SourceGraphNavigation(SourceNavigationData(repository), states, { _, n -> n == "d" }, { _, _ -> },
                 showGraph = { _, ready -> ready() })
             navigation.previous(record.id, "d")
             navigation.cancelChoices()
@@ -224,7 +224,7 @@ class SourceGraphNavigationTest {
                 var opens = 0
                 var steps = 0
                 var ready: (() -> Unit)? = null
-                val navigation = SourceGraphNavigation(repository, states, { _, n -> n == "d" }, { _, _ -> },
+                val navigation = SourceGraphNavigation(SourceNavigationData(repository), states, { _, n -> n == "d" }, { _, _ -> },
                     showGraph = { _, callback -> opens++; ready = callback })
                 navigation.use {
                     navigation.previous(record.id, "d")
@@ -251,7 +251,7 @@ class SourceGraphNavigationTest {
             val states = GraphViewStateStore(values::get) { key, value -> values[key] = value }
             val callbacks = mutableListOf<() -> Unit>()
             var steps = 0
-            SourceGraphNavigation(repository, states, { _, n -> n == "d" }, { _, _ -> },
+            SourceGraphNavigation(SourceNavigationData(repository), states, { _, n -> n == "d" }, { _, _ -> },
                 showGraph = { _, ready -> callbacks += ready }).use { navigation ->
                 navigation.previous(record.id, "d")
                 navigation.next(record.id, "d")
@@ -278,7 +278,7 @@ class SourceGraphNavigationTest {
             var opens = 0
             var steps = 0
             var ready: (() -> Unit)? = null
-            SourceGraphNavigation(repository, states, { _, n -> n == "d" }, { _, _ -> },
+            SourceGraphNavigation(SourceNavigationData(repository), states, { _, n -> n == "d" }, { _, _ -> },
                 showGraph = { _, callback ->
                     opens++
                     if (opens == 1) error("无法显示图表")
@@ -314,7 +314,7 @@ class SourceGraphNavigationTest {
             val values = mutableMapOf<String, String>()
             val states = GraphViewStateStore(values::get) { key, value -> values[key] = value }
             var selected = "tool"
-            SourceGraphNavigation(repository, states,
+            SourceGraphNavigation(SourceNavigationData(repository), states,
                 isSelected = { id, node -> id == record.id && node == selected },
                 selectNode = { _, node -> selected = node },
                 showGraph = { _, _ -> error("Unique links do not require choosing a route") },

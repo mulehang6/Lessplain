@@ -9,7 +9,7 @@ import com.lessplain.model.RouteNavigationState
 
 internal fun graphBrowseState(service: UnderstandingService, key: GraphLayerKey): BrowseState? =
     service.graphStates.get(key).browse ?:
-        if (key.questionNodeId == null) service.repository.getBrowseState(key.recordId) else null
+        if (key.questionNodeId == null) service.storage.browse(key.recordId) else null
 
 /** 编辑器跳转只属于当前标签页，其余图状态仍按图层共享。 */
 internal enum class NavigationStateScope { SHARED, EDITOR_LOCAL }

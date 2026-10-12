@@ -23,7 +23,7 @@ internal class OpenUnderstandingInEditorAction(
     override fun actionPerformed(event: AnActionEvent) {
         val layer = service.panelLayers.lastOrNull()
         val id = layer?.recordId ?: service.activeRecordId ?: return
-        val record = runCatching { service.repository.getRecord(id) }.getOrNull() ?: return
+        val record = service.storage.record(id) ?: return
         openRecordInEditor(project, record, layer?.nodeId, resetSourceNavigation = true)
     }
 }

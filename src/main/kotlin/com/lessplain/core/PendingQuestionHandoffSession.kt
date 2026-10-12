@@ -1,6 +1,7 @@
 package com.lessplain.core
 
 import com.lessplain.storage.PendingNoteScope
+import java.util.concurrent.CancellationException
 
 /** 管理单个画布的数量和复制状态；后台读取结束时仍使用点击时固定的根范围。 */
 internal class PendingQuestionHandoffSession(
@@ -8,13 +9,14 @@ internal class PendingQuestionHandoffSession(
     private val loadCopy: (String) -> PendingQuestionCopy,
     scopeDispatch: BackgroundReadDispatch<PendingNoteScope>,
     subscribe: (() -> Unit) -> AutoCloseable,
-    private val dispatch: (() -> PendingQuestionCopy, (Result<PendingQuestionCopy>) -> Unit) -> Unit,
+    private val dispatch: BackgroundReadDispatch<PendingQuestionCopy>,
     private val write: (PendingQuestionCopy) -> Unit,
     private val updated: (Int, Boolean, String?) -> Unit,
     private val notify: (String, Boolean) -> Unit,
 ) : AutoCloseable {
     private var closed = false
     private var busy = false
+    private var copyTask: AutoCloseable? = null
     private var scope: PendingNoteScope? = null
     private val scopeLoader = LatestBackgroundRead(scopeDispatch) { result ->
         result.onSuccess {
@@ -39,7 +41,7 @@ internal class PendingQuestionHandoffSession(
         busy = true
         updated(scope?.count ?: 0, false, null)
         try {
-            dispatch({ loadCopy(fixedScope) }) { result ->
+            copyTask = dispatch({ loadCopy(fixedScope) }) { result ->
                 if (closed) return@dispatch
                 try {
                     val copy = result.getOrThrow()
@@ -49,6 +51,8 @@ internal class PendingQuestionHandoffSession(
                         write(copy)
                         notify("已复制 ${copy.count} 条待答注释", false)
                     }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
                 } catch (error: Exception) {
                     notify("复制提问失败：${error.message ?: "无法读取待答注释"}", true)
                 } finally {
@@ -56,6 +60,8 @@ internal class PendingQuestionHandoffSession(
                     refresh()
                 }
             }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (error: Exception) {
             busy = false
             notify("复制提问失败：${error.message ?: "无法读取待答注释"}", true)
@@ -68,6 +74,8 @@ internal class PendingQuestionHandoffSession(
         closed = true
         subscription.close()
         scopeLoader.close()
+        copyTask?.close()
+        copyTask = null
         scope = null
         updated(0, false, null)
     }

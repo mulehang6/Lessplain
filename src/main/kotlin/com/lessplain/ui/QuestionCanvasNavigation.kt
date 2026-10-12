@@ -9,7 +9,7 @@ import com.lessplain.model.RouteNavigationState
 /** 带前缀的组合画布，仅在全部参与记录的版本未变化时有效。 */
 internal fun QuestionCanvas.isCurrent(service: UnderstandingService, owner: UnderstandingRecord): Boolean =
     (sources.values.map { it.record } + owner).distinctBy { it.id }.all { snapshot ->
-        runCatching { service.repository.getRecord(snapshot.id).revision == snapshot.revision }.getOrDefault(false)
+        service.isCurrent(snapshot)
     }
 
 

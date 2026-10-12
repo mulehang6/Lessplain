@@ -1,15 +1,12 @@
 package com.lessplain.ide
 
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.event.EditorFactoryEvent
 import com.intellij.openapi.editor.event.EditorFactoryListener
-import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.vfs.LocalFileSystem
 import com.lessplain.model.SourceAnchor
 import java.nio.file.Path
 import javax.swing.SwingUtilities
@@ -46,21 +43,21 @@ internal class SourceInsightMarker(private val project: Project, parent: Disposa
     }
 
     /** 不打开源码编辑器即可定位证据。 */
-    fun show(anchor: SourceAnchor?, label: String, navigation: SourceInlayNavigation,
-        binding: SourceNodeBinding? = null): LocatedSource? {
+    fun show(
+        anchor: SourceAnchor?, resolution: SourceResolution, label: String, navigation: SourceInlayNavigation,
+        binding: SourceNodeBinding? = null
+    ): LocatedSource? {
         check(SwingUtilities.isEventDispatchThread())
         clear()
         if (anchor == null || disposed) return null
-        val located = locateSource(project, anchor)
+        if (!resolution.isCurrent()) return null
+        val located = resolution.located
         if (located.evidence == EvidenceStatus.CHANGED) return located
         val start = located.offset ?: return located
         val root = Path.of(project.basePath ?: return located).toAbsolutePath().normalize()
         val path = root.resolve(anchor.path).normalize()
         if (!path.startsWith(root)) return located
-        val document = ApplicationManager.getApplication().runReadAction<Document?> {
-            val file = LocalFileSystem.getInstance().findFileByNioFile(path) ?: return@runReadAction null
-            FileDocumentManager.getInstance().getDocument(file)
-        } ?: return located
+        val document = resolution.document ?: return located
         val end = (start + anchor.text.length).coerceAtMost(document.textLength)
         if (end <= start) return located
         target = Target(document, start, end, label.replace('\n', ' '), navigation, binding)
@@ -83,7 +80,14 @@ internal class SourceInsightMarker(private val project: Project, parent: Disposa
 
     private fun attach(editor: Editor, value: Target) {
         if (editor.project != project || editor.document !== value.document || editor in markers) return
-        EditorSourceInsightMarker(editor, value.start, value.end, value.label, value.navigation, value.binding).takeIf { it.isInstalled }?.let {
+        EditorSourceInsightMarker(
+            editor,
+            value.start,
+            value.end,
+            value.label,
+            value.navigation,
+            value.binding
+        ).takeIf { it.isInstalled }?.let {
             markers[editor] = it
         }
     }

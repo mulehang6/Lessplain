@@ -27,9 +27,9 @@ class PendingQuestionHandoffSessionTest {
         val session = PendingQuestionHandoffSession(
             loadScope = { if (scopeFailure) error("范围不存在"); scope },
             loadCopy = { id -> reads += id; if (readFailure) error("读取失败"); PendingQuestionCopy(id, readCount) },
-            scopeDispatch = { read, done -> done(runCatching(read)) },
+            scopeDispatch = { read, done -> done(runCatching(read)); AutoCloseable { } },
             subscribe = { listener -> callback = listener; AutoCloseable { callback = null } },
-            dispatch = { read, done -> work = read; complete = done },
+            dispatch = { read, done -> work = read; complete = done; AutoCloseable { } },
             write = { copy -> if (writeFailure) error("剪贴板不可用"); clipboard = copy.text },
             updated = { total, available, error -> count = total; enabled = available; tooltipError = error },
             notify = { message, error -> notices += message to error },
@@ -118,9 +118,9 @@ class PendingQuestionHandoffSessionTest {
         val session = PendingQuestionHandoffSession(
             loadScope = { reads++; current },
             loadCopy = { copies++; PendingQuestionCopy(it, 1) },
-            scopeDispatch = { work, complete -> read = work; done = complete },
+            scopeDispatch = { work, complete -> read = work; done = complete; AutoCloseable { } },
             subscribe = { callback -> changed = callback; AutoCloseable { changed = null } },
-            dispatch = { work, complete -> complete(runCatching(work)) },
+            dispatch = { work, complete -> complete(runCatching(work)); AutoCloseable { } },
             write = { },
             updated = { total, available, _ -> count = total; enabled = available },
             notify = { _, _ -> },

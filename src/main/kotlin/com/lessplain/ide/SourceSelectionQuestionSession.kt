@@ -12,34 +12,54 @@ import java.awt.Point
 internal class SourceSelectionQuestionSession(private val service: UnderstandingService) : AutoCloseable {
     private val drafts = SourceSelectionDrafts()
     private var popup: CanvasEditorPopup? = null
+    private var loading: AutoCloseable? = null
+    private var generation = 0L
+    private var closed = false
 
     fun show(editor: Editor, binding: SourceNodeBinding, anchor: SourceAnchor) {
-        if (service.repository.readOnly) return
+        if (service.readOnly || closed) return
         val project = editor.project ?: return
         popup?.close()
-        val question = drafts.restoreOrCapture(binding, anchor) {
-            captureSourceQuestion(service.repository, service.core, binding, anchor)
+        val request = ++generation
+        loading?.close()
+        loading = service.readBackground({
+            captureSourceQuestion(
+                service.repository,
+                service.core,
+                binding,
+                anchor
+            )
+        }) { result ->
+            if (closed || editor.isDisposed || request != generation) return@readBackground
+            result.onFailure { service.contentActions.notifyQuestionCopy(it.message ?: "无法准备问题", true) }
+            result.onSuccess { captured ->
+                val question = drafts.restoreOrCapture(binding, anchor) { captured }
+                popup = CanvasEditorPopup(
+                    owner = editor.contentComponent,
+                    point = Point(0, editor.contentComponent.visibleRect.y),
+                    size = Dimension(420, 200),
+                    title = questionEditorTitle(question.binding.label),
+                    draft = question.draft,
+                    multiline = true,
+                    save = { text ->
+                        question.submit(service.repository, service.core, text)
+                        service.notifyChanged()
+                    },
+                    onClosed = {
+                        drafts.closed(question)
+                        popup = null
+                    },
+                    selectionPreview = SelectedCodePreview(project, question.anchor),
+                    saveDispatch = service::readBackground,
+                )
+            }
         }
-        popup = CanvasEditorPopup(
-            owner = editor.contentComponent,
-            point = Point(0, editor.contentComponent.visibleRect.y),
-            size = Dimension(420, 200),
-            title = questionEditorTitle(question.binding.label),
-            draft = question.draft,
-            multiline = true,
-            save = { text ->
-                question.submit(service.repository, service.core, text)
-                service.notifyChanged()
-            },
-            onClosed = {
-                drafts.closed(question)
-                popup = null
-            },
-            selectionPreview = SelectedCodePreview(project, question.anchor),
-        )
     }
 
     override fun close() {
+        closed = true
+        generation++
+        loading?.close()
         popup?.close()
         drafts.clear()
     }

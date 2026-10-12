@@ -48,17 +48,16 @@ internal fun bindDiagramSourceNavigation(
     fun isCurrentSource(nodeId: String): Boolean {
         val source = sourceAt(nodeId) ?: return false
         if (canvas != null && !canvas.isCurrent(service, record)) return false
-        return runCatching { service.repository.getRecord(source.record.id).revision == source.record.revision }
-            .getOrDefault(false)
+        return service.isCurrent(source.record)
     }
 
     fun persist(saveRepository: Boolean = true) {
         if (closed) return
         saveViewport()
-        if (saveRepository && key.questionNodeId == null && !service.repository.readOnly) {
-            val previous = service.repository.getBrowseState(record.id) ?: BrowseState(record.id)
+        if (saveRepository && key.questionNodeId == null && !service.readOnly) {
+            val previous = service.storage.browse(record.id) ?: BrowseState(record.id)
             val center = diagram.center
-            service.repository.saveBrowseState(
+            service.storage.saveBrowse(
                 previous.copy(
                     nodeId = explorer.currentNodeId,
                     staticPath = explorer.path,
@@ -96,7 +95,7 @@ internal fun bindDiagramSourceNavigation(
             val source = canvas?.sources?.get(id)
             val projected = if (canvas != null && source != null) {
                 val browse = service.graphStates.get(GraphLayerKey(source.record.id)).browse
-                    ?: service.repository.getBrowseState(source.record.id)
+                    ?: service.storage.browse(source.record.id)
                 browse?.let { state -> projectSourceBrowseToCanvas(canvas, state, source, id) }
             } else null
             val saved = projected ?: graphBrowseState(service, key)?.takeIf { it.nodeId == id }
@@ -128,7 +127,7 @@ internal fun UnderstandingDiagram.bindSourceNavigation(
         matches = { recordId, nodeId ->
             val source = sourceOf(navigation.explorer.currentNodeId)
             !navigation.isClosed && isShowing && source?.record?.id == recordId && source.nodeId == nodeId &&
-                runCatching { service.repository.getRecord(recordId).revision == source.record.revision }.getOrDefault(false)
+                service.isCurrent(source.record)
         },
         busy = { navigation.hasChoice },
         previous = ::previousStep,

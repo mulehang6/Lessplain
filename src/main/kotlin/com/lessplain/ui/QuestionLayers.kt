@@ -16,6 +16,7 @@ import com.lessplain.diagram.DiagramCluster
 import com.lessplain.diagram.DiagramHierarchyItem
 import com.lessplain.diagram.DiagramExamplePanel
 import com.lessplain.diagram.createUnderstandingDiagram
+import com.lessplain.diagram.bindNodeContextCopy
 import com.lessplain.diagram.bindGraphState
 import com.lessplain.diagram.graphBrowseState
 import com.lessplain.diagram.requestFocusCluster
@@ -58,13 +59,16 @@ internal fun QuestionIndexView(
     onChildQuestions: (UnderstandingRecord, String) -> Unit,
 ) {
     val graphKey = GraphLayerKey(record.id, nodeId)
-    val loaded = rememberBackgroundRead(Triple(record.id, record.revision, nodeId), revision) {
+    val loaded = rememberBackgroundRead(service, Triple(record.id, record.revision, nodeId), revision) {
         val questions = questionsForNode(service, record, nodeId)
         val signature = questions.map { question ->
             val child = service.repository.recordForQuestion(question.id)
             listOf(question.id, child?.id.orEmpty(), child?.revision.toString()).joinToString(":")
         }
-        signature to buildQuestionCanvas(service, record, nodeId, questions, revision)
+        service.storage.remember(record)
+        signature to buildQuestionCanvas(service, record, nodeId, questions, revision).also { canvas ->
+            canvas.sources.values.forEach { service.storage.remember(it.record) }
+        }
     }
     val data = loaded?.getOrNull()
     if (data == null) {
@@ -97,15 +101,10 @@ internal fun QuestionIndexView(
                 scopes = canvas.sources.mapValues { it.value.record.id })
         }
         val navigation = bindDiagramSourceNavigation(service, graphKey, diagram, explorer, record, canvas)
-        val copy = diagram.onCopyNodeContext { id ->
-            canvas.sources[id]?.let {
-                service.copyNodeContext(it.record, it.nodeId)
-                diagram.showCopied(id)
-            }
-        }
+        val copy = diagram.bindNodeContextCopy(service, canvas.sources::get)
         val content = diagram.bindContentActions(service, record.id, canvas.sources::get, canvas.clusterSources::get)
         val questionSelection = diagram.onQuestionBadgeClicked { id ->
-            canvas.sources[id]?.takeIf { questionsForNode(service, it.record, it.nodeId).isNotEmpty() }?.let {
+            canvas.sources[id]?.let {
                 onChildQuestions(it.record, it.nodeId)
             }
         }

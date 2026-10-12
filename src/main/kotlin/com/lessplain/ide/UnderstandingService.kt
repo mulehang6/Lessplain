@@ -1,32 +1,30 @@
 package com.lessplain.ide
 
-import com.intellij.openapi.Disposable
-import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.application.ModalityState
-import com.intellij.openapi.ide.CopyPasteManager
-import com.intellij.openapi.diagnostic.Logger
-import com.intellij.openapi.project.Project
-import com.intellij.openapi.fileEditor.FileEditorManager
-import com.intellij.openapi.wm.ToolWindowManager
-import com.intellij.openapi.wm.WindowManager
+import com.google.gson.Gson
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
-import com.lessplain.core.UnderstandingCore
+import com.intellij.openapi.Disposable
+import com.intellij.openapi.diagnostic.Logger
+import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.ide.CopyPasteManager
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.wm.ToolWindowManager
+import com.intellij.openapi.wm.WindowManager
+import com.lessplain.core.BackgroundTasks
 import com.lessplain.core.StaticExplorer
+import com.lessplain.core.UnderstandingCore
 import com.lessplain.diagram.UnderstandingVirtualFile
+import com.lessplain.model.UNDERSTANDING_SCHEMA_VERSION
 import com.lessplain.model.UnderstandingContext
 import com.lessplain.model.UnderstandingRecord
-import com.lessplain.model.BrowseState
-import com.lessplain.ui.FollowUpLayer
-import com.lessplain.ui.graphHierarchyEntries
 import com.lessplain.storage.UnderstandingRepository
 import com.lessplain.storage.deleteRootRecord
-import com.google.gson.Gson
-import com.lessplain.model.UNDERSTANDING_SCHEMA_VERSION
-import java.awt.datatransfer.StringSelection
+import com.lessplain.ui.FollowUpLayer
+import kotlinx.coroutines.CoroutineScope
 import java.awt.Component
-import java.awt.Point
 import java.awt.KeyboardFocusManager
+import java.awt.Point
+import java.awt.datatransfer.StringSelection
 import java.beans.PropertyChangeListener
 import java.nio.file.Path
 import java.util.concurrent.CopyOnWriteArrayList
@@ -44,34 +42,48 @@ internal data class PanelLocation(
     val focusQuestionId: String?,
 )
 
-class UnderstandingService(private val project: Project) : Disposable {
+class UnderstandingService(private val project: Project, coroutineScope: CoroutineScope) : Disposable {
     private val log = Logger.getInstance(UnderstandingService::class.java)
-    val repository = UnderstandingRepository(Path.of(requireNotNull(project.basePath)))
-    val core = UnderstandingCore(repository, prepareGraph = { prepareGraphAnchors(project, it) })
+    @Volatile
+    private var disposed = false
+    private var storageError: String? = null
+    private val tasks = BackgroundTasks(coroutineScope) { action -> SwingUtilities.invokeLater(action) }
+    internal val storage = UnderstandingStorage(
+        Path.of(requireNotNull(project.basePath)), tasks,
+        ::notifyChanged, ::storageFailed
+    )
+    val repository: UnderstandingRepository get() = storage.repository
+    val core: UnderstandingCore by lazy {
+        UnderstandingCore(
+            repository,
+            prepareGraph = { prepareGraphAnchors(project, it) })
+    }
+    val readOnly: Boolean get() = storage.readOnly
+    internal fun <T> readBackground(read: () -> T, completed: (Result<T>) -> Unit): AutoCloseable =
+        tasks.dispatch(read, completed)
+
+    internal fun isCurrent(record: UnderstandingRecord): Boolean =
+        storage.record(record.id)?.revision == record.revision
+
+    internal fun storageFailed(failure: Throwable) {
+        log.warn("Lessplain storage operation failed", failure)
+        storageError = "数据操作失败：${failure.message ?: "未知错误"}"
+        notifyChanged()
+    }
+
     private val listeners = CopyOnWriteArrayList<() -> Unit>()
     private val selectionListeners = CopyOnWriteArrayList<(String, String?) -> Unit>()
     private val editorFiles = mutableMapOf<String, UnderstandingVirtualFile>()
-    private val sourceHints = SourceInsightMarker(project, this)
-    private val sourceScrollAnimation = SourceScrollAnimation()
     internal val graphStates = GraphViewStateStore(project)
-    private val sourceNavigation = SourceGraphNavigation(
-        repository = repository,
-        graphStates = graphStates,
-        isSelected = { recordId, nodeId -> activeRecordId == recordId && activeNodeId == nodeId },
-        selectNode = { record, nodeId -> select(record, nodeId) },
-        showGraph = { record, ready ->
-            showRoot(record)
-            ToolWindowManager.getInstance(project).getToolWindow("Understanding")?.show {
-                if (!project.isDisposed) ready()
-            }
-        },
-    )
+    private val selection = UnderstandingSelection(project, this, storage)
     internal val resultInbox = ResultInbox(project)
-    @Volatile private var pendingAutoOpenKey: String? = resultInbox.pending().lastOrNull()?.key
+    @Volatile
+    private var pendingAutoOpenKey: String? = resultInbox.pending().lastOrNull()?.key
     internal var panelPage: PanelPage = PanelPage.WELCOME
     internal var panelFocusQuestionId: String? = null
     private var pageBeforeHistory = PanelPage.WELCOME
     private var previousLocation: PanelLocation? = null
+    private var navigationGeneration = 0L
     internal val contentActions = UnderstandingContentActions(this, project)
     private val deletionConfirmation = RootDeletionConfirmation(project, ::deleteConfirmedRoot)
     private val resultTimer = Timer(180) { handlePendingResults() }.apply { isRepeats = false }
@@ -80,6 +92,7 @@ class UnderstandingService(private val project: Project) : Disposable {
     }
 
     init {
+        storage.initialize()
         KeyboardFocusManager.getCurrentKeyboardFocusManager()
             .addPropertyChangeListener("focusOwner", focusListener)
     }
@@ -89,16 +102,19 @@ class UnderstandingService(private val project: Project) : Disposable {
     internal var panelRootRecordId: String? = null
 
     internal val canReturnToPrevious: Boolean get() = previousLocation != null
-    internal val returnLabel: String get() = if (previousLocation?.page == PanelPage.CANVAS)
-        "返回刚才的画布" else "返回刚才的页面"
+    internal val returnLabel: String
+        get() = if (previousLocation?.page == PanelPage.CANVAS)
+            "返回刚才的画布" else "返回刚才的页面"
 
     internal fun showWelcome() {
+        navigationGeneration++
         panelPage = PanelPage.WELCOME
         previousLocation = null
         notifyChanged()
     }
 
     internal fun toggleHistory() {
+        navigationGeneration++
         if (panelPage == PanelPage.HISTORY) panelPage = pageBeforeHistory
         else {
             pageBeforeHistory = panelPage
@@ -109,6 +125,7 @@ class UnderstandingService(private val project: Project) : Disposable {
     }
 
     internal fun showHistory() {
+        navigationGeneration++
         if (panelPage == PanelPage.HISTORY) return
         pageBeforeHistory = panelPage
         panelPage = PanelPage.HISTORY
@@ -117,6 +134,7 @@ class UnderstandingService(private val project: Project) : Disposable {
     }
 
     internal fun showRoot(record: UnderstandingRecord) {
+        navigationGeneration++
         panelLayers = emptyList()
         panelRootRecordId = null
         panelFocusQuestionId = null
@@ -131,6 +149,7 @@ class UnderstandingService(private val project: Project) : Disposable {
     }
 
     internal fun returnToPrevious() {
+        navigationGeneration++
         val previous = previousLocation ?: return
         previousLocation = null
         panelPage = previous.page
@@ -138,7 +157,7 @@ class UnderstandingService(private val project: Project) : Disposable {
         panelRootRecordId = previous.rootRecordId
         panelFocusQuestionId = previous.focusQuestionId
         previous.recordId?.let { id ->
-            runCatching { repository.getRecord(id) }.getOrNull()?.let {
+            storage.record(id)?.let {
                 select(it, previous.nodeId, navigateSource = false)
             }
         }
@@ -155,10 +174,16 @@ class UnderstandingService(private val project: Project) : Disposable {
         val key = answerId?.let { "answer:$it" } ?: recordId?.let {
             if (revision != null && revision > 1) "record:$it:revision:$revision" else "record:$it"
         } ?: return
+        recordId?.let(storage::loadRecord)
         val isUpdate = (revision != null && revision > 1) || questionId != null || answerId != null ||
-            recordId?.let { repository.getRecord(it).parentId != null } == true
-        if (!resultInbox.register(PendingResult(key, recordId, questionId, System.currentTimeMillis(),
-                isUpdate = isUpdate))) return
+                recordId?.let { storage.record(it)?.parentId != null } == true
+        if (!resultInbox.register(
+                PendingResult(
+                    key, recordId, questionId, System.currentTimeMillis(),
+                    isUpdate = isUpdate
+                )
+            )
+        ) return
         pendingAutoOpenKey = key
         notifyChanged()
         SwingUtilities.invokeLater { if (!project.isDisposed) resultTimer.restart() }
@@ -170,13 +195,18 @@ class UnderstandingService(private val project: Project) : Disposable {
                 showLatestPendingResult()
                 return
             }
+
             ResultDelivery.WAIT -> return
             ResultDelivery.NOTIFY -> Unit
         }
         val fresh = resultInbox.pending().filterNot { it.notified }
         if (fresh.isEmpty()) return
         NotificationGroupManager.getInstance().getNotificationGroup("code.comprehension.results")
-            .createNotification(resultNotificationTitle(fresh), "打开理解工具窗口即可查看", NotificationType.INFORMATION)
+            .createNotification(
+                resultNotificationTitle(fresh),
+                "打开理解工具窗口即可查看",
+                NotificationType.INFORMATION
+            )
             .notify(project)
         resultInbox.markNotified(fresh.mapTo(mutableSetOf()) { it.key })
         notifyChanged()
@@ -201,55 +231,32 @@ class UnderstandingService(private val project: Project) : Disposable {
 
     internal fun showResult(result: PendingResult, automatic: Boolean = false): Boolean {
         val previous = if (automatic) previousLocation
-            ?: PanelLocation(panelPage, activeRecordId, activeNodeId, panelLayers,
-                panelRootRecordId, panelFocusQuestionId) else null
-        val question = result.questionId?.let { runCatching { repository.getQuestion(it) }.getOrNull() }
-        val context = question?.let { runCatching { repository.getContext(it.contextToken) }.getOrNull() }
-        val ownerId = question?.ownerRecordId ?: context?.recordId
-        val nodeId = context?.nodeId
-        val targetRecord = result.recordId?.let { runCatching { repository.getRecord(it) }.getOrNull() }
-        if (ownerId != null && nodeId != null) {
-            val owner = runCatching { repository.getRecord(ownerId) }.getOrNull() ?: return false
-            var root = owner
-            val visited = mutableSetOf<String>()
-            while (root.parentId != null && visited.add(root.id)) {
-                root = runCatching { repository.getRecord(requireNotNull(root.parentId)) }.getOrNull() ?: break
+            ?: PanelLocation(
+                panelPage, activeRecordId, activeNodeId, panelLayers,
+                panelRootRecordId, panelFocusQuestionId
+            ) else null
+        val request = ++navigationGeneration
+        readBackground({ loadResultLocation(repository, result)?.also { storage.remember(it.record) } }) { loaded ->
+            if (request != navigationGeneration) return@readBackground
+            loaded.onFailure(::storageFailed).onSuccess { destination ->
+                if (destination == null) return@onSuccess
+                panelLayers = destination.layers
+                panelRootRecordId = destination.rootRecordId
+                panelFocusQuestionId = destination.questionId
+                panelPage = PanelPage.CANVAS
+                select(destination.record, navigateSource = false)
+                previousLocation = previous
+                resultInbox.markViewed(result.key)
+                if (pendingAutoOpenKey == result.key) pendingAutoOpenKey = null
+                notifyChanged()
             }
-            val layer = FollowUpLayer(owner.id, nodeId)
-            val entry = graphHierarchyEntries(repository, root.id).firstOrNull { it.layers.lastOrNull() == layer }
-            panelRootRecordId = root.id
-            panelLayers = entry?.layers ?: listOf(layer)
-            panelFocusQuestionId = question.id
-            panelPage = PanelPage.CANVAS
-            select(owner, navigateSource = false)
-        } else if (targetRecord != null) {
-            panelLayers = emptyList()
-            panelRootRecordId = null
-            panelFocusQuestionId = null
-            panelPage = PanelPage.CANVAS
-            select(targetRecord, navigateSource = false)
-        } else return false
-        previousLocation = previous
-        resultInbox.markViewed(result.key)
-        if (pendingAutoOpenKey == result.key) pendingAutoOpenKey = null
-        notifyChanged()
+        }
         return true
     }
 
-    @Volatile
-    var activeRecordId: String? = null
-        private set
-
-    @Volatile
-    var activeNodeId: String? = null
-        private set
-
-    private var activeRecordRevision: Int? = null
-    private var activeStaticPath: List<String>? = null
-
-    @Volatile
-    var sourceLocationMessage: String? = null
-        private set
+    val activeRecordId: String? get() = selection.activeRecordId
+    val activeNodeId: String? get() = selection.activeNodeId
+    val sourceLocationMessage: String? get() = selection.sourceLocationMessage ?: storageError
 
     fun select(
         record: UnderstandingRecord,
@@ -258,125 +265,24 @@ class UnderstandingService(private val project: Project) : Disposable {
         staticPath: List<String>? = null,
         navigationState: com.lessplain.model.RouteNavigationState? = null,
     ) {
-        val recordChanged = activeRecordId != record.id
-        val previousNodeId = activeNodeId
-        val previousRevision = activeRecordRevision
-        val previousStaticPath = activeStaticPath
-        val key = GraphLayerKey(record.id)
-        val graphBrowse = graphStates.get(key).browse
-        val repositoryBrowse = repository.getBrowseState(record.id)
-        val previousBrowse = graphBrowse?.takeIf { it.nodeId != null || it.staticPath.isNotEmpty() }
-            ?: repositoryBrowse ?: graphBrowse
-        val restored = nodeId ?: graphBrowse?.nodeId ?: repositoryBrowse?.nodeId
-        val validNode = restored?.takeIf { id -> record.graph.nodes.any { it.id == id } }
-        val explorer = if (staticPath != null && validNode != null) {
-            StaticExplorer(record.graph, staticPath, validNode, navigationState)
-        } else {
-            StaticExplorer(record.graph, previousBrowse?.staticPath.orEmpty(), previousBrowse?.nodeId,
-                previousBrowse?.navigationState)
-        }
-        if (validNode != null) {
-            if (staticPath == null) explorer.synchronizeNode(validNode)
-        } else if (nodeId != null || previousBrowse?.nodeId != null) {
-            explorer.restorePath(emptyList(), null)
-        }
-        val selectedPath = explorer.path
-        val selectedNavigation = explorer.navigationState
-        val browseChanged = previousBrowse?.nodeId != validNode || previousBrowse?.staticPath.orEmpty() != selectedPath ||
-            previousBrowse?.navigationState != selectedNavigation
-        val selectionChanged = recordChanged || previousNodeId != validNode || previousRevision != record.revision ||
-            (activeRecordId == record.id && previousStaticPath != selectedPath)
+        navigationGeneration++
+        selection.select(record, nodeId, navigateSource, staticPath, navigationState)
+    }
 
-        if (nodeId != null || browseChanged) {
-            graphStates.update(key) { state ->
-                val browse = state.browse ?: repositoryBrowse ?: BrowseState(record.id)
-                state.copy(browse = browse.copy(nodeId = validNode, staticPath = selectedPath, navigationState = selectedNavigation))
+    internal fun selectionChanged(recordId: String, nodeId: String?) {
+        selectionListeners.forEach { listener ->
+            if (SwingUtilities.isEventDispatchThread()) listener(recordId, nodeId)
+            else SwingUtilities.invokeLater {
+                if (!disposed && listener in selectionListeners) listener(
+                    recordId,
+                    nodeId
+                )
             }
         }
-        if (!repository.readOnly && (nodeId != null || repositoryBrowse?.nodeId != validNode ||
-                repositoryBrowse?.staticPath.orEmpty() != selectedPath || repositoryBrowse?.navigationState != selectedNavigation)) {
-            repository.saveBrowseState((repositoryBrowse ?: BrowseState(record.id)).copy(
-                nodeId = validNode,
-                staticPath = selectedPath,
-                navigationState = selectedNavigation,
-            ))
-        }
+    }
 
-        val selectionUnchanged = !selectionChanged
-        activeRecordId = record.id
-        activeNodeId = validNode
-        activeRecordRevision = record.revision
-        activeStaticPath = selectedPath
-        if (!selectionUnchanged) sourceLocationMessage = null
-        if (recordChanged || previousStaticPath != selectedPath) notifyChanged()
-        if (selectionChanged) {
-            sourceNavigation.cancelChoices()
-            selectionListeners.forEach { listener ->
-                if (SwingUtilities.isEventDispatchThread()) listener(record.id, validNode)
-                else SwingUtilities.invokeLater { listener(record.id, validNode) }
-            }
-        }
-        if (selectionUnchanged && sourceLocationMessage == null) return
-        if (validNode != null) {
-            val node = record.graph.nodes.first { it.id == validNode }
-            val anchor = node.anchor ?: record.graph.evidence.firstOrNull { it.id in node.evidenceIds }?.anchor
-            if (anchor == null) {
-                sourceLocationMessage = "当前节点没有源码证据"
-                SwingUtilities.invokeLater {
-                    if (activeRecordId == record.id && activeNodeId == validNode && activeRecordRevision == record.revision) {
-                        sourceScrollAnimation.cancel()
-                        sourceHints.clear()
-                    }
-                }
-                notifyChanged()
-            } else {
-                // PSI 文档提交需要平台的写安全上下文，普通 Swing 队列无法提供。
-                ApplicationManager.getApplication().invokeLater({
-                    if (project.isDisposed || activeRecordId != record.id || activeNodeId != validNode ||
-                        activeRecordRevision != record.revision) return@invokeLater
-                    sourceScrollAnimation.cancel()
-                    runCatching {
-                        val explorer = sourceNavigation.explorer(record, validNode)
-                        val navigation = SourceInlayNavigation(
-                            canPrevious = explorer.canPrevious,
-                            canNext = explorer.canNext,
-                            previous = { sourceNavigation.previous(record.id, validNode) },
-                            next = { sourceNavigation.next(record.id, validNode) },
-                            cancelChoices = { sourceNavigation.cancelChoices(record.id, validNode) },
-                            evidenceChanged = {
-                                if (activeRecordId == record.id && activeNodeId == validNode && activeRecordRevision == record.revision) {
-                                    sourceHints.clear()
-                                    sourceLocationMessage = "原片段已变化"
-                                    notifyChanged()
-                                }
-                            },
-                        )
-                        val located = sourceHints.show(anchor, node.label, navigation,
-                            SourceNodeBinding(record.id, record.revision, validNode, node.label, selectedPath.toList()))
-                        if (navigateSource && nodeId != null && located?.offset != null) {
-                            navigateToSource(project, anchor, sourceScrollAnimation, located)
-                            sourceHints.refreshOpenEditors()
-                        }
-                        located
-                    }
-                        .onSuccess { located ->
-                            sourceLocationMessage = sourceEvidenceMessage(located)
-                        }
-                        .onFailure { failure ->
-                            log.warn("Unable to navigate to source for ${record.id}/$validNode", failure)
-                            sourceLocationMessage = "源码定位失败：${failure.message ?: "未知错误"}"
-                        }
-                    if (sourceLocationMessage != null) notifyChanged()
-                }, ModalityState.nonModal())
-            }
-        } else {
-            SwingUtilities.invokeLater {
-                if (activeNodeId == null) {
-                    sourceScrollAnimation.cancel()
-                    sourceHints.clear()
-                }
-            }
-        }
+    internal fun logSourceFailure(recordId: String, nodeId: String, failure: Throwable) {
+        log.warn("Unable to navigate to source for $recordId/$nodeId", failure)
     }
 
     fun captureCurrentContext(): UnderstandingContext {
@@ -394,6 +300,7 @@ class UnderstandingService(private val project: Project) : Disposable {
     fun addNodeNote(record: UnderstandingRecord, nodeId: String) = contentActions.addNodeNote(record, nodeId)
     fun showNodeNotes(record: UnderstandingRecord, nodeId: String, component: Component, point: Point) =
         contentActions.showNodeNotes(record, nodeId, component, point)
+
     fun editRecordTitle(recordId: String) = contentActions.editRecordTitle(recordId)
 
     internal fun refreshOpenDiagrams() {
@@ -404,7 +311,7 @@ class UnderstandingService(private val project: Project) : Disposable {
         opened.forEach(manager::closeFile)
         editorFiles.clear()
         val replacements = opened.associateWith { old ->
-            val current = runCatching { repository.getRecord(old.recordId) }.getOrNull() ?: return@associateWith old
+            val current = storage.record(old.recordId) ?: return@associateWith old
             editorFile(current, old.questionNodeId)
         }
         replacements.forEach { (old, replacement) ->
@@ -415,52 +322,59 @@ class UnderstandingService(private val project: Project) : Disposable {
     }
 
     fun deleteRoot(recordId: String) {
-        if (!repository.readOnly) deletionConfirmation.show(repository.getRecord(recordId))
+        if (!readOnly) storage.record(recordId)?.let(deletionConfirmation::show)
     }
 
     private fun deleteConfirmedRoot(recordId: String) {
-        check(!project.isDisposed && !repository.readOnly) { "当前项目不可删除记录" }
-        val deleted = repository.deleteRootRecord(recordId)
-        resultInbox.removeDeleted(deleted.recordIds, deleted.questionIds)
-        editorFiles.entries.removeIf { (_, file) ->
-            if (file.recordId !in deleted.recordIds) false else {
-                FileEditorManager.getInstance(project).closeFile(file)
-                true
+        check(!project.isDisposed && !readOnly) { "当前项目不可删除记录" }
+        readBackground({ repository.deleteRootRecord(recordId) }) { result ->
+            result.onFailure(::storageFailed).onSuccess { deleted ->
+                storage.remove(deleted.recordIds)
+                resultInbox.removeDeleted(deleted.recordIds, deleted.questionIds)
+                editorFiles.entries.removeIf { (_, file) ->
+                    if (file.recordId !in deleted.recordIds) false else {
+                        FileEditorManager.getInstance(project).closeFile(file)
+                        true
+                    }
+                }
+                if (activeRecordId in deleted.recordIds) {
+                    selection.reset()
+                    panelLayers = emptyList()
+                    panelRootRecordId = null
+                    panelFocusQuestionId = null
+                    panelPage = PanelPage.HISTORY
+                    selection.clear()
+                }
+                previousLocation = null
+                notifyChanged()
             }
         }
-        if (activeRecordId in deleted.recordIds) {
-            activeRecordId = null
-            activeNodeId = null
-            activeRecordRevision = null
-            activeStaticPath = null
-            panelLayers = emptyList()
-            panelRootRecordId = null
-            panelFocusQuestionId = null
-            panelPage = PanelPage.HISTORY
-            sourceHints.clear()
-        }
-        previousLocation = null
-        notifyChanged()
     }
 
     /** 复制节点的固定来源 token，不创建空问题。 */
-    fun copyNodeContext(record: UnderstandingRecord, nodeId: String) {
+    fun copyNodeContext(record: UnderstandingRecord, nodeId: String, copied: () -> Unit = {}): AutoCloseable {
         val node = record.graph.nodes.firstOrNull { it.id == nodeId }
             ?: throw IllegalArgumentException("节点不属于理解记录")
         val anchor = node.anchor ?: record.graph.evidence.firstOrNull { it.id in node.evidenceIds }?.anchor
-        val browse = graphStates.get(GraphLayerKey(record.id)).browse ?: repository.getBrowseState(record.id)
+        val browse = graphStates.get(GraphLayerKey(record.id)).browse ?: storage.browse(record.id)
         val route = StaticExplorer(record.graph, browse?.staticPath.orEmpty(), browse?.nodeId, browse?.navigationState)
         route.synchronizeNode(nodeId)
-        val context = core.captureContext(record.id, nodeId, anchor,
-            route.path)
-        val payload = Gson().toJson(mapOf(
-            "protocolVersion" to UNDERSTANDING_SCHEMA_VERSION,
-            "contextToken" to context.token,
-            "recordId" to record.id,
-            "nodeId" to nodeId,
-            "nodeLabel" to node.label,
-        ))
-        CopyPasteManager.getInstance().setContents(StringSelection(payload))
+        val path = route.path.toList()
+        return readBackground({ core.captureContext(record.id, nodeId, anchor, path) }) { result ->
+            result.onFailure(::storageFailed).onSuccess { context ->
+                val payload = Gson().toJson(
+                    mapOf(
+                        "protocolVersion" to UNDERSTANDING_SCHEMA_VERSION,
+                        "contextToken" to context.token,
+                        "recordId" to record.id,
+                        "nodeId" to nodeId,
+                        "nodeLabel" to node.label,
+                    )
+                )
+                CopyPasteManager.getInstance().setContents(StringSelection(payload))
+                copied()
+            }
+        }
     }
 
     fun onChanged(listener: () -> Unit): AutoCloseable {
@@ -479,21 +393,25 @@ class UnderstandingService(private val project: Project) : Disposable {
         }
 
     fun notifyChanged() {
-        listeners.forEach { listener -> SwingUtilities.invokeLater { listener() } }
+        if (disposed) return
+        listeners.forEach { listener ->
+            SwingUtilities.invokeLater {
+                if (!disposed && listener in listeners) listener()
+            }
+        }
     }
 
     override fun dispose() {
+        disposed = true
+        selection.close()
+        tasks.close()
         deletionConfirmation.close()
         contentActions.close()
         resultTimer.stop()
         KeyboardFocusManager.getCurrentKeyboardFocusManager()
             .removePropertyChangeListener("focusOwner", focusListener)
-        sourceScrollAnimation.dispose()
-        sourceNavigation.close()
-        sourceHints.dispose()
-        sourceNavigation.close()
         listeners.clear()
         selectionListeners.clear()
-        repository.close()
+        storage.close()
     }
 }

@@ -6,11 +6,10 @@ import com.lessplain.core.StepResult
 import com.lessplain.model.BrowseState
 import com.lessplain.model.RouteNavigationState
 import com.lessplain.model.UnderstandingRecord
-import com.lessplain.storage.UnderstandingRepository
 
 /** 源码 inline 控件与图视图共用方向选择和已保存路线。 */
 internal class SourceGraphNavigation(
-    private val repository: UnderstandingRepository,
+    private val repository: SourceNavigationData,
     private val graphStates: GraphViewStateStore,
     private val isSelected: (recordId: String, nodeId: String) -> Boolean,
     private val selectNode: (record: UnderstandingRecord, nodeId: String) -> Unit,
@@ -105,7 +104,7 @@ internal class SourceGraphNavigation(
                 ),
             )
         }
-        if (!repository.readOnly) {
+        if (!repository.readOnly()) {
             repository.saveBrowseState(
                 (previous ?: BrowseState(record.id)).copy(
                     nodeId = nodeId,

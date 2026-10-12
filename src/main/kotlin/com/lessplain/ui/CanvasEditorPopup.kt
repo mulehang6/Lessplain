@@ -14,6 +14,7 @@ import java.awt.Point
 import java.awt.Rectangle
 import java.awt.Toolkit
 import javax.swing.SwingUtilities
+import com.lessplain.core.BackgroundReadDispatch
 
 /** 原生编辑弹层允许输入法窗口临时激活，并管理所有输入监听器。 */
 internal class CanvasEditorPopup(
@@ -26,6 +27,8 @@ internal class CanvasEditorPopup(
     save: (String) -> Unit,
     private val onClosed: () -> Unit,
     selectionPreview: SelectedCodePreview? = null,
+    saveDispatch: BackgroundReadDispatch<Unit>? = null,
+    onSaved: () -> Unit = {},
 ) : AutoCloseable {
     private val width = JBUI.scale(size.width).coerceAtLeast(1)
     private var closed = false
@@ -35,11 +38,12 @@ internal class CanvasEditorPopup(
         draft = draft,
         multiline = multiline,
         save = save,
-        saved = ::close,
+        saved = { onSaved(); close() },
         dismiss = ::close,
         cancel = { draft.retain = false; close() },
         onMetricsChanged = ::scheduleResize,
         selectionPreview = selectionPreview,
+        saveDispatch = saveDispatch,
     )
     private val popup: JBPopup = try {
         JBPopupFactory.getInstance().createComponentPopupBuilder(editor, editor.input)

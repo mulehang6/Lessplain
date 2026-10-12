@@ -23,6 +23,8 @@ import javax.swing.SwingUtilities
 import javax.swing.text.JTextComponent
 import javax.swing.text.View
 import kotlin.math.ceil
+import com.lessplain.core.BackgroundReadDispatch
+import java.util.concurrent.CancellationException
 
 /** 草稿不依赖界面工具包；关闭保留，明确取消才丢弃。 */
 internal class CanvasTextDraft(initial: String) {
@@ -40,6 +42,8 @@ internal class CanvasTextDraft(initial: String) {
             save(normalized)
             retain = false
             true
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (failure: Exception) {
             error = failure.message ?: "保存失败，请刷新后重试"
             false
@@ -68,6 +72,7 @@ internal class CanvasTextEditor(
     private val cancel: () -> Unit,
     private val onMetricsChanged: () -> Unit = {},
     selectionPreview: SelectedCodePreview? = null,
+    private val saveDispatch: BackgroundReadDispatch<Unit>? = null,
 ) : JPanel(BorderLayout(0, JBUI.scale(UnderstandingUiMetrics.SECTION_GAP))), AutoCloseable, UISettingsListener {
     internal val input: JTextComponent = if (multiline) {
         JBTextArea(draft.text).apply {
@@ -116,6 +121,8 @@ internal class CanvasTextEditor(
     private var saveQueued = false
     private var metricsQueued = false
     private var disposed = false
+    private var saveTask: AutoCloseable? = null
+    private var saving = false
     private val documentListener = object : javax.swing.event.DocumentListener {
         override fun insertUpdate(e: javax.swing.event.DocumentEvent) = updateDraftAndMetrics()
         override fun removeUpdate(e: javax.swing.event.DocumentEvent) = updateDraftAndMetrics()
@@ -221,7 +228,7 @@ internal class CanvasTextEditor(
     }
 
     internal fun requestSave() {
-        if (disposed || saveQueued) return
+        if (disposed || saveQueued || saving) return
         saveQueued = true
         input.inputContext?.endComposition()
         SwingUtilities.invokeLater {
@@ -232,7 +239,26 @@ internal class CanvasTextEditor(
                 return@invokeLater
             }
             draft.text = input.text
-            if (draft.submit(save)) {
+            val dispatch = saveDispatch
+            if (dispatch != null) {
+                val value = draft.text.trim()
+                if (value.isEmpty()) {
+                    showErrorMessage("内容不能为空")
+                    return@invokeLater
+                }
+                saving = true
+                saveButton.isEnabled = false
+                input.isEditable = false
+                saveTask = dispatch({ save(value) }) { result ->
+                    if (!disposed) {
+                        saving = false
+                        saveButton.isEnabled = true
+                        input.isEditable = true
+                        result.onSuccess { draft.retain = false; saved() }
+                            .onFailure { draft.error = it.message ?: "保存失败，请刷新后重试"; showErrorMessage(draft.error.orEmpty()) }
+                    }
+                }
+            } else if (draft.submit(save)) {
                 saved()
             } else {
                 showErrorMessage(draft.error.orEmpty())
@@ -251,6 +277,7 @@ internal class CanvasTextEditor(
         input.inputContext?.endComposition()
         draft.text = input.text
         disposed = true
+        saveTask?.close()
         fonts.close()
         preview?.close()
         input.document.removeDocumentListener(documentListener)

@@ -9,7 +9,8 @@ class LatestBackgroundReadTest {
         val work = mutableListOf<() -> T>()
         val finish = mutableListOf<(Result<T>) -> Unit>()
         val published = mutableListOf<Result<T>>()
-        val reader = LatestBackgroundRead<T>({ read, done -> work += read; finish += done }, published::add)
+        var cancellations = 0
+        val reader = LatestBackgroundRead<T>({ read, done -> work += read; finish += done; AutoCloseable { cancellations++ } }, published::add)
         fun complete(index: Int) = finish[index](runCatching(work[index]))
     }
 
@@ -35,6 +36,7 @@ class LatestBackgroundReadTest {
         q.reader.request { 1 }
         q.reader.request { 2 }
         q.reader.close()
+        assertEquals(1, q.cancellations, "关闭必须传播到调度器的实际任务")
         q.complete(0)
         q.reader.request { 3 }
         assertEquals(1, q.work.size)
