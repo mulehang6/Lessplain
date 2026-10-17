@@ -36,35 +36,48 @@ internal class InsightInlayRenderer(
     private val label: String,
     private val start: Int,
     private val end: Int,
-    private val canPrevious: Boolean,
-    private val canNext: Boolean,
+    var canPrevious: Boolean,
+    var canNext: Boolean,
 ) : EditorCustomElementRenderer {
     var hovered = false
     var hoveredButton: SourceInlayButton? = null
     var expanded = false
 
+    private var sourceRange: (() -> Pair<Int, Int>?)? = null
+
+    /** 几何直接读取 range marker，避免文档变化到异步监听器之间使用旧偏移。 */
+    fun bindSourceRange(provider: () -> Pair<Int, Int>?) { sourceRange = provider }
+
     private data class LabelLayout(val lines: List<String>, val truncated: Boolean,
         val lineHeight: Int, val textWidth: Int, val actionLine: Boolean)
+
+    private val displayLabel = sourceInlayDisplayLabel(label)
 
     private fun labelLayout(inlay: Inlay<*>): LabelLayout {
         val editor = inlay.editor
         val font = editor.colorsScheme.getFont(EditorFontType.PLAIN)
         val metrics = editor.contentComponent.getFontMetrics(font)
         val available = (editor.scrollingModel.visibleArea.width * 0.62).toInt().coerceIn(160, 620)
-        val all = wrapSourceInlayLabel("◉ $label", available, metrics::stringWidth)
+        val all = wrapSourceInlayLabel(displayLabel, (available - LABEL_TEXT_INSET).coerceAtLeast(1), metrics::stringWidth)
         val truncated = !expanded && all.size > 2
         val lines = if (truncated) all.take(2).toMutableList().apply {
             var last = this[1]
             while (last.isNotEmpty() && metrics.stringWidth("$last…") > available) last = last.dropLast(1)
             this[1] = "$last…"
         } else all
-        return LabelLayout(lines, truncated, metrics.height, lines.maxOf(metrics::stringWidth), expanded && all.size > 2)
+        return LabelLayout(
+            lines, truncated, metrics.height,
+            lines.maxOf(metrics::stringWidth) + LABEL_TEXT_INSET,
+            expanded && all.size > 2,
+        )
     }
 
     private fun textWidth(inlay: Inlay<*>): Int = labelLayout(inlay).textWidth
 
-    private fun left(inlay: Inlay<*>): Int = sourceBlockBounds(inlay.editor, start, end)?.x
-        ?: inlay.bounds?.x ?: 0
+    private fun left(inlay: Inlay<*>): Int {
+        val range = sourceRange?.invoke() ?: (start to end)
+        return sourceBlockBounds(inlay.editor, range.first, range.second)?.x ?: inlay.bounds?.x ?: 0
+    }
 
     private fun controls(inlay: Inlay<*>): SourceInlayControlBounds {
         val bounds = inlay.bounds
@@ -82,8 +95,8 @@ internal class InsightInlayRenderer(
         val actionY = if (layout.truncated) top + layout.lineHeight else top + layout.lines.size * layout.lineHeight
         val metrics = inlay.editor.contentComponent.getFontMetrics(
             inlay.editor.colorsScheme.getFont(EditorFontType.PLAIN))
-        val x = if (layout.truncated) left(inlay) + 8 + metrics.stringWidth(layout.lines.last().dropLast(1))
-            else left(inlay) + 8
+        val x = if (layout.truncated) left(inlay) + 8 + LABEL_TEXT_INSET + metrics.stringWidth(layout.lines.last().dropLast(1))
+            else left(inlay) + 8 + LABEL_TEXT_INSET
         return Rectangle(x, actionY, if (layout.truncated) metrics.stringWidth("…") + 4 else 48,
             layout.lineHeight)
     }
@@ -120,8 +133,12 @@ internal class InsightInlayRenderer(
         g.font = inlay.editor.colorsScheme.getFont(EditorFontType.PLAIN)
         g.color = if (hovered) JBColor(Color(103, 58, 183), Color(189, 145, 242))
             else JBColor(Color(79, 72, 112), Color(173, 163, 199))
+        val iconX = bounds.x + 8
+        val iconSize = 7
+        val iconY = bounds.y + (layout.lineHeight - iconSize) / 2 + 2
+        g.fillOval(iconX, iconY, iconSize, iconSize)
         layout.lines.forEachIndexed { index, line ->
-            g.drawString(line, bounds.x + 8, bounds.y + index * layout.lineHeight + g.fontMetrics.ascent + 2)
+            g.drawString(line, iconX + LABEL_TEXT_INSET, bounds.y + index * layout.lineHeight + g.fontMetrics.ascent + 2)
         }
         if (layout.actionLine) {
             g.color = JBColor.BLUE
@@ -134,7 +151,15 @@ internal class InsightInlayRenderer(
             enabled = canNext, hovered = hoveredButton == SourceInlayButton.NEXT)
     }
 
+    private companion object {
+        const val LABEL_TEXT_INSET = 16
+    }
+
 }
+
+/** 旧记录可能把 circled number 当装饰符存进 label；显示时去掉，binding 保留原文。 */
+internal fun sourceInlayDisplayLabel(label: String): String =
+    label.replaceFirst(Regex("^\\s*[①-⑳]\\s*"), "").ifBlank { label.trim() }
 
 /** 按编辑器实际字形宽度折行，保留全部字符供展开查看。 */
 internal fun wrapSourceInlayLabel(value: String, width: Int, measure: (String) -> Int): List<String> {

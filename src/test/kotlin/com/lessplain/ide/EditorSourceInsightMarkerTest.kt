@@ -79,6 +79,8 @@ class EditorSourceInsightMarkerTest {
                 move(fixture, Point(block.maxX.toInt() + 30, block.maxY.toInt() + 30))
                 move(fixture, caption)
                 assertTrue(fixture.renderer.hovered)
+                press(fixture, Point(block.maxX.toInt() + 30, block.maxY.toInt() + 30), MouseEvent.BUTTON3)
+                assertFalse(fixture.renderer.hovered, "任意鼠标按键都应关闭渐显")
             } finally { marker.dispose() }
         }
     }
@@ -191,6 +193,39 @@ class EditorSourceInsightMarkerTest {
             assertEquals(resizeCount, fixture.component.componentListeners.size)
             move(fixture, Point(80, 40))
             assertFalse(marker.timer.isRunning)
+        }
+    }
+
+    @Test
+    fun `navigation capability changes update only the available inlay arrows`() {
+        SwingUtilities.invokeAndWait {
+            val fixture = SourceMarkerTestEditor()
+            var previous = 0
+            var next = 0
+            val navigation = SourceInlayNavigation(false, false, { previous++ }, { next++ })
+            val marker = EditorSourceInsightMarker(fixture.editor, 0, fixture.text.length, "步骤", navigation)
+            try {
+                assertFalse(fixture.renderer.canPrevious)
+                assertFalse(fixture.renderer.canNext)
+                navigation.updateCapabilities(true, false)
+                assertTrue(fixture.renderer.canPrevious)
+                assertFalse(fixture.renderer.canNext)
+                var hint = fixture.renderer.hintBounds(fixture.inlay)
+                click(fixture, Point(hint.maxX.toInt() - 33, hint.y + 10))
+                click(fixture, Point(hint.maxX.toInt() - 10, hint.y + 10))
+                assertEquals(1, previous)
+                assertEquals(0, next)
+                navigation.updateCapabilities(false, true)
+                assertFalse(fixture.renderer.canPrevious)
+                assertTrue(fixture.renderer.canNext)
+                hint = fixture.renderer.hintBounds(fixture.inlay)
+                click(fixture, Point(hint.maxX.toInt() - 33, hint.y + 10))
+                click(fixture, Point(hint.maxX.toInt() - 10, hint.y + 10))
+                assertEquals(1, previous)
+                assertEquals(1, next)
+            } finally {
+                marker.dispose()
+            }
         }
     }
 

@@ -1,0 +1,782 @@
+{
+  "question": "基于 Redis 实现热点文章等高频数据的缓存与排行榜统计，优化接口查询性能。这是我写简历上的一点，你按照正常的流程做一个讲解的示例。",
+  "title": "简历讲解：热门文章缓存与 Redis 活跃榜",
+  "spec": {
+    "root": "board",
+    "elements": {
+      "board": {
+        "type": "Board",
+        "props": {},
+        "children": [
+          "hot-cluster",
+          "rank-cluster"
+        ]
+      },
+      "hot-cluster": {
+        "type": "Cluster",
+        "props": {
+          "title": "热门文章：为什么不用每次查库？"
+        },
+        "slots": {
+          "diagram": [
+            "hot-graph"
+          ],
+          "companion": [
+            "hot-panel"
+          ]
+        }
+      },
+      "hot-graph": {
+        "type": "Graph",
+        "props": {
+          "nodes": [
+            {
+              "id": "home",
+              "label": "请求首页侧栏",
+              "source": "home-cache",
+              "roles": [
+                "start"
+              ]
+            },
+            {
+              "id": "cached",
+              "label": "返回侧栏缓存",
+              "source": "home-cache",
+              "roles": [
+                "end"
+              ]
+            },
+            {
+              "id": "query",
+              "label": "按阅读数取前 8 篇",
+              "source": "hot-sql"
+            },
+            {
+              "id": "fill",
+              "label": "侧栏整体缓存 5 分钟",
+              "source": "home-ttl",
+              "roles": [
+                "end"
+              ]
+            }
+          ],
+          "edges": [
+            {
+              "id": "h-hit",
+              "source": "home",
+              "target": "cached",
+              "kind": "control_flow",
+              "label": "命中",
+              "evidence": [
+                "home-cache"
+              ]
+            },
+            {
+              "id": "h-miss",
+              "source": "home",
+              "target": "query",
+              "kind": "control_flow",
+              "label": "未命中",
+              "evidence": [
+                "home-cache",
+                "hot-eight"
+              ]
+            },
+            {
+              "id": "h-fill",
+              "source": "query",
+              "target": "fill",
+              "kind": "data_flow",
+              "evidence": [
+                "hot-eight",
+                "home-ttl"
+              ],
+              "summary": "热门文章、公告和月度榜组装成首页侧栏，由 Spring 缓存方法返回值。"
+            }
+          ],
+          "selectionPath": "/resumeHotStep"
+        }
+      },
+      "cache-fact": {
+        "type": "Text",
+        "props": {
+          "text": "当前实现：Caffeine 本地缓存。首页侧栏整体复用，热门文章只是其中一部分。",
+          "variant": "body"
+        }
+      },
+      "cache-scenarios": {
+        "type": "Tabs",
+        "props": {
+          "tabs": [
+            {
+              "label": "缓存命中",
+              "value": "cached"
+            },
+            {
+              "label": "缓存未命中",
+              "value": "query"
+            },
+            {
+              "label": "完成回填",
+              "value": "fill"
+            }
+          ],
+          "defaultValue": null,
+          "value": {
+            "$bindState": "/resumeHotStep"
+          }
+        }
+      },
+      "cache-hit-values": {
+        "type": "JsonView",
+        "props": {
+          "label": "单次请求推演 · 非运行数据",
+          "value": {
+            "缓存状态": "有效",
+            "热门文章 SQL 执行次数": 0,
+            "结果": "直接复用首页侧栏"
+          }
+        }
+      },
+      "cache-hit-case": {
+        "type": "Stack",
+        "props": {
+          "direction": "vertical",
+          "gap": "sm",
+          "className": "lesson-experiment"
+        },
+        "children": [
+          "cache-hit-values"
+        ],
+        "visible": {
+          "$state": "/resumeHotStep",
+          "eq": "cached"
+        }
+      },
+      "cache-miss-values": {
+        "type": "JsonView",
+        "props": {
+          "label": "单次请求推演 · 非运行数据",
+          "value": {
+            "缓存状态": "为空或过期",
+            "热门文章 SQL 执行次数": 1,
+            "排序": "read_count.cnt 降序",
+            "数量": 8
+          }
+        }
+      },
+      "cache-miss-case": {
+        "type": "Stack",
+        "props": {
+          "direction": "vertical",
+          "gap": "sm",
+          "className": "lesson-experiment"
+        },
+        "children": [
+          "cache-miss-values"
+        ],
+        "visible": {
+          "$state": "/resumeHotStep",
+          "eq": "query"
+        }
+      },
+      "cache-fill-values": {
+        "type": "JsonView",
+        "props": {
+          "label": "单次请求推演 · 非运行数据",
+          "value": {
+            "缓存内容": "完整首页侧栏",
+            "有效期": "写入后 5 分钟",
+            "下一次有效期内请求": "命中，跳过方法体"
+          }
+        }
+      },
+      "cache-fill-case": {
+        "type": "Stack",
+        "props": {
+          "direction": "vertical",
+          "gap": "sm",
+          "className": "lesson-experiment"
+        },
+        "children": [
+          "cache-fill-values"
+        ],
+        "visible": {
+          "$state": "/resumeHotStep",
+          "eq": "fill"
+        }
+      },
+      "cache-tradeoff": {
+        "type": "Text",
+        "props": {
+          "text": "命中时绕过侧栏查询；代价是刷新前可能看到旧数据。首页里的月榜 Top 8 也随整份侧栏缓存。独立排行榜页面另走实时查询链路。",
+          "variant": "caption"
+        }
+      },
+      "cache-annotation": {
+        "type": "SourceLink",
+        "props": {
+          "source": "home-cache",
+          "label": "查看 Spring 缓存入口"
+        }
+      },
+      "cache-sql": {
+        "type": "SourceLink",
+        "props": {
+          "source": "hot-sql",
+          "label": "查看热门文章 SQL"
+        }
+      },
+      "cache-ttl": {
+        "type": "SourceLink",
+        "props": {
+          "source": "home-ttl",
+          "label": "查看 5 分钟缓存配置"
+        }
+      },
+      "cache-details": {
+        "type": "Collapsible",
+        "props": {
+          "title": "源码与取舍",
+          "defaultOpen": false
+        },
+        "children": [
+          "cache-tradeoff",
+          "cache-annotation",
+          "cache-sql",
+          "cache-ttl"
+        ]
+      },
+      "resume-suggestion": {
+        "type": "Text",
+        "props": {
+          "text": "使用 Caffeine 缓存首页热门文章侧栏，基于 Redis ZSet 实现用户活跃度日/月排行榜，配合批量查询补齐用户信息，减少重复查询。",
+          "variant": "body"
+        }
+      },
+      "resume-measurement": {
+        "type": "Text",
+        "props": {
+          "text": "当前源码不能支持“热门文章使用 Redis 缓存”或具体性能提升比例。面试中可以解释查询被省在哪里；提升幅度需要压测数据。",
+          "variant": "caption"
+        }
+      },
+      "resume-wording": {
+        "type": "Collapsible",
+        "props": {
+          "title": "这条简历怎么讲",
+          "defaultOpen": true
+        },
+        "children": [
+          "resume-suggestion",
+          "resume-measurement"
+        ]
+      },
+      "hot-panel": {
+        "type": "Stack",
+        "props": {
+          "direction": "vertical",
+          "gap": "sm",
+          "className": "lesson-experiment"
+        },
+        "children": [
+          "cache-fact",
+          "cache-scenarios",
+          "cache-hit-case",
+          "cache-miss-case",
+          "cache-fill-case",
+          "cache-details",
+          "resume-wording"
+        ]
+      },
+      "rank-cluster": {
+        "type": "Cluster",
+        "props": {
+          "title": "Redis 活跃榜：分数怎么写入、怎么读？"
+        },
+        "slots": {
+          "diagram": [
+            "rank-graph"
+          ],
+          "companion": [
+            "rank-panel"
+          ]
+        }
+      },
+      "rank-graph": {
+        "type": "Graph",
+        "props": {
+          "nodes": [
+            {
+              "id": "publish",
+              "label": "收到发布文章事件",
+              "source": "rank-event",
+              "roles": [
+                "start"
+              ]
+            },
+            {
+              "id": "score",
+              "label": "计算发布活跃分 +10",
+              "source": "rank-score"
+            },
+            {
+              "id": "gate",
+              "label": "检查当天行为记录",
+              "source": "rank-gate"
+            },
+            {
+              "id": "zsets",
+              "label": "累加用户日榜和月榜",
+              "source": "rank-zsets"
+            },
+            {
+              "id": "page",
+              "label": "请求前 30 名",
+              "source": "rank-page",
+              "roles": [
+                "start"
+              ]
+            },
+            {
+              "id": "key",
+              "label": "选择日榜或月榜",
+              "source": "rank-query"
+            },
+            {
+              "id": "top",
+              "label": "取最高分的 30 位用户",
+              "source": "rank-top"
+            },
+            {
+              "id": "result",
+              "label": "补齐用户资料和名次",
+              "source": "rank-result",
+              "roles": [
+                "end"
+              ]
+            },
+            {
+              "id": "skip",
+              "label": "已记录：本次不加分",
+              "source": "rank-gate",
+              "roles": [
+                "end"
+              ]
+            }
+          ],
+          "edges": [
+            {
+              "id": "r-publish",
+              "source": "publish",
+              "target": "score",
+              "kind": "call",
+              "evidence": [
+                "rank-event"
+              ],
+              "summary": "Spring 事件"
+            },
+            {
+              "id": "r-gate",
+              "source": "score",
+              "target": "gate",
+              "kind": "control_flow",
+              "evidence": [
+                "rank-score",
+                "rank-gate"
+              ],
+              "summary": "检查记录"
+            },
+            {
+              "id": "r-add",
+              "source": "gate",
+              "target": "zsets",
+              "kind": "control_flow",
+              "label": "首次正向加分",
+              "evidence": [
+                "rank-gate",
+                "rank-zsets"
+              ]
+            },
+            {
+              "id": "r-page",
+              "source": "page",
+              "target": "key",
+              "kind": "call",
+              "evidence": [
+                "rank-page",
+                "rank-query"
+              ],
+              "summary": "time，size=30"
+            },
+            {
+              "id": "r-top",
+              "source": "key",
+              "target": "top",
+              "kind": "call",
+              "evidence": [
+                "rank-query",
+                "rank-top"
+              ],
+              "summary": "查询同一榜单"
+            },
+            {
+              "id": "r-data",
+              "source": "zsets",
+              "target": "top",
+              "kind": "data_flow",
+              "evidence": [
+                "rank-zsets",
+                "rank-top"
+              ],
+              "summary": "读取成员与分数"
+            },
+            {
+              "id": "r-info",
+              "source": "top",
+              "target": "result",
+              "kind": "data_flow",
+              "evidence": [
+                "rank-result"
+              ],
+              "summary": "批量补齐"
+            },
+            {
+              "id": "r-skip",
+              "source": "gate",
+              "target": "skip",
+              "kind": "control_flow",
+              "label": "已记录",
+              "evidence": [
+                "rank-gate"
+              ]
+            }
+          ],
+          "selectionPath": "/resumeRankStep"
+        }
+      },
+      "rank-purpose": {
+        "type": "Text",
+        "props": {
+          "text": "榜单成员是用户 ID，分数是活跃分。发布文章只是加分入口之一，这不是文章热度榜。",
+          "variant": "body"
+        }
+      },
+      "rank-scenarios": {
+        "type": "Tabs",
+        "props": {
+          "tabs": [
+            {
+              "label": "首次发布",
+              "value": "zsets"
+            },
+            {
+              "label": "重复事件",
+              "value": "skip"
+            },
+            {
+              "label": "读取榜单",
+              "value": "result"
+            }
+          ],
+          "defaultValue": null,
+          "value": {
+            "$bindState": "/resumeRankStep"
+          }
+        }
+      },
+      "rank-new-values": {
+        "type": "JsonView",
+        "props": {
+          "label": "顺序推演：用户 42 发布文章 101",
+          "value": {
+            "新增活跃分": 10,
+            "Hash 行为字段": "101_publish",
+            "日榜分数": "55 → 65",
+            "月榜分数": "145 → 155",
+            "ZSet member": "42"
+          }
+        }
+      },
+      "rank-new-case": {
+        "type": "Stack",
+        "props": {
+          "direction": "vertical",
+          "gap": "sm",
+          "className": "lesson-experiment"
+        },
+        "children": [
+          "rank-new-values"
+        ],
+        "visible": {
+          "$state": "/resumeRankStep",
+          "eq": "zsets"
+        }
+      },
+      "rank-duplicate-values": {
+        "type": "JsonView",
+        "props": {
+          "label": "顺序推演：当天再次处理同一篇文章",
+          "value": {
+            "Hash 行为字段": "101_publish",
+            "已记录分数": 10,
+            "本次新增": 0,
+            "日榜分数": 65,
+            "月榜分数": 155
+          }
+        }
+      },
+      "rank-duplicate-case": {
+        "type": "Stack",
+        "props": {
+          "direction": "vertical",
+          "gap": "sm",
+          "className": "lesson-experiment"
+        },
+        "children": [
+          "rank-duplicate-values"
+        ],
+        "visible": {
+          "$state": "/resumeRankStep",
+          "eq": "skip"
+        }
+      },
+      "rank-period": {
+        "type": "Select",
+        "props": {
+          "label": "对照日榜 / 月榜",
+          "name": "rankPeriod",
+          "options": [
+            "日榜",
+            "月榜"
+          ],
+          "placeholder": null,
+          "value": {
+            "$bindState": "/resumeRankPeriod"
+          }
+        }
+      },
+      "rank-day-values": {
+        "type": "JsonView",
+        "props": {
+          "label": "示例 Top 3 · 实际接口取前 30 人",
+          "value": [
+            {
+              "rank": 1,
+              "userId": 7,
+              "score": 80
+            },
+            {
+              "rank": 2,
+              "userId": 42,
+              "score": 65
+            },
+            {
+              "rank": 3,
+              "userId": 9,
+              "score": 60
+            }
+          ]
+        }
+      },
+      "rank-day-case": {
+        "type": "Stack",
+        "props": {
+          "direction": "vertical",
+          "gap": "sm",
+          "className": "lesson-experiment"
+        },
+        "children": [
+          "rank-day-values"
+        ],
+        "visible": {
+          "$state": "/resumeRankPeriod",
+          "eq": "日榜"
+        }
+      },
+      "rank-month-values": {
+        "type": "JsonView",
+        "props": {
+          "label": "同三位用户的月度累计分 · 示例",
+          "value": [
+            {
+              "rank": 1,
+              "userId": 7,
+              "score": 200
+            },
+            {
+              "rank": 2,
+              "userId": 9,
+              "score": 160
+            },
+            {
+              "rank": 3,
+              "userId": 42,
+              "score": 155
+            }
+          ]
+        }
+      },
+      "rank-month-case": {
+        "type": "Stack",
+        "props": {
+          "direction": "vertical",
+          "gap": "sm",
+          "className": "lesson-experiment"
+        },
+        "children": [
+          "rank-month-values"
+        ],
+        "visible": {
+          "$state": "/resumeRankPeriod",
+          "eq": "月榜"
+        }
+      },
+      "rank-query-note": {
+        "type": "Text",
+        "props": {
+          "text": "先从 ZSet 取用户 ID 和分数，再批量补齐用户资料、按分数排序并填写名次。这里的数据用于解释流程，未请求 Redis。",
+          "variant": "caption"
+        }
+      },
+      "rank-read-case": {
+        "type": "Stack",
+        "props": {
+          "direction": "vertical",
+          "gap": "sm",
+          "className": "lesson-experiment"
+        },
+        "children": [
+          "rank-period",
+          "rank-day-case",
+          "rank-month-case",
+          "rank-query-note"
+        ],
+        "visible": {
+          "$state": "/resumeRankStep",
+          "eq": "result"
+        }
+      },
+      "rank-idempotency": {
+        "type": "Text",
+        "props": {
+          "text": "重复事件一定不会重复加分吗？源码先 HGET，再 HSET 和两次 ZINCRBY，这些操作没有组成一个原子事务。顺序执行可以过滤已记录行为；并发和中途失败需要单独验证。",
+          "variant": "caption"
+        }
+      },
+      "rank-gate-source": {
+        "type": "SourceLink",
+        "props": {
+          "source": "rank-gate",
+          "label": "查看行为记录与多步写入"
+        }
+      },
+      "rank-db-boundary": {
+        "type": "Text",
+        "props": {
+          "text": "排行榜不是完全不查数据库：Redis 保存 ID 与分数，展示资料仍由 batchQuerySimpleUserInfo 批量补齐。",
+          "variant": "caption"
+        }
+      },
+      "rank-result-source": {
+        "type": "SourceLink",
+        "props": {
+          "source": "rank-result",
+          "label": "查看资料补齐与名次计算"
+        }
+      },
+      "rank-query-source": {
+        "type": "SourceLink",
+        "props": {
+          "source": "rank-top",
+          "label": "查看 ZSet Top N 查询"
+        }
+      },
+      "rank-questions": {
+        "type": "Collapsible",
+        "props": {
+          "title": "面试追问：边界在哪里？",
+          "defaultOpen": false
+        },
+        "children": [
+          "rank-idempotency",
+          "rank-gate-source",
+          "rank-db-boundary",
+          "rank-result-source",
+          "rank-query-source"
+        ]
+      },
+      "rank-panel": {
+        "type": "Stack",
+        "props": {
+          "direction": "vertical",
+          "gap": "sm",
+          "className": "lesson-experiment"
+        },
+        "children": [
+          "rank-purpose",
+          "rank-scenarios",
+          "rank-new-case",
+          "rank-duplicate-case",
+          "rank-read-case",
+          "rank-questions"
+        ]
+      }
+    },
+    "state": {
+      "resumeHotStep": "cached",
+      "resumeRankStep": "zsets",
+      "resumeRankPeriod": "日榜"
+    }
+  },
+  "sources": {
+    "home-cache": {
+      "path": "paicoding-service/src/main/java/com/github/paicoding/forum/service/sidebar/service/SidebarServiceImpl.java",
+      "text": "@Cacheable(key = \"'homeSidebar'\", cacheManager = \"caffeineCacheManager\", cacheNames = \"home\")\n    public List<SideBarDTO> queryHomeSidebarList() {"
+    },
+    "hot-eight": {
+      "path": "paicoding-service/src/main/java/com/github/paicoding/forum/service/sidebar/service/SidebarServiceImpl.java",
+      "text": "private SideBarDTO hotArticles() {\n        PageListVo<SimpleArticleDTO> vo = articleReadService.queryHotArticlesForRecommend(PageParam.newPageInstance(1, 8));"
+    },
+    "hot-sql": {
+      "path": "paicoding-service/src/main/resources/mapper/ArticleMapper.xml",
+      "text": "<select id=\"listArticlesByReadCounts\"\n            resultType=\"com.github.paicoding.forum.api.model.vo.article.dto.SimpleArticleDTO\">\n        select rc.document_id as id, a.user_id as authorId, a.title as title, a.create_time as createTime\n        from read_count as rc left join article as a on rc.document_id = a.id\n        where rc.document_type = ${@com.github.paicoding.forum.api.model.enums.DocumentTypeEnum@ARTICLE.code}\n        and a.status = ${@com.github.paicoding.forum.api.model.enums.PushStatusEnum@ONLINE.code}\n        and a.deleted = ${@com.github.paicoding.forum.api.model.enums.YesOrNoEnum@NO.code} order by rc.cnt desc\n        <include refid=\"limit\"/>\n    </select>"
+    },
+    "home-ttl": {
+      "path": "paicoding-core/src/main/java/com/github/paicoding/forum/core/ForumCoreAutoConfig.java",
+      "text": ".expireAfterWrite(5, TimeUnit.MINUTES)"
+    },
+    "rank-event": {
+      "path": "paicoding-service/src/main/java/com/github/paicoding/forum/service/rank/service/listener/UserActivityListener.java",
+      "text": "@Async\n    @EventListener(ArticleMsgEvent.class)\n    public void publishArticleListener(ArticleMsgEvent<ArticleDO> event) {\n        ArticleEventEnum type = event.getType();\n        if (type == ArticleEventEnum.ONLINE) {\n            userActivityRankService.addActivityScore(ReqInfoContext.getReqInfo().getUserId(), new ActivityScoreBo().setPublishArticle(true).setArticleId(event.getContent().getId()));"
+    },
+    "rank-score": {
+      "path": "paicoding-service/src/main/java/com/github/paicoding/forum/service/rank/service/impl/UserActivityRankServiceImpl.java",
+      "text": "} else if (BooleanUtils.isTrue(activityScore.getPublishArticle())) {\n                // 发布文章\n                field += \"publish\";\n                score += 10;"
+    },
+    "rank-gate": {
+      "path": "paicoding-service/src/main/java/com/github/paicoding/forum/service/rank/service/impl/UserActivityRankServiceImpl.java",
+      "text": "Integer recordedScore = RedisClient.hGet(userActionKey, field, Integer.class);\n        if (recordedScore == null) {\n            // 2.1 之前没有加分记录，执行具体的加分\n            if (score > 0) {\n                // 记录加分记录\n                RedisClient.hSet(userActionKey, field, score);"
+    },
+    "rank-zsets": {
+      "path": "paicoding-service/src/main/java/com/github/paicoding/forum/service/rank/service/impl/UserActivityRankServiceImpl.java",
+      "text": "Double updatedScore = RedisClient.zIncrBy(todayRankKey, String.valueOf(userId), score);\n                RedisClient.zIncrBy(monthRankKey, String.valueOf(userId), score);"
+    },
+    "rank-page": {
+      "path": "paicoding-web/src/main/java/com/github/paicoding/forum/web/front/rank/RankController.java",
+      "text": "@RequestMapping(path = \"/rank/{time}\")\n    public String rank(@PathVariable String time, Model model) {\n        ActivityRankTimeEnum rankTime = ActivityRankTimeEnum.nameOf(time);\n        if (rankTime == null) {\n            rankTime = ActivityRankTimeEnum.MONTH;\n        }\n        List<RankItemDTO> list = userActivityRankService.queryRankList(rankTime, 30);"
+    },
+    "rank-query": {
+      "path": "paicoding-service/src/main/java/com/github/paicoding/forum/service/rank/service/impl/UserActivityRankServiceImpl.java",
+      "text": "public List<RankItemDTO> queryRankList(ActivityRankTimeEnum time, int size) {\n        String rankKey = time == ActivityRankTimeEnum.DAY ? todayRankKey() : monthRankKey();\n        // 1. 获取topN的活跃用户\n        List<ImmutablePair<String, Double>> rankList = RedisClient.zTopNScore(rankKey, size);"
+    },
+    "rank-top": {
+      "path": "paicoding-core/src/main/java/com/github/paicoding/forum/core/cache/RedisClient.java",
+      "text": "public static List<ImmutablePair<String, Double>> zTopNScore(String key, int n) {\n        return template.execute((RedisCallback<List<ImmutablePair<String, Double>>>) connection -> {\n            // zRangeWithScores里，-n：倒数第几个\n            // Tuple 元组\n            Set<RedisZSetCommands.Tuple> set = connection.zRangeWithScores(keyBytes(key), -n, -1);\n            if (set == null) {\n                return Collections.emptyList();\n            }\n            return set.stream()\n                    .map(tuple -> ImmutablePair.of(toObj(tuple.getValue(), String.class), tuple.getScore()))\n                    .sorted((o1, o2) -> Double.compare(o2.getRight(), o1.getRight()))\n                    .collect(Collectors.toList());"
+    },
+    "rank-result": {
+      "path": "paicoding-service/src/main/java/com/github/paicoding/forum/service/rank/service/impl/UserActivityRankServiceImpl.java",
+      "text": "List<SimpleUserInfoDTO> users = userService.batchQuerySimpleUserInfo(userScoreMap.keySet());\n\n        // 3. 根据评分进行排序\n        List<RankItemDTO> rank = users.stream()\n                .map(user -> new RankItemDTO().setUser(user).setScore(userScoreMap.getOrDefault(user.getUserId(), 0)))\n                .sorted((o1, o2) -> Integer.compare(o2.getScore(), o1.getScore()))\n                .collect(Collectors.toList());\n\n        // 4. 补齐每个用户的排名\n        // 上面只是设置了每个用户的id和评分，但是RankItemDTO里的rank(Integer)并为设置\n        IntStream.range(0, rank.size()).forEach(i -> rank.get(i).setRank(i + 1));\n        return rank;"
+    }
+  }
+}

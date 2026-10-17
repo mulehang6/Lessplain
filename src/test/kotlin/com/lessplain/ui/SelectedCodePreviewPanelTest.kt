@@ -165,7 +165,7 @@ class SelectedCodePreviewPanelTest {
         val panel = SelectedCodePreviewPanel(captured) {}
         try {
             assertEquals(text.replace("\r\n", "\n"), panel.editor.document.text)
-            assertEquals(text, captured.anchor.text)
+            assertEquals(text, captured.anchor!!.text)
             assertFalse(panel.editor.settings.isUseSoftWraps)
             assertFalse(panel.toggle.isVisible)
             assertTrue(panel.heightFor(420, 600) > 0)

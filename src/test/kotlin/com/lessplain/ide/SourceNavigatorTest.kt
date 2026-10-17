@@ -1,12 +1,25 @@
 package com.lessplain.ide
 
 import com.lessplain.model.SourceAnchor
+import com.lessplain.model.SourceSelectionRange
 import com.lessplain.storage.sha256
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 class SourceNavigatorTest {
+    @Test
+    fun `frozen utf16 range selects the second identical token and never searches on invalid range`() {
+        val content = "😀 consume(item, item)"
+        val start = content.lastIndexOf("item")
+        val anchor = SourceAnchor("src/A.kt", null, "item", sha256(content), 1,
+            selectionRange = SourceSelectionRange(start, start + 4))
+        assertEquals(start, matchAnchorText(anchor, content) { null }.offset)
+        assertEquals(LocationStatus.UNRESOLVED,
+            matchAnchorText(anchor.copy(selectionRange = SourceSelectionRange(0, 4)), content) { null }.location)
+        assertEquals(LocationStatus.AMBIGUOUS, matchAnchorText(anchor, "$content ") { null }.location)
+    }
+
     @Test
     fun `missing block returns unique function with changed evidence without changing old anchor`() {
         val content = "fun submit() { checkPermission(); save() }"

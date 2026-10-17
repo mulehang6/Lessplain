@@ -126,4 +126,25 @@ class CanvasTextEditorTest {
         }
         SwingUtilities.invokeAndWait { assertTrue(draft.retain) }
     }
+
+    @Test fun `read only details hide save and ignore save shortcuts`() {
+        val saves = mutableListOf<String>()
+        SwingUtilities.invokeAndWait {
+            val editor = CanvasTextEditor(
+                "问题详情", CanvasTextDraft("只读内容"), true, saves::add, {}, {}, {},
+                editable = false,
+            )
+            try {
+                assertEquals("只读内容", editor.input.text)
+                assertFalse(editor.input.isEditable)
+                assertFalse(editor.saveButton.isVisible)
+                assertEquals("关闭", editor.cancelButton.text)
+                editor.requestSave()
+                editor.actionMap["save"]?.actionPerformed(ActionEvent(editor, 0, "save"))
+                assertTrue(saves.isEmpty())
+            } finally {
+                editor.close()
+            }
+        }
+    }
 }

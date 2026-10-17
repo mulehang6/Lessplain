@@ -1,0 +1,235 @@
+{
+  "title": "等待时线程能做什么？",
+  "question": "Kotlin 协程挂起等待与阻塞等待有什么区别？",
+  "codeSamples": {
+    "suspend": {
+      "title": "挂起等待",
+      "language": "kotlin",
+      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    launch {\n        println(\"A 开始等待\")\n        delay(1000) // 模拟等待；真实 HTTP 客户端由其挂起 API 等待响应\n        println(\"A 继续\")\n    }\n    launch {\n        println(\"B 执行\")\n    }\n}\n"
+    },
+    "blocking": {
+      "title": "阻塞等待",
+      "language": "kotlin",
+      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    launch {\n        println(\"A 开始等待\")\n        Thread.sleep(1000) // 占住 runBlocking 的同一线程\n        println(\"A 继续\")\n    }\n    launch {\n        println(\"B 执行\")\n    }\n}\n"
+    }
+  },
+  "spec": {
+    "root": "waiting-board",
+    "state": {
+      "suspend": {
+        "step": "await"
+      },
+      "blocking": {
+        "step": "await"
+      }
+    },
+    "elements": {
+      "waiting-board": {
+        "type": "Board",
+        "props": {},
+        "children": [
+          "suspend-cluster",
+          "blocking-cluster"
+        ]
+      },
+      "suspend-cluster": {
+        "type": "Cluster",
+        "props": {
+          "title": "挂起等待"
+        },
+        "slots": {
+          "diagram": [
+            "suspend-graph"
+          ],
+          "companion": [
+            "suspend-content"
+          ]
+        }
+      },
+      "suspend-graph": {
+        "type": "Graph",
+        "props": {
+          "direction": "DOWN",
+          "selectionPath": "/suspend/step",
+          "nodes": [
+            {
+              "id": "await",
+              "label": "A 挂起等待",
+              "sample": {
+                "id": "suspend",
+                "startLine": 6
+              },
+              "roles": [
+                "start"
+              ]
+            },
+            {
+              "id": "b",
+              "label": "线程执行 B",
+              "sample": {
+                "id": "suspend",
+                "startLine": 10
+              }
+            },
+            {
+              "id": "resume",
+              "label": "A 恢复执行",
+              "sample": {
+                "id": "suspend",
+                "startLine": 7
+              },
+              "roles": [
+                "end"
+              ],
+              "outcome": "success"
+            }
+          ],
+          "edges": [
+            {
+              "id": "next-0",
+              "source": "await",
+              "target": "b",
+              "kind": "control_flow"
+            },
+            {
+              "id": "next-1",
+              "source": "b",
+              "target": "resume",
+              "kind": "control_flow"
+            }
+          ]
+        }
+      },
+      "suspend-content": {
+        "type": "Stack",
+        "props": {
+          "direction": "vertical",
+          "gap": "sm",
+          "className": "lesson-experiment"
+        },
+        "children": [
+          "suspend-demo",
+          "suspend-code"
+        ]
+      },
+      "suspend-demo": {
+        "type": "Demo",
+        "props": {
+          "demo": "suspend",
+          "title": "挂起任务与线程",
+          "height": 250
+        }
+      },
+      "suspend-code": {
+        "type": "CodeSample",
+        "props": {
+          "sample": "suspend",
+          "label": "查看挂起版代码"
+        }
+      },
+      "blocking-cluster": {
+        "type": "Cluster",
+        "props": {
+          "title": "阻塞等待"
+        },
+        "slots": {
+          "diagram": [
+            "blocking-graph"
+          ],
+          "companion": [
+            "blocking-content"
+          ]
+        }
+      },
+      "blocking-graph": {
+        "type": "Graph",
+        "props": {
+          "direction": "DOWN",
+          "selectionPath": "/blocking/step",
+          "nodes": [
+            {
+              "id": "await",
+              "label": "A 阻塞线程",
+              "sample": {
+                "id": "blocking",
+                "startLine": 6
+              },
+              "roles": [
+                "start"
+              ]
+            },
+            {
+              "id": "resume",
+              "label": "A 结束等待",
+              "sample": {
+                "id": "blocking",
+                "startLine": 7
+              }
+            },
+            {
+              "id": "b",
+              "label": "线程执行 B",
+              "sample": {
+                "id": "blocking",
+                "startLine": 10
+              },
+              "roles": [
+                "end"
+              ],
+              "outcome": "success"
+            }
+          ],
+          "edges": [
+            {
+              "id": "next-0",
+              "source": "await",
+              "target": "resume",
+              "kind": "control_flow"
+            },
+            {
+              "id": "next-1",
+              "source": "resume",
+              "target": "b",
+              "kind": "control_flow"
+            }
+          ]
+        }
+      },
+      "blocking-content": {
+        "type": "Stack",
+        "props": {
+          "direction": "vertical",
+          "gap": "sm",
+          "className": "lesson-experiment"
+        },
+        "children": [
+          "blocking-demo",
+          "blocking-code"
+        ]
+      },
+      "blocking-demo": {
+        "type": "Demo",
+        "props": {
+          "demo": "blocking",
+          "title": "阻塞任务与线程",
+          "height": 250
+        }
+      },
+      "blocking-code": {
+        "type": "CodeSample",
+        "props": {
+          "sample": "blocking",
+          "label": "查看阻塞版代码"
+        }
+      }
+    }
+  },
+  "demos": {
+    "suspend": {
+      "html": "<style>body{margin:0;line-height:1.5}.kind{font-size:12px;opacity:.7}.lanes{display:grid;grid-template-columns:60px 1fr;gap:10px;margin:14px 0}.value{padding:5px 9px;background:var(--demo-hover,#8882);border-radius:5px}.active{color:var(--demo-primary,#589df6)}.actions{display:flex;gap:8px}button{padding:5px 10px;border:1px solid var(--demo-border,#8885);border-radius:5px;background:transparent;color:inherit;cursor:pointer}button:hover{background:var(--demo-hover,#8882)}button:disabled{opacity:.45;cursor:default}button:focus-visible{outline:2px solid var(--demo-primary,#589df6);outline-offset:2px}</style>\n <div class=\"kind\">演示推演 · 非运行记录 · 同一线程</div>\n <div class=\"lanes\"><span>任务 A</span><span id=\"a\" class=\"value\"></span><span>任务 B</span><span id=\"b\" class=\"value\"></span><span>线程</span><span id=\"thread\" class=\"value active\"></span></div>\n <div class=\"actions\"><button id=\"next\">推进一步</button><button id=\"reset\">重置</button></div>\n <script>\n const mode=\"suspend\",steps=[\"await\",\"b\",\"resume\"],frames=[[\"等待\",\"待执行\",\"可用于其他任务\"],[\"等待\",\"完成\",\"刚执行 B\"],[\"继续执行\",\"完成\",\"恢复 A\"]];let index=0;\n function render(){for(const [n,id] of [\"a\",\"b\",\"thread\"].entries())document.getElementById(id).textContent=frames[index][n];document.getElementById(\"next\").disabled=index===steps.length-1}\n function choose(next){index=next;render();parent.postMessage({channel:\"lessplain-demo\",method:\"setState\",params:{path:\"/\"+mode+\"/step\",value:steps[index]}},\"*\")}\n document.getElementById(\"next\").onclick=()=>choose(Math.min(steps.length-1,index+1));document.getElementById(\"reset\").onclick=()=>choose(0);\n addEventListener(\"message\",e=>{if(e.source!==parent||e.data?.channel!==\"lessplain-demo\"||e.data?.method!==\"state\")return;const found=steps.indexOf(e.data.params?.state?.[mode]?.step);if(found>=0){index=found;render()}});render();\n </script>"
+    },
+    "blocking": {
+      "html": "<style>body{margin:0;line-height:1.5}.kind{font-size:12px;opacity:.7}.lanes{display:grid;grid-template-columns:60px 1fr;gap:10px;margin:14px 0}.value{padding:5px 9px;background:var(--demo-hover,#8882);border-radius:5px}.active{color:var(--demo-primary,#589df6)}.actions{display:flex;gap:8px}button{padding:5px 10px;border:1px solid var(--demo-border,#8885);border-radius:5px;background:transparent;color:inherit;cursor:pointer}button:hover{background:var(--demo-hover,#8882)}button:disabled{opacity:.45;cursor:default}button:focus-visible{outline:2px solid var(--demo-primary,#589df6);outline-offset:2px}</style>\n <div class=\"kind\">演示推演 · 非运行记录 · 同一线程</div>\n <div class=\"lanes\"><span>任务 A</span><span id=\"a\" class=\"value\"></span><span>任务 B</span><span id=\"b\" class=\"value\"></span><span>线程</span><span id=\"thread\" class=\"value active\"></span></div>\n <div class=\"actions\"><button id=\"next\">推进一步</button><button id=\"reset\">重置</button></div>\n <script>\n const mode=\"blocking\",steps=[\"await\",\"resume\",\"b\"],frames=[[\"阻塞等待\",\"待执行\",\"被 A 占用\"],[\"结束等待\",\"待执行\",\"A 才释放线程\"],[\"完成\",\"执行\",\"执行 B\"]];let index=0;\n function render(){for(const [n,id] of [\"a\",\"b\",\"thread\"].entries())document.getElementById(id).textContent=frames[index][n];document.getElementById(\"next\").disabled=index===steps.length-1}\n function choose(next){index=next;render();parent.postMessage({channel:\"lessplain-demo\",method:\"setState\",params:{path:\"/\"+mode+\"/step\",value:steps[index]}},\"*\")}\n document.getElementById(\"next\").onclick=()=>choose(Math.min(steps.length-1,index+1));document.getElementById(\"reset\").onclick=()=>choose(0);\n addEventListener(\"message\",e=>{if(e.source!==parent||e.data?.channel!==\"lessplain-demo\"||e.data?.method!==\"state\")return;const found=steps.indexOf(e.data.params?.state?.[mode]?.step);if(found>=0){index=found;render()}});render();\n </script>"
+    }
+  }
+}

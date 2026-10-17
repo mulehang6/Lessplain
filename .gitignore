@@ -4,3 +4,7 @@
 .intellijPlatform
 build
 prototype/package-lock.json
+webview/node_modules/
+webview/dist/
+webview/test-results/
+.idea/lessplain-experiment/

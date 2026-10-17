@@ -16,25 +16,32 @@
 
     <!-- 产品和插件兼容要求，更多说明：https://plugins.jetbrains.com/docs/intellij/plugin-compatibility.html -->
     <depends>com.intellij.modules.platform</depends>
-    <depends>com.intellij.modules.compose</depends>
+    <depends>com.intellij.modules.jcef</depends>
     <depends>com.intellij.mcpServer</depends>
 
     <resource-bundle>messages.MyMessageBundle</resource-bundle>
 
     <!-- 插件定义的扩展，更多说明：https://plugins.jetbrains.com/docs/intellij/plugin-extension-points.html -->
     <extensions defaultExtensionNs="com.intellij">
-        <projectService serviceImplementation="com.lessplain.ide.UnderstandingService"/>
-        <fileEditorProvider implementation="com.lessplain.diagram.UnderstandingFileEditorProvider"/>
-        <editorTabTitleProvider implementation="com.lessplain.diagram.UnderstandingTabTitleProvider"/>
-        <toolWindow id="Understanding" factoryClass="com.lessplain.MyToolWindowFactory"
+        <projectService serviceImplementation="com.lessplain.experiment.ide.ViewService"/>
+        <fileEditorProvider implementation="com.lessplain.experiment.ide.ViewEditorProvider"/>
+        <toolWindow id="Lessplain" factoryClass="com.lessplain.experiment.ide.ViewToolWindowFactory"
                     icon="AllIcons.Toolwindows.ToolWindowPalette"/>
         <notificationGroup id="code.comprehension.results" displayType="BALLOON"/>
     </extensions>
     <extensions defaultExtensionNs="com.intellij.mcpServer">
-        <mcpToolset implementation="com.lessplain.mcp.UnderstandingToolset"/>
+        <mcpToolset implementation="com.lessplain.experiment.mcp.ViewToolset"/>
     </extensions>
     <actions>
-        <action id="Lessplain.AskSelectedCode" class="com.lessplain.ui.AskSelectedCodeAction"
+        <action id="Lessplain.CreateSampleScratch" class="com.lessplain.experiment.ide.CreateSampleScratchAction"
+                text="Lessplain: 创建可编辑练习副本" description="将当前只读教学代码复制到 Scratch；运行能力取决于项目语言和依赖">
+            <add-to-group group-id="EditorPopupMenu" anchor="first"/>
+        </action>
+        <action id="Lessplain.OpenDevTools" class="com.lessplain.experiment.browser.OpenDevToolsAction"
+                text="Lessplain: Open DevTools" description="在内部模式下诊断当前 Lessplain 页面的布局与渲染"/>
+        <action id="Lessplain.CaptureDiagnostics" class="com.lessplain.experiment.browser.CaptureBrowserDiagnosticsAction"
+                text="Lessplain: Capture Browser Diagnostics" description="在后台采样当前浏览器状态并写入沙盒日志，不等待 DevTools 窗口"/>
+        <action id="Lessplain.AskSelectedCode" class="com.lessplain.experiment.ide.AskSourceAction"
                 text="提问" description="将所选代码的问题添加到当前源码节点" icon="AllIcons.General.QuestionDialog">
             <add-to-group group-id="Floating.CodeToolbar" anchor="first"/>
             <add-to-group group-id="EditorPopupMenu" anchor="first"/>

@@ -1,0 +1,256 @@
+.graph-shell.graph-shell-fill {
+  display: flex;
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.global-canvas-shell {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--background);
+}
+
+.global-canvas-shell > .react-flow {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  background: var(--background);
+}
+
+.canvas-cluster-node {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  border: 1px solid color-mix(in srgb, var(--border) 88%, var(--muted-foreground));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--card) 50%, transparent);
+}
+
+/* React Flow 父框只承载几何，空白命中下面的 pane；标题是分组唯一拖动入口。 */
+.react-flow__node-cluster { pointer-events:none !important; }
+.canvas-cluster-title { pointer-events:auto; }
+
+.canvas-cluster-title {
+  position: absolute;
+  inset: 0 0 auto;
+  min-height: 38px;
+  max-height: 52px;
+  overflow: hidden;
+  padding: 10px 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  border-radius: 10px 10px 0 0;
+  color: var(--foreground);
+  font-weight: 600;
+  cursor: grab;
+  user-select: none;
+}
+
+.canvas-cluster-title:active { cursor: grabbing; }
+
+.canvas-companion-node {
+  width: max-content;
+  min-width: 180px;
+  max-width: calc(var(--canvas-content-width, 100vw) * .76);
+  padding: 14px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.canvas-companion-content,
+.canvas-companion-content > .lesson-element {
+  width: max-content;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.canvas-companion-content .demo { min-width: 260px; }
+.canvas-companion-content .demo iframe { width: 100%; }
+
+.react-flow__edge .react-flow__edge-path { transition: stroke-width 120ms ease; }
+
+.graph-shell-fill > .react-flow {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.graph-shell-fill:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary) 55%, transparent);
+  outline-offset: 2px;
+}
+
+.graph-node {
+  position: relative;
+  width: 220px;
+  min-height: 56px;
+  padding: 12px 38px 12px 14px;
+  color: var(--foreground);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 2px 5px #0000000a;
+}
+
+.graph-node.selected {
+  border-color: var(--diagram-purple);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--diagram-purple) 25%, transparent);
+}
+
+:root {
+  --diagram-purple:#8060db;
+  --diagram-warning:#a86400;
+  --diagram-success:#278047;
+  --diagram-failure:#c02d3e;
+}
+.lesson-node.start { background:color-mix(in srgb,var(--primary) 9%,var(--card)); border:2px solid var(--primary); padding:13px; }
+.lesson-node.end { background:var(--muted); border-color:var(--muted-foreground); }
+.lesson-node.end-success { background:color-mix(in srgb,var(--diagram-success) 10%,var(--card)); border-color:var(--diagram-success); }
+.lesson-node.end-failure { background:color-mix(in srgb,var(--diagram-failure) 10%,var(--card)); border-color:var(--diagram-failure); }
+.lesson-node.selected { border-color:var(--diagram-purple); box-shadow:0 0 0 2px color-mix(in srgb,var(--diagram-purple) 25%,transparent); }
+.lesson-node.candidate { outline:3px solid var(--diagram-warning); outline-offset:3px; box-shadow:none; }
+.lesson-node.preview { outline:3px solid var(--diagram-purple); outline-offset:3px; border-color:var(--diagram-purple); box-shadow:none; }
+.node-branch-icon { display:inline-block; width:17px; height:17px; margin-right:6px; vertical-align:-2px; color:var(--diagram-warning); }
+
+.graph-node-title {
+  display: -webkit-box;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.graph-node-hover-bridge {
+  position: absolute;
+  z-index: 2;
+  bottom: -34px;
+  left: -6px;
+  width: 70px;
+  height: 40px;
+  pointer-events: auto;
+}
+
+.graph-node-actions {
+  position: absolute;
+  z-index: 4;
+  bottom: -29px;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  pointer-events: none;
+  transition: none;
+}
+
+.graph-node-actions.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transition: opacity 120ms ease;
+}
+
+.graph-node-action {
+  position: relative;
+  display: grid;
+  width: 25px;
+  height: 25px;
+  padding: 4px;
+  place-items: center;
+  border-color: transparent;
+  border-radius: 5px;
+  color: var(--foreground);
+  background: transparent;
+}
+
+.graph-shell .graph-node .graph-node-action {
+  display: grid;
+  margin: 0;
+  padding: 4px;
+  font-size: inherit;
+}
+
+.graph-node-action:hover,
+.graph-node-action:focus-visible {
+  color: var(--primary);
+  border-color: var(--border);
+  background: var(--background);
+}
+
+.graph-node-action svg {
+  width: 16px;
+  height: 16px;
+}
+
+.graph-node-action sup {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  min-width: 13px;
+  padding: 1px 3px;
+  border-radius: 8px;
+  color: var(--primary-foreground);
+  background: var(--primary);
+  font-size: 9px;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.graph-context-menu {
+  position: fixed;
+  z-index: 30;
+  display: grid;
+  width: 220px;
+  max-width: calc(100vw - 16px);
+  max-height: min(70vh, 400px);
+  gap: 3px;
+  overflow: auto;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--foreground);
+  background: var(--card);
+  box-shadow: 0 4px 18px #0003;
+}
+
+.graph-context-menu > button {
+  width: 100%;
+  padding: 7px 9px;
+  border: 0;
+  text-align: left;
+  background: transparent;
+}
+
+.graph-context-menu > button:hover,
+.graph-context-menu > button:focus-visible {
+  background: var(--muted);
+}
+
+.graph-shell-fill .graph-status {
+  max-width: min(80%, 440px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.graph-shell-fill .graph-popup {
+  max-height: min(70vh, calc(var(--graph-height, 100vh) - 24px));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .graph-node-actions { transition: none; }
+}

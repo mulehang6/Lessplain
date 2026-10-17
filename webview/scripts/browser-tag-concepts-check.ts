@@ -1,0 +1,84 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import type { Browser } from "@playwright/test";
+import { fixture, fit, harness, layoutPosts, viewport } from "./browser-harness";
+import type { Snapshot, View } from "../src/runtime/types";
+
+/** 真实载荷的三组对照、源码入口、常驻注释标记及几何稳定性。 */
+export async function checkTagConcepts(browser: Browser) {
+  const document = JSON.parse(await readFile("../docs/examples/tag-concepts.view.json", "utf8"));
+  const view: View = { ...fixture(), document, sources: Object.fromEntries(Object.entries(document.sources).map(([id, source]) => [id, { ...(source as object), version: "fixture", line: 1 }])) };
+  const snapshot: Snapshot = { views: [view], notes: [], browse: {} };
+  const h = await harness(browser, snapshot), { page } = h;
+  const panel = (id: string) => page.locator('[data-component-type="Stack"][data-element-id="' + id + '"]');
+  const choose = async (id: string, name: string) => {
+    await panel(id).getByRole("combobox").click(); await page.getByRole("option", { name, exact: true }).click(); await page.waitForTimeout(120);
+  };
+  try {
+    h.release(); await page.getByText("还没有答案", { exact: true }).waitFor(); await h.publish(view.ref);
+    await page.getByText("文章主题标签", { exact: true }).waitFor(); await page.waitForTimeout(400); await fit(page);
+    assert.equal(await page.locator(".canvas-cluster-node").count(), 3);
+    assert.equal(await page.locator(".react-flow").count(), 1);
+    assert.equal(await page.locator('[data-component-type="Card"],[data-component-type="CodeExcerpt"]').count(), 0);
+    assert.equal(await page.getByRole("tab").count(), 0);
+    const article = panel("article-panel"), config = panel("config-panel"), navigation = panel("navigation-panel");
+    await article.getByRole("button", { name: /TagDO · tag 表记录/ }).click();
+    assert.equal(h.calls.findLast(c => c.method === "source")?.params.source, "article-record");
+    await choose("article-panel", "文章关联");
+    await page.getByText("article_tag 保存文章与标签的关系，不是另一类标签。", { exact: true }).waitFor();
+    await choose("config-panel", "热门＋推荐 · 1,3");
+    await page.getByText(/"title": "热门,推荐"/).waitFor();
+    await config.getByRole("button", { name: "源码入口", exact: true }).click();
+    await config.getByRole("button", { name: /subscribeSideBar · 码值转换为标题/ }).click();
+    assert.equal(h.calls.findLast(c => c.method === "source")?.params.source, "config-render");
+    await choose("navigation-panel", "浏览记录 · read");
+    await page.getByText(/"selectType": "read"/).waitFor();
+    await fit(page);
+    const geometry = await page.locator(".canvas-companion-node").evaluateAll(nodes => nodes.map(node => (node as HTMLElement).offsetHeight));
+    const camera = await viewport(page).getAttribute("style");
+    const posts = await layoutPosts(page);
+    await choose("article-panel", "标签记录"); await choose("article-panel", "文章关联");
+    await choose("config-panel", "热门 · 1"); await choose("config-panel", "热门＋推荐 · 1,3");
+    await choose("navigation-panel", "文章 · article"); await choose("navigation-panel", "浏览记录 · read");
+    await page.waitForTimeout(200);
+    assert.deepEqual(await page.locator(".canvas-companion-node").evaluateAll(nodes => nodes.map(node => (node as HTMLElement).offsetHeight)), geometry, "重看已见内容不回缩");
+    assert.equal(await layoutPosts(page), posts, "已见内容切换不重复布局");
+    assert.equal(await viewport(page).getAttribute("style"), camera, "控件操作不触发整组跟焦");
+    view.revision++; view.document = { ...view.document, title: "仅重命名历史" };
+    await h.publish(); await page.waitForTimeout(200);
+    assert.equal(await layoutPosts(page), posts);
+    assert.equal(await navigation.getByRole("combobox").innerText(), "浏览记录 · read", "重命名保留共享状态");
+    const text = page.locator('[data-component-type="Text"][data-element-id="navigation-purpose"]');
+    await text.hover(); const trigger = text.getByRole("button", { name: "为组件添加注释", exact: true });
+    await trigger.click(); await page.getByLabel("问题内容").fill("为什么这里不是文章标签？");
+    await page.getByRole("button", { name: "发送注释", exact: true }).click();
+    await page.locator(".annotation-dialog").waitFor({ state: "detached" });
+    await page.mouse.move(10, 10);
+    assert.equal(await trigger.getAttribute("data-pending-count"), "1");
+    assert.equal(await trigger.evaluate(el => getComputedStyle(el).opacity), "1", "移开鼠标后已有注释仍有标记");
+    assert.equal(h.calls.findLast(c => c.method === "note")?.params.origin.entry, "component");
+    assert.equal(h.calls.findLast(c => c.method === "note")?.params.origin.source, undefined);
+    await page.getByRole("button", { name: "复制全部问题 (1)", exact: true }).click();
+    assert.ok(h.calls.findLast(c => c.method === "copy")?.params.text.includes("为什么这里不是文章标签？"));
+    const feedback = page.getByRole("status").filter({ hasText: "已复制 1 条问题，可粘贴到 Agent" });
+    await feedback.waitFor();
+    assert.ok((await feedback.boundingBox())!.width > 120, "紧凑复制按钮也要显示可见的页面内提示");
+    await feedback.waitFor({ state: "detached", timeout: 5000 });
+    h.failCopy();
+    await page.getByRole("button", { name: "复制全部问题 (1)", exact: true }).click();
+    await page.getByRole("alert").filter({ hasText: "复制失败：测试复制失败" }).waitFor();
+    assert.equal(await feedback.count(), 0, "失败不能显示复制成功");
+    await page.locator(".error").getByRole("button", { name: "关闭", exact: true }).click();
+    const note = snapshot.notes[0];
+    snapshot.notes = [];
+    snapshot.views.push({ ...view, ref: "view:reply", parentRef: view.ref, origin: note.origin, answeredNote: note });
+    await h.publish(); await page.waitForTimeout(100);
+    assert.equal(await trigger.getAttribute("data-pending-count"), "0");
+    assert.equal(await trigger.getAttribute("data-answer-count"), "1");
+    assert.equal(await trigger.evaluate(el => getComputedStyle(el).opacity), "1", "已回复保留历史标记");
+    snapshot.views.pop(); await h.publish(); await page.mouse.move(10, 10); await page.waitForTimeout(100);
+    assert.equal(await trigger.evaluate(el => getComputedStyle(el).opacity), "0");
+    assert.equal(await layoutPosts(page), posts, "注释与历史标记不参与布局");
+    assert.deepEqual(h.errors, []);
+  } finally { await page.close(); }
+}

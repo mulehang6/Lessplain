@@ -7,6 +7,7 @@ import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiDocumentManager
 import com.lessplain.model.SourceAnchor
+import com.lessplain.model.SourceSelectionRange
 import com.lessplain.storage.sha256
 import java.nio.file.Path
 
@@ -21,7 +22,7 @@ internal fun captureEditorAnchor(project: Project, editor: Editor): SourceAnchor
         val file = FileDocumentManager.getInstance().getFile(editor.document) ?: return@runReadAction null
         val root = Path.of(project.basePath ?: return@runReadAction null).toAbsolutePath().normalize()
         val path = Path.of(file.path).toAbsolutePath().normalize()
-        if (!path.startsWith(root)) return@runReadAction null
+        if (runCatching { requireProjectSourcePath(root, path) }.isFailure) return@runReadAction null
         val offset = (if (editor.selectionModel.hasSelection()) editor.selectionModel.selectionStart else editor.caretModel.offset)
             .coerceIn(0, editor.document.textLength)
         val psi = PsiDocumentManager.getInstance(project).getPsiFile(editor.document)
@@ -51,5 +52,6 @@ internal fun captureAnchorSnapshot(editor: Editor, path: String, symbol: String?
         version = sha256(document.text),
         lineHint = document.getLineNumber(offset) + 1,
         fingerprint = sha256(text),
+        selectionRange = if (selection.hasSelection()) SourceSelectionRange(selection.selectionStart, selection.selectionEnd) else null,
     )
 }

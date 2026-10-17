@@ -71,6 +71,17 @@ internal fun matchAnchorText(
     val normalizedContent = content.replace("\r\n", "\n")
     val versionMatches = sha256(normalizedContent) == expectedVersion ||
             sha256(normalizedContent.replace("\n", "\r\n")) == expectedVersion
+    anchor.selectionRange?.let { range ->
+        // 精确偏移仅适用于完全一致的 Document 版本，不能把换行规范化后的偏移当作实际偏移。
+        if (sha256(content) == expectedVersion) {
+            if (!range.matches(content, anchor.text)) return LocatedSource(LocationStatus.UNRESOLVED, EvidenceStatus.UNKNOWN)
+            val codeOffset = range.startOffset + anchor.text.indexOfFirst { !it.isWhitespace() }.coerceAtLeast(0)
+            if (anchor.symbol != null && !symbolMatches(anchor.symbol, symbolAt(codeOffset))) {
+                return LocatedSource(LocationStatus.UNRESOLVED, EvidenceStatus.UNKNOWN)
+            }
+            return LocatedSource(LocationStatus.EXACT, EvidenceStatus.UNCHANGED, range.startOffset)
+        }
+    }
     val expectedOffset = anchor.lineHint?.let { line ->
         if (line < 1) null else {
             val starts = mutableListOf(0)

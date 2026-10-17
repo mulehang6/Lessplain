@@ -5,6 +5,7 @@ import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.EditorCustomElementRenderer
 import com.intellij.openapi.editor.Inlay
+import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.testFramework.fixtures.CodeInsightTestFixture
 import com.intellij.testFramework.fixtures.IdeaTestFixtureFactory
 import kotlin.test.assertEquals
@@ -81,6 +82,92 @@ class SourceInlayPlacementTest {
         } finally {
             marker.dispose()
             other.dispose()
+        }
+    }
+
+    @Test
+    fun `moving unchanged source keeps the hint aligned with its new anchored line`() {
+        lateinit var marker: EditorSourceInsightMarker
+        onEdt {
+            fixture.configureByText("MovedSource.txt", "class Sample {\n    before()\n        target()\n}\n")
+            val editor = fixture.editor
+            val start = editor.document.text.indexOf("target()")
+            marker = EditorSourceInsightMarker(editor, start, start + "target()".length, "目标源码",
+                SourceInlayNavigation(false, false, {}, {}))
+            WriteCommandAction.runWriteCommandAction(fixture.project) {
+                editor.document.insertString(0, "// header\nnewPrefix()\n")
+            }
+        }
+        // 队列中的文档监听器先完成 range 更新，再核对真实编辑器几何。
+        onEdt {
+            try {
+                val editor = fixture.editor
+                val start = editor.document.text.indexOf("target()")
+                val line = editor.offsetToVisualPosition(start).line
+                assertClosestToCode(editor, line)
+                val inlay = editor.inlayModel.getBlockElementsForVisualLine(line, true)
+                    .single { it.renderer is InsightInlayRenderer }
+                val block = assertNotNull(sourceBlockBounds(editor, start, start + "target()".length))
+                assertEquals(block.x, (inlay.renderer as InsightInlayRenderer).hintBounds(inlay).x)
+            } finally {
+                marker.dispose()
+            }
+        }
+    }
+
+    @Test
+    fun `label strips legacy circled decoration without changing binding text`() {
+        assertEquals("RedisCache", sourceInlayDisplayLabel("① RedisCache"))
+        assertEquals("对象", sourceInlayDisplayLabel("  ③ 对象"))
+        assertEquals("Plain", sourceInlayDisplayLabel("Plain"))
+    }
+
+    @Test
+    fun `dynamic hints and folding keep the source label nearest its anchored code line`() = onEdt {
+        fixture.configureByText(
+            "SourceInlayPlacement.kt",
+            "class Sample {\n    fun run() {\n        before()\n        target()\n        after()\n    }\n}\n",
+        )
+        val editor = fixture.editor
+        val targetLine = 3
+        val targetStart = editor.document.getLineStartOffset(targetLine)
+        val targetOffset = targetStart + "        ".length
+        val marker = EditorSourceInsightMarker(
+            editor,
+            targetOffset,
+            editor.document.getLineEndOffset(targetLine),
+            "目标源码",
+            SourceInlayNavigation(false, false, {}, {}),
+        )
+        var vision: Inlay<*>? = null
+        var laterHint: Inlay<*>? = null
+        try {
+            assertClosestToCode(editor, editor.offsetToVisualPosition(targetOffset).line)
+            val addedVision = hint(editor, targetStart + 4, 20)
+            vision = addedVision
+            assertClosestToCode(editor, editor.offsetToVisualPosition(targetOffset).line)
+            addedVision.dispose()
+            vision = null
+            val addedLaterHint = hint(editor, targetStart + 7, 200)
+            laterHint = addedLaterHint
+            assertClosestToCode(editor, editor.offsetToVisualPosition(targetOffset).line)
+
+            editor.foldingModel.runBatchFoldingOperation {
+                val fold = assertNotNull(editor.foldingModel.addFoldRegion(
+                    editor.document.getLineStartOffset(0),
+                    editor.document.getLineEndOffset(2),
+                    "…",
+                ))
+                fold.isExpanded = false
+            }
+            assertClosestToCode(editor, editor.offsetToVisualPosition(targetOffset).line)
+            addedLaterHint.dispose()
+            laterHint = null
+            assertClosestToCode(editor, editor.offsetToVisualPosition(targetOffset).line)
+        } finally {
+            marker.dispose()
+            vision?.dispose()
+            laterHint?.dispose()
         }
     }
 

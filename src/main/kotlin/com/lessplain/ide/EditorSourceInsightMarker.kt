@@ -9,6 +9,7 @@ import com.intellij.openapi.editor.markup.HighlighterTargetArea
 import com.intellij.openapi.editor.markup.TextAttributes
 import com.intellij.openapi.util.Disposer
 import com.intellij.util.ui.JBUI
+import com.lessplain.experiment.model.EditorSourceBinding
 import java.awt.Point
 import java.awt.event.ComponentAdapter
 import java.awt.event.ComponentEvent
@@ -27,13 +28,23 @@ internal class EditorSourceInsightMarker(
     end: Int,
     label: String,
     private val navigation: SourceInlayNavigation,
-    private val binding: SourceNodeBinding? = null,
+    internal val binding: EditorSourceBinding? = null,
 ) : Disposable {
     private val renderer = InsightInlayRenderer(label, start, end, navigation.canPrevious, navigation.canNext)
     private val originalText = editor.document.charsSequence.subSequence(start, end).toString()
     private val lineStart = editor.document.getLineStartOffset(editor.document.getLineNumber(start))
     private val inlay = editor.inlayModel.addBlockElement(lineStart, false, true, SOURCE_INLAY_PRIORITY, renderer)
     val isInstalled: Boolean get() = inlay != null
+    private val navigationSubscription = if (inlay == null) AutoCloseable {} else navigation.onCapabilitiesChanged {
+        val update = {
+            if (!disposed) {
+                renderer.canPrevious = navigation.canPrevious
+                renderer.canNext = navigation.canNext
+                inlay.update()
+            }
+        }
+        if (SwingUtilities.isEventDispatchThread()) update() else SwingUtilities.invokeLater(update)
+    }
     private var reveal = 0f
     private var hoverStart = 0L
     private var hovered = false
@@ -51,6 +62,9 @@ internal class EditorSourceInsightMarker(
                     if (range == null || !range.isValid || sourceExcerptChanged(
                             editor.document.charsSequence, range.startOffset, range.endOffset, originalText,
                         )) navigation.evidenceChanged()
+                    else {
+                        inlay?.update()
+                    }
                 }
             }
         }
@@ -93,7 +107,9 @@ internal class EditorSourceInsightMarker(
 
         override fun mousePressed(event: MouseEvent) {
             if (disposed) return
-            setHovered(hoverState.press(inHint(event.point), inRetentionArea(event.point)))
+            hoverState.press(inHint(event.point), inRetentionArea(event.point))
+            if (hoverState.active) hoverState.exit()
+            setHovered(false)
         }
 
         override fun mouseDragged(event: MouseEvent) {
@@ -134,7 +150,9 @@ internal class EditorSourceInsightMarker(
     }
 
     init {
-        if (inlay != null && binding != null) editor.putUserData(SOURCE_NODE_BINDING, binding)
+        renderer.bindSourceRange {
+            highlighter?.takeIf { it.isValid }?.let { it.startOffset to it.endOffset }
+        }
         if (inlay != null) editor.document.addDocumentListener(documentListener, documentLifetime)
         if (inlay != null) editor.contentComponent.addMouseMotionListener(mouse)
         if (inlay != null) editor.contentComponent.addMouseListener(mouse)
@@ -150,6 +168,14 @@ internal class EditorSourceInsightMarker(
         if (block.contains(point)) return true
         val hint = inlay?.takeIf { it.bounds != null }?.let { renderer.hintBounds(it) }
         return sourceHighlightHoverBridge(hint, block, JBUI.scale(4))?.contains(point) == true
+    }
+
+    /** 仅当完整选区仍位于当前 marker range 内，才继承该节点的来源身份。 */
+    internal fun bindingForSelection(selectionStart: Int, selectionEnd: Int): EditorSourceBinding? {
+        if (disposed || selectionStart >= selectionEnd) return null
+        val range = highlighter?.takeIf { it.isValid } ?: return null
+        if (selectionStart < range.startOffset || selectionEnd > range.endOffset) return null
+        return binding
     }
 
     private fun setHovered(value: Boolean) {
@@ -171,9 +197,7 @@ internal class EditorSourceInsightMarker(
     override fun dispose() {
         if (disposed) return
         disposed = true
-        if (binding != null && editor.getUserData(SOURCE_NODE_BINDING) === binding) {
-            editor.putUserData(SOURCE_NODE_BINDING, null)
-        }
+        navigationSubscription.close()
         Disposer.dispose(documentLifetime)
         navigation.cancelChoices()
         hoverState.dispose()

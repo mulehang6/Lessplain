@@ -23,8 +23,9 @@ import javax.swing.SwingUtilities
 import javax.swing.text.JTextComponent
 import javax.swing.text.View
 import kotlin.math.ceil
-import com.lessplain.core.BackgroundReadDispatch
 import java.util.concurrent.CancellationException
+
+internal typealias CanvasSaveDispatch<T> = (() -> T, (Result<T>) -> Unit) -> AutoCloseable
 
 /** 草稿不依赖界面工具包；关闭保留，明确取消才丢弃。 */
 internal class CanvasTextDraft(initial: String) {
@@ -72,7 +73,11 @@ internal class CanvasTextEditor(
     private val cancel: () -> Unit,
     private val onMetricsChanged: () -> Unit = {},
     selectionPreview: SelectedCodePreview? = null,
-    private val saveDispatch: BackgroundReadDispatch<Unit>? = null,
+    private val saveDispatch: CanvasSaveDispatch<Unit>? = null,
+    private var editable: Boolean = true,
+    private val delete: (() -> Unit)? = null,
+    private val deleted: () -> Unit = {},
+    cancelLabel: String? = null,
 ) : JPanel(BorderLayout(0, JBUI.scale(UnderstandingUiMetrics.SECTION_GAP))), AutoCloseable, UISettingsListener {
     internal val input: JTextComponent = if (multiline) {
         JBTextArea(draft.text).apply {
@@ -87,8 +92,16 @@ internal class CanvasTextEditor(
         private set
     internal var scrollRequired = false
         private set
-    internal val saveButton = JButton("保存").apply { addActionListener { requestSave() } }
-    internal val cancelButton = JButton("取消").apply { addActionListener { cancel() } }
+    internal val saveButton = JButton("保存").apply {
+        isVisible = editable
+        addActionListener { requestSave() }
+    }
+    internal val cancelButton = JButton(cancelLabel ?: if (editable) "取消" else "关闭").apply { addActionListener { cancel() } }
+    internal val deleteButton = JButton("删除").apply {
+        isVisible = editable && delete != null
+        toolTipText = "删除此问题"
+        addActionListener { requestDelete() }
+    }
 
     internal val error = JBTextArea().apply {
         isEditable = false
@@ -112,10 +125,11 @@ internal class CanvasTextEditor(
         add(JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(UnderstandingUiMetrics.GAP), 0)).apply {
             add(saveButton)
             add(cancelButton)
+            add(deleteButton)
         }, BorderLayout.SOUTH)
     }
     private val fonts = CanvasUiFonts(
-        listOf(input, error, saveButton, cancelButton),
+        listOf(input, error, saveButton, cancelButton, deleteButton),
         onRefreshed = ::scheduleMetricsChanged,
     )
     private var saveQueued = false
@@ -140,6 +154,7 @@ internal class CanvasTextEditor(
     init {
         border = JBUI.Borders.empty(UnderstandingUiMetrics.DETAIL_PADDING)
         input.enableInputMethods(true)
+        input.isEditable = editable
         input.accessibleContext.accessibleName = title
         input.document.addDocumentListener(documentListener)
         input.addInputMethodListener(inputListener)
@@ -148,7 +163,7 @@ internal class CanvasTextEditor(
         preview?.let { add(it, BorderLayout.NORTH) }
         bind("control ENTER", "save") { if (!composition.active) requestSave() }
         bind("ESCAPE", "dismiss") { if (!composition.active) dismissSafely() }
-        if (!multiline) (input as JBTextField).addActionListener { if (!composition.active) requestSave() }
+        if (editable && !multiline) (input as JBTextField).addActionListener { if (!composition.active) requestSave() }
     }
 
     override fun uiSettingsChanged(uiSettings: UISettings) {
@@ -228,12 +243,12 @@ internal class CanvasTextEditor(
     }
 
     internal fun requestSave() {
-        if (disposed || saveQueued || saving) return
+        if (!editable || disposed || saveQueued || saving) return
         saveQueued = true
         input.inputContext?.endComposition()
         SwingUtilities.invokeLater {
             saveQueued = false
-            if (disposed) return@invokeLater
+            if (disposed || !editable) return@invokeLater
             if (composition.active) {
                 showErrorMessage("请先确认输入法候选文字")
                 return@invokeLater
@@ -248,12 +263,14 @@ internal class CanvasTextEditor(
                 }
                 saving = true
                 saveButton.isEnabled = false
+                deleteButton.isEnabled = false
                 input.isEditable = false
                 saveTask = dispatch({ save(value) }) { result ->
                     if (!disposed) {
                         saving = false
-                        saveButton.isEnabled = true
-                        input.isEditable = true
+                        saveButton.isEnabled = editable
+                        deleteButton.isEnabled = editable
+                        input.isEditable = editable
                         result.onSuccess { draft.retain = false; saved() }
                             .onFailure { draft.error = it.message ?: "保存失败，请刷新后重试"; showErrorMessage(draft.error.orEmpty()) }
                     }
@@ -264,6 +281,41 @@ internal class CanvasTextEditor(
                 showErrorMessage(draft.error.orEmpty())
             }
         }
+    }
+
+    /** 删除与取消编辑分开；失败保留原生文档，异步完成不得重新开启已失效的编辑。 */
+    internal fun requestDelete() {
+        val action = delete ?: return
+        if (!editable || disposed || saving || composition.active) return
+        draft.text = input.text
+        fun complete(result: Result<Unit>) {
+            if (disposed) return
+            saving = false
+            input.isEditable = editable
+            saveButton.isEnabled = editable
+            deleteButton.isEnabled = editable
+            result.onSuccess { draft.retain = false; deleted() }
+                .onFailure { showErrorMessage(it.message ?: "删除失败，内容已保留") }
+        }
+        saving = true
+        input.isEditable = false
+        saveButton.isEnabled = false
+        deleteButton.isEnabled = false
+        val dispatch = saveDispatch
+        if (dispatch != null) saveTask = dispatch(action, ::complete)
+        else complete(runCatching(action))
+    }
+
+    /** 外部回答、删除或编辑后保留当前文字，撤销尚未派发的保存和删除入口。 */
+    fun lockEditing() {
+        if (disposed || !editable) return
+        editable = false
+        draft.text = input.text
+        input.isEditable = false
+        saveButton.isVisible = false
+        deleteButton.isVisible = false
+        cancelButton.text = "关闭"
+        showErrorMessage("问题已变化，当前文字已保留")
     }
 
     fun dismissSafely() {

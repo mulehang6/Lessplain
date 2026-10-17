@@ -21,7 +21,12 @@ import javax.swing.JPanel
 import javax.swing.SwingUtilities
 
 /** 预览只依赖问题自己的冻结锚点，不读取当前源码文件。 */
-internal data class SelectedCodePreview(val project: Project, val anchor: SourceAnchor)
+internal data class SelectedCodePreview(
+    val project: Project,
+    val anchor: SourceAnchor? = null,
+    val text: String = anchor?.text.orEmpty(),
+    val fileName: String = anchor?.path.orEmpty(),
+)
 
 internal fun questionEditorTitle(nodeLabel: String): String =
     "提问 · ${nodeLabel.replace('\r', ' ').replace('\n', ' ')}"
@@ -33,7 +38,7 @@ internal class SelectedCodePreviewPanel(
 ) : JPanel(BorderLayout()), AutoCloseable {
     private val factory = EditorFactory.getInstance()
     private val lifetime: Disposable = Disposer.newDisposable("Lessplain code preview")
-    private val document = factory.createDocument(preview.anchor.text.replace("\r\n", "\n").replace('\r', '\n'))
+    private val document = factory.createDocument(preview.text.replace("\r\n", "\n").replace('\r', '\n'))
     internal var expanded = false
         private set
     internal val toggle = CodePreviewToggle { expanded }.apply {
@@ -55,7 +60,7 @@ internal class SelectedCodePreviewPanel(
     private val fonts = CanvasUiFonts(listOf(toggle), onRefreshed = ::metricsChanged)
     internal val editor: Editor = try {
         factory.createEditor(document, preview.project,
-            FileTypeManager.getInstance().getFileTypeByFileName(preview.anchor.path.substringAfterLast('/').substringAfterLast('\\')),
+            FileTypeManager.getInstance().getFileTypeByFileName(preview.fileName.substringAfterLast('/').substringAfterLast('\\')),
             true)
     } catch (failure: Throwable) {
         fonts.close()

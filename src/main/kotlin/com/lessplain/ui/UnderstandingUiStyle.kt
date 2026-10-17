@@ -44,8 +44,8 @@ internal object UnderstandingUiStyle {
     val controlForeground: Color get() = color(0x43454A, 0xDFE1E5, "Button.foreground", "Label.foreground")
     val disabledForeground: Color get() = color(0xA8ADBD, 0x6F737A,
         "Button.disabledText", "Label.disabledForeground")
-    val controlHover: Color get() = colorOr("ActionButton.hoverBackground") ?: blend(surface, accent, 0.1)
-    val controlPressed: Color get() = colorOr("ActionButton.pressedBackground") ?: blend(surface, accent, 0.18)
+    val controlHover: Color get() = colorOr("ActionButton.hoverBackground") ?: blend(surface, foreground, 0.1)
+    val controlPressed: Color get() = colorOr("ActionButton.pressedBackground") ?: blend(surface, foreground, 0.18)
     val tooltipBackground: Color get() = colorOr("ToolTip.background") ?: surface
     val tooltipForeground: Color get() = colorOr("ToolTip.foreground") ?: foreground
 

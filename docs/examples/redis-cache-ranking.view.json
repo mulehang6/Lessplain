@@ -1,0 +1,441 @@
+{
+  "question": "基于 Redis 实现热点文章等高频数据的缓存与排行榜统计，优化接口查询性能：这项简历描述在当前项目中具体怎样实现？",
+  "title": "缓存与用户活跃度榜",
+  "spec": {
+    "root": "board",
+    "elements": {
+      "board": {
+        "type": "Board",
+        "props": {},
+        "children": [
+          "hot-cluster",
+          "tag-cluster",
+          "rank-cluster"
+        ]
+      },
+      "hot-cluster": {
+        "type": "Cluster",
+        "props": {
+          "title": "热门文章 · 本地 Caffeine"
+        },
+        "slots": {
+          "diagram": [
+            "hot-graph"
+          ]
+        }
+      },
+      "hot-graph": {
+        "type": "Graph",
+        "props": {
+          "nodes": [
+            {
+              "id": "home",
+              "label": "请求首页侧栏",
+              "source": "home-cache",
+              "roles": [
+                "start"
+              ]
+            },
+            {
+              "id": "cached",
+              "label": "返回侧栏缓存",
+              "source": "home-cache",
+              "roles": [
+                "end"
+              ]
+            },
+            {
+              "id": "query",
+              "label": "按阅读数取前 8 篇",
+              "source": "hot-sql"
+            },
+            {
+              "id": "fill",
+              "label": "缓存侧栏 5 分钟",
+              "source": "home-ttl",
+              "roles": [
+                "end"
+              ]
+            }
+          ],
+          "edges": [
+            {
+              "id": "h-hit",
+              "source": "home",
+              "target": "cached",
+              "kind": "control_flow",
+              "label": "命中",
+              "evidence": [
+                "home-cache"
+              ]
+            },
+            {
+              "id": "h-miss",
+              "source": "home",
+              "target": "query",
+              "kind": "control_flow",
+              "label": "未命中",
+              "evidence": [
+                "home-cache",
+                "hot-eight"
+              ]
+            },
+            {
+              "id": "h-fill",
+              "source": "query",
+              "target": "fill",
+              "kind": "data_flow",
+              "label": "组装侧栏",
+              "evidence": [
+                "hot-eight",
+                "home-ttl"
+              ]
+            }
+          ],
+          "selectionPath": "/redis/hot/node"
+        }
+      },
+      "tag-cluster": {
+        "type": "Cluster",
+        "props": {
+          "title": "标签 Redis 缓存 · 仅找到测试调用"
+        },
+        "slots": {
+          "diagram": [
+            "tag-graph"
+          ],
+          "companion": [
+            "tag-demo"
+          ]
+        }
+      },
+      "tag-graph": {
+        "type": "Graph",
+        "props": {
+          "nodes": [
+            {
+              "id": "tag-read",
+              "label": "读取标签缓存",
+              "source": "tag-read",
+              "roles": [
+                "start"
+              ]
+            },
+            {
+              "id": "tag-hit",
+              "label": "JSON 还原为 TagDTO",
+              "source": "tag-hit",
+              "roles": [
+                "end"
+              ]
+            },
+            {
+              "id": "tag-db",
+              "label": "按记录 ID 查 MySQL",
+              "source": "tag-db"
+            },
+            {
+              "id": "tag-fill",
+              "label": "写入 JSON · 有效 100 秒",
+              "source": "tag-fill",
+              "roles": [
+                "end"
+              ]
+            }
+          ],
+          "edges": [
+            {
+              "id": "t-hit",
+              "source": "tag-read",
+              "target": "tag-hit",
+              "kind": "control_flow",
+              "label": "命中",
+              "evidence": [
+                "tag-read",
+                "tag-hit"
+              ]
+            },
+            {
+              "id": "t-miss",
+              "source": "tag-read",
+              "target": "tag-db",
+              "kind": "control_flow",
+              "label": "未命中",
+              "evidence": [
+                "tag-read",
+                "tag-db"
+              ]
+            },
+            {
+              "id": "t-fill",
+              "source": "tag-db",
+              "target": "tag-fill",
+              "kind": "data_flow",
+              "label": "回填并返回",
+              "evidence": [
+                "tag-fill",
+                "tag-constants"
+              ]
+            }
+          ],
+          "selectionPath": "/redis/tag/node"
+        }
+      },
+      "tag-demo": {
+        "type": "Demo",
+        "props": {
+          "demo": "tag-branch",
+          "title": "选择分支（演示）",
+          "height": 140
+        }
+      },
+      "rank-cluster": {
+        "type": "Cluster",
+        "props": {
+          "title": "用户活跃度榜 · Redis ZSet"
+        },
+        "slots": {
+          "diagram": [
+            "rank-graph"
+          ],
+          "companion": [
+            "rank-data"
+          ]
+        }
+      },
+      "rank-graph": {
+        "type": "Graph",
+        "props": {
+          "nodes": [
+            {
+              "id": "publish",
+              "label": "收到发布文章事件",
+              "source": "rank-event",
+              "roles": [
+                "start"
+              ]
+            },
+            {
+              "id": "score",
+              "label": "计算发布活跃分 +10",
+              "source": "rank-score"
+            },
+            {
+              "id": "gate",
+              "label": "检查当天行为记录",
+              "source": "rank-gate"
+            },
+            {
+              "id": "zsets",
+              "label": "累加用户日榜和月榜",
+              "source": "rank-zsets"
+            },
+            {
+              "id": "page",
+              "label": "请求前 30 名",
+              "source": "rank-page",
+              "roles": [
+                "start"
+              ]
+            },
+            {
+              "id": "key",
+              "label": "选择日榜或月榜",
+              "source": "rank-query"
+            },
+            {
+              "id": "top",
+              "label": "取最高分的 30 位用户",
+              "source": "rank-top"
+            },
+            {
+              "id": "result",
+              "label": "补齐用户资料和名次",
+              "source": "rank-result",
+              "roles": [
+                "end"
+              ]
+            }
+          ],
+          "edges": [
+            {
+              "id": "r-publish",
+              "source": "publish",
+              "target": "score",
+              "kind": "call",
+              "label": "Spring 事件",
+              "evidence": [
+                "rank-event"
+              ]
+            },
+            {
+              "id": "r-gate",
+              "source": "score",
+              "target": "gate",
+              "kind": "control_flow",
+              "label": "检查记录",
+              "evidence": [
+                "rank-score",
+                "rank-gate"
+              ]
+            },
+            {
+              "id": "r-add",
+              "source": "gate",
+              "target": "zsets",
+              "kind": "control_flow",
+              "label": "首次正向加分",
+              "evidence": [
+                "rank-gate",
+                "rank-zsets"
+              ]
+            },
+            {
+              "id": "r-page",
+              "source": "page",
+              "target": "key",
+              "kind": "call",
+              "label": "time，size=30",
+              "evidence": [
+                "rank-page",
+                "rank-query"
+              ]
+            },
+            {
+              "id": "r-top",
+              "source": "key",
+              "target": "top",
+              "kind": "call",
+              "label": "查询同一榜单",
+              "evidence": [
+                "rank-query",
+                "rank-top"
+              ]
+            },
+            {
+              "id": "r-data",
+              "source": "zsets",
+              "target": "top",
+              "kind": "data_flow",
+              "label": "读取成员与分数",
+              "evidence": [
+                "rank-zsets",
+                "rank-top"
+              ]
+            },
+            {
+              "id": "r-info",
+              "source": "top",
+              "target": "result",
+              "kind": "data_flow",
+              "label": "批量补齐",
+              "evidence": [
+                "rank-result"
+              ]
+            }
+          ],
+          "selectionPath": "/redis/rank/node"
+        }
+      },
+      "rank-data": {
+        "type": "JsonView",
+        "props": {
+          "label": "榜单中的三个量",
+          "value": {
+            "key": "activity_rank_yyyyMMdd / activity_rank_yyyyMM",
+            "member": "用户 ID 字符串",
+            "score": "累计活跃分"
+          }
+        }
+      }
+    },
+    "state": {
+      "redis": {
+        "hot": {
+          "node": "home"
+        },
+        "tag": {
+          "node": "tag-read"
+        },
+        "rank": {
+          "node": "publish"
+        }
+      }
+    }
+  },
+  "sources": {
+    "home-cache": {
+      "path": "paicoding-service/src/main/java/com/github/paicoding/forum/service/sidebar/service/SidebarServiceImpl.java",
+      "text": "@Cacheable(key = \"'homeSidebar'\", cacheManager = \"caffeineCacheManager\", cacheNames = \"home\")\n    public List<SideBarDTO> queryHomeSidebarList() {"
+    },
+    "hot-eight": {
+      "path": "paicoding-service/src/main/java/com/github/paicoding/forum/service/sidebar/service/SidebarServiceImpl.java",
+      "text": "private SideBarDTO hotArticles() {\n        PageListVo<SimpleArticleDTO> vo = articleReadService.queryHotArticlesForRecommend(PageParam.newPageInstance(1, 8));"
+    },
+    "hot-sql": {
+      "path": "paicoding-service/src/main/resources/mapper/ArticleMapper.xml",
+      "text": "<select id=\"listArticlesByReadCounts\"\n            resultType=\"com.github.paicoding.forum.api.model.vo.article.dto.SimpleArticleDTO\">\n        select rc.document_id as id, a.user_id as authorId, a.title as title, a.create_time as createTime\n        from read_count as rc left join article as a on rc.document_id = a.id\n        where rc.document_type = ${@com.github.paicoding.forum.api.model.enums.DocumentTypeEnum@ARTICLE.code}\n        and a.status = ${@com.github.paicoding.forum.api.model.enums.PushStatusEnum@ONLINE.code}\n        and a.deleted = ${@com.github.paicoding.forum.api.model.enums.YesOrNoEnum@NO.code} order by rc.cnt desc\n        <include refid=\"limit\"/>\n    </select>"
+    },
+    "home-ttl": {
+      "path": "paicoding-core/src/main/java/com/github/paicoding/forum/core/ForumCoreAutoConfig.java",
+      "text": ".expireAfterWrite(5, TimeUnit.MINUTES)"
+    },
+    "tag-read": {
+      "path": "paicoding-service/src/main/java/com/github/paicoding/forum/service/article/service/impl/TagSettingServiceImpl.java",
+      "text": "String redisKey = CACHE_TAG_PRE + tagId;\n\n        // 先查询缓存，如果有就直接返回\n        String tagInfoStr = RedisClient.getStr(redisKey);"
+    },
+    "tag-hit": {
+      "path": "paicoding-service/src/main/java/com/github/paicoding/forum/service/article/service/impl/TagSettingServiceImpl.java",
+      "text": "if (tagInfoStr != null && !tagInfoStr.isEmpty()) {\n            return JsonUtil.toObj(tagInfoStr, TagDTO.class);"
+    },
+    "tag-db": {
+      "path": "paicoding-service/src/main/java/com/github/paicoding/forum/service/article/service/impl/TagSettingServiceImpl.java",
+      "text": "TagDTO tagDTO = tagDao.selectById(tagId);"
+    },
+    "tag-fill": {
+      "path": "paicoding-service/src/main/java/com/github/paicoding/forum/service/article/service/impl/TagSettingServiceImpl.java",
+      "text": "tagInfoStr = JsonUtil.toStr(tagDTO);\n        RedisClient.setStrWithExpire(redisKey, tagInfoStr, CACHE_TAG_EXPRIE_TIME);"
+    },
+    "tag-constants": {
+      "path": "paicoding-service/src/main/java/com/github/paicoding/forum/service/article/service/impl/TagSettingServiceImpl.java",
+      "text": "private static final String CACHE_TAG_PRE = \"cache_tag_pre_\";\n\n    private static final Long CACHE_TAG_EXPRIE_TIME = 100L;"
+    },
+    "rank-event": {
+      "path": "paicoding-service/src/main/java/com/github/paicoding/forum/service/rank/service/listener/UserActivityListener.java",
+      "text": "@Async\n    @EventListener(ArticleMsgEvent.class)\n    public void publishArticleListener(ArticleMsgEvent<ArticleDO> event) {\n        ArticleEventEnum type = event.getType();\n        if (type == ArticleEventEnum.ONLINE) {\n            userActivityRankService.addActivityScore(ReqInfoContext.getReqInfo().getUserId(), new ActivityScoreBo().setPublishArticle(true).setArticleId(event.getContent().getId()));"
+    },
+    "rank-score": {
+      "path": "paicoding-service/src/main/java/com/github/paicoding/forum/service/rank/service/impl/UserActivityRankServiceImpl.java",
+      "text": "} else if (BooleanUtils.isTrue(activityScore.getPublishArticle())) {\n                // 发布文章\n                field += \"publish\";\n                score += 10;"
+    },
+    "rank-gate": {
+      "path": "paicoding-service/src/main/java/com/github/paicoding/forum/service/rank/service/impl/UserActivityRankServiceImpl.java",
+      "text": "Integer recordedScore = RedisClient.hGet(userActionKey, field, Integer.class);\n        if (recordedScore == null) {\n            // 2.1 之前没有加分记录，执行具体的加分\n            if (score > 0) {\n                // 记录加分记录\n                RedisClient.hSet(userActionKey, field, score);"
+    },
+    "rank-zsets": {
+      "path": "paicoding-service/src/main/java/com/github/paicoding/forum/service/rank/service/impl/UserActivityRankServiceImpl.java",
+      "text": "Double updatedScore = RedisClient.zIncrBy(todayRankKey, String.valueOf(userId), score);\n                RedisClient.zIncrBy(monthRankKey, String.valueOf(userId), score);"
+    },
+    "rank-page": {
+      "path": "paicoding-web/src/main/java/com/github/paicoding/forum/web/front/rank/RankController.java",
+      "text": "@RequestMapping(path = \"/rank/{time}\")\n    public String rank(@PathVariable String time, Model model) {\n        ActivityRankTimeEnum rankTime = ActivityRankTimeEnum.nameOf(time);\n        if (rankTime == null) {\n            rankTime = ActivityRankTimeEnum.MONTH;\n        }\n        List<RankItemDTO> list = userActivityRankService.queryRankList(rankTime, 30);"
+    },
+    "rank-query": {
+      "path": "paicoding-service/src/main/java/com/github/paicoding/forum/service/rank/service/impl/UserActivityRankServiceImpl.java",
+      "text": "public List<RankItemDTO> queryRankList(ActivityRankTimeEnum time, int size) {\n        String rankKey = time == ActivityRankTimeEnum.DAY ? todayRankKey() : monthRankKey();\n        // 1. 获取topN的活跃用户\n        List<ImmutablePair<String, Double>> rankList = RedisClient.zTopNScore(rankKey, size);"
+    },
+    "rank-top": {
+      "path": "paicoding-core/src/main/java/com/github/paicoding/forum/core/cache/RedisClient.java",
+      "text": "public static List<ImmutablePair<String, Double>> zTopNScore(String key, int n) {\n        return template.execute((RedisCallback<List<ImmutablePair<String, Double>>>) connection -> {\n            // zRangeWithScores里，-n：倒数第几个\n            // Tuple 元组\n            Set<RedisZSetCommands.Tuple> set = connection.zRangeWithScores(keyBytes(key), -n, -1);\n            if (set == null) {\n                return Collections.emptyList();\n            }\n            return set.stream()\n                    .map(tuple -> ImmutablePair.of(toObj(tuple.getValue(), String.class), tuple.getScore()))\n                    .sorted((o1, o2) -> Double.compare(o2.getRight(), o1.getRight()))\n                    .collect(Collectors.toList());"
+    },
+    "rank-result": {
+      "path": "paicoding-service/src/main/java/com/github/paicoding/forum/service/rank/service/impl/UserActivityRankServiceImpl.java",
+      "text": "List<SimpleUserInfoDTO> users = userService.batchQuerySimpleUserInfo(userScoreMap.keySet());\n\n        // 3. 根据评分进行排序\n        List<RankItemDTO> rank = users.stream()\n                .map(user -> new RankItemDTO().setUser(user).setScore(userScoreMap.getOrDefault(user.getUserId(), 0)))\n                .sorted((o1, o2) -> Integer.compare(o2.getScore(), o1.getScore()))\n                .collect(Collectors.toList());\n\n        // 4. 补齐每个用户的排名\n        // 上面只是设置了每个用户的id和评分，但是RankItemDTO里的rank(Integer)并为设置\n        IntStream.range(0, rank.size()).forEach(i -> rank.get(i).setRank(i + 1));\n        return rank;"
+    }
+  },
+  "demos": {
+    "tag-branch": {
+      "html": "<!doctype html><meta charset=\"utf-8\"><style>body{margin:12px;color:#ddd;font:13px system-ui}button{margin:8px 8px 0 0;padding:8px 14px;background:#292d35;color:inherit;border:1px solid #5b606b;border-radius:6px;cursor:pointer}button[aria-pressed=true]{border-color:#6d9eff}p{margin:4px 0;color:#aaa}</style><p>只切换图的分支，不执行 Redis 请求。</p><button data-node=\"tag-hit\">命中</button><button data-node=\"tag-db\">未命中</button><script>const buttons=document.querySelectorAll(\"button\");buttons.forEach(b=>b.onclick=()=>parent.postMessage({channel:\"lessplain-demo\",method:\"setState\",params:{path:\"/redis/tag/node\",value:b.dataset.node}},\"*\"));addEventListener(\"message\",e=>{if(e.source!==parent||e.data?.channel!==\"lessplain-demo\"||e.data.method!==\"state\")return;const selected=e.data.params?.state?.redis?.tag?.node;buttons.forEach(b=>b.setAttribute(\"aria-pressed\",String(b.dataset.node===selected)));});</script>"
+    }
+  }
+}

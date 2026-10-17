@@ -1,0 +1,46 @@
+package com.lessplain.experiment
+
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.util.Disposer
+import com.intellij.testFramework.fixtures.IdeaTestFixtureFactory
+import com.lessplain.experiment.ide.SampleNavigation
+import com.lessplain.experiment.ide.SampleVirtualFile
+import com.lessplain.experiment.model.*
+import kotlinx.coroutines.runBlocking
+import org.junit.jupiter.api.Test
+import kotlin.test.*
+
+class SampleNavigationPlatformTest {
+    @Test fun opensReadonlyMemoryCodeReusesItAndInvalidatesReplacedSamples() {
+        val factory = IdeaTestFixtureFactory.getFixtureFactory()
+        val fixture = factory.createCodeInsightFixture(factory.createFixtureBuilder("SampleNavigation").fixture)
+        fixture.setUp()
+        val navigation = SampleNavigation(fixture.project)
+        try {
+            val sample = CodeSample("等待", "kotlin", "fun main() {\n    println(1)\n}")
+            val location = SampleLocation("view:sample", 1, CodeSampleTarget("sample", 2), sample, ViewOrigin(viewRef = "view:sample"))
+            runBlocking { navigation.open(location) }
+            ApplicationManager.getApplication().invokeAndWait {
+                val manager = FileEditorManager.getInstance(fixture.project)
+                val file = manager.selectedFiles.single() as SampleVirtualFile
+                assertFalse(file.isWritable)
+                assertEquals("等待.kt", file.name)
+                assertEquals(sample.code, manager.selectedTextEditor?.document?.text)
+                assertEquals(1, manager.selectedTextEditor?.caretModel?.logicalPosition?.line)
+                assertEquals(location, navigation.location(manager.selectedTextEditor!!))
+            }
+            runBlocking { navigation.open(location) }
+            ApplicationManager.getApplication().invokeAndWait {
+                val manager = FileEditorManager.getInstance(fixture.project)
+                assertEquals(1, manager.openFiles.filterIsInstance<SampleVirtualFile>().size)
+                navigation.invalidate(AppSnapshot(emptyList(), emptyList(), emptyMap()))
+                assertTrue(manager.openFiles.none { it is SampleVirtualFile })
+            }
+            assertFailsWith<IllegalStateException> { runBlocking { navigation.open(location) } }
+        } finally {
+            ApplicationManager.getApplication().invokeAndWait { Disposer.dispose(navigation) }
+            fixture.tearDown()
+        }
+    }
+}
