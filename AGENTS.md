@@ -2,9 +2,11 @@
 
 ## 项目结构与模块
 
-插件源码位于 `src/main/kotlin/com/lessplain/`，按 `core`、`diagram`、`ide`、`mcp`、`model`、`storage` 和 `ui` 分模块。平台描述、图标和消息资源在 `src/main/resources/`；测试位于 `src/test/kotlin/`，并按主代码包路径组织。`docs/` 保存设计文档，`skills/` 保存 Agent 工作流。`prototype/` 是独立的交互原型，不属于插件源码。
+当前实验源码位于 `src/main/kotlin/com/lessplain/experiment/`，React 页面在 `webview/`。平台描述、图标和消息资源在 `src/main/resources/`；测试位于 `src/test/kotlin/`，并按主代码包路径组织。`docs/` 保存设计文档，`skills/` 保存 Agent 工作流。旧图画布、存储和 MCP 模块已删除；原生编辑器 Inlay、高亮、源码选区弹层及其 UI 辅助类从旧版复用，适配新记录协议。`prototype/` 是独立原型。
 
 ## 文档职责
+
+UI 技术迁移不得改变既定产品流程和控件归属：用户在自己的 Agent 中提问，插件展示 MCP 答案、收集节点/组件/源码注释，并从图内复制当前理解根及所有追问的待答问题回 Agent。主页直接显示历史记录；历史和编辑器入口在原生标题栏，复制与画布行为在图内。修改界面前遵循 docs/context.md 的流程约束。
 
 本文件约束开发本插件的 Agent。`skills/` 将分发给用户，用于指导用户的 Agent 使用插件，不写入本仓库的开发流程或环境约束。`README.md` 面向用户，说明安装、使用和已实现能力。新增开发规则写入本文件，接口实现说明写入 `docs/`，按任务范围更新文档。
 
@@ -22,11 +24,11 @@
 
 ## 代码风格与测试
 
-沿用现有 Kotlin 和 Compose 写法，缩进使用 4 个空格、尾随逗号、无制表符。包名用小写，类型名用 `UpperCamelCase`，函数和属性用 `lowerCamelCase`；测试类以 `Test` 结尾。行为变更应在对应包的 `src/test/kotlin/` 中补充或更新测试，先运行针对性测试，再运行完整 `test`。图表和源码导航使用事件、几何和离屏绘制回归；实际界面验收由用户安装新版插件完成。
+Kotlin 缩进使用 4 个空格、尾随逗号、无制表符。包名用小写，类型名用 `UpperCamelCase`，函数和属性用 `lowerCamelCase`；测试类以 `Test` 结尾。行为变更应在对应包的 `src/test/kotlin/` 中补充或更新测试，先运行针对性测试，再运行完整 `test`。前端运行 `pnpm --dir webview test`、`pnpm --dir webview build` 和无服务器的 `pnpm --dir webview test:browser`；实际界面验收由用户安装新版插件完成。
 
 每个文件围绕一个内聚职责组织。生产 Kotlin 文件超过 500 行、测试 Kotlin 文件超过 800 行时，必须在同次改动中拆分；渲染、交互策略、平台适配和纯几何规则应尽早分开。移动或新增代码时保留适当 KDoc，并同步维护对应测试。
 
-保留未来公开发布能力，优先使用 IntelliJ 公开 API。内部 API 使用不能通过反射或降低检查标准来隐藏。当前图表采用 ELK 布局与 Swing/Java2D 绘制；替换后端必须验证公开入口、兼容性和路径动画等现有能力。
+保留未来公开发布能力，优先使用 IntelliJ 公开 API。内部 API 使用不能通过反射或降低检查标准来隐藏。当前图表采用 React Flow 和 elkjs Worker；测试可调用 SDK 实际 schema 生成器核对协议，生产代码不依赖 MCP 实现包。具体边界见 `docs/jcef-react-experiment.md`。
 
 ## 提交与拉取请求
 
@@ -45,13 +47,13 @@
 | `idea`          | 日常开发使用的 IDEA 的内置 MCP，当前打开包含本插件工程的工作区                          | 面向插件源码工程的日常开发操作                               | `mcp__idea__execute_tool` 路由器 |
 | `idea_dev_2026` | 由 `Lessplain IDE` 启动的开发 IDE，加载本插件；其中打开的项目是验收对象，可能随测试改变 | 调用插件自身的 MCP 工具，检查开发 IDE 中的运行行为和测试项目 | `execute_tool` 路由器            |
 
-两条连接通过各自的 `execute_tool` 路由器调用。`idea` 面向日常开发 IDE 中的插件源码工程；`idea_dev_2026` 面向插件开发实例中当前打开的验收项目。调用插件的 `get_understanding_context` 或 `present_understanding` 时，将工具名及参数放入 `command`，把验收项目路径放在外层 `projectPath`，不要误传插件源码工程路径。本插件目前只有这两个 MCP 工具。`idea_dev_2026` 用于插件自身工具及验收对象，不能作为日常开发连接的替代。
+两条连接通过各自的 `execute_tool` 路由器调用。`idea` 面向日常开发 IDE 中的插件源码工程；开发连接若可用则面向其中打开的验收项目。新协议为 `lessplain_context`、`lessplain_present` 和 `lessplain_finish_feedback`；使用实际工具 schema 编码结构化参数，把验收项目路径放在外层 `projectPath`。不能以开发连接替代日常源码工程连接，也不能为验证而启动 IDE。
 
 开发默认打开父级 `Agent-dev` 工程。仓库内 `Lessplain IDE`、`Lessplain Tests` 和 `Lessplain Verifications` 三份运行配置的 Gradle 路径都是 `$PROJECT_DIR$/Lessplain`，这是父工程下的预期设置，不为单独打开插件目录而修改。启动插件时选唯一的 `Lessplain IDE`；不要选旧配置 `Run IDE with Plugin`，它属于 `walkthrough-plugin`，会把没有 Gradle 构建文件的工作区根目录传给 Gradle。单独打开 `Lessplain` 时，使用本目录的 Gradle 命令，或另建 Gradle 工程目录指向本插件 `settings.gradle.kts` 所在目录的配置。
 
 开发 IDE 重新启动后，旧的 stdio MCP 连接可能失效。MCP 重连只恢复通信，不会把新构建的插件代码加载进仍在运行的 IDE。自动化工作不要为验证而启动开发 IDE 或截图；需要时等待用户明确要求。
 
-测试记录保存在开发 IDE 当前打开项目的 `.idea/lessplain/` 中。写入前确认项目，使用明确标记的测试内容；不要把测试记录误认为插件工程自身的数据。
+实验记录保存在开发 IDE 当前打开项目的 `.idea/lessplain-experiment/` 中，旧 `.idea/lessplain/` 不自动导入。写入前确认项目，使用明确标记的测试内容；不要把测试记录误认为插件工程自身的数据。
 
 ## 自动化检查
 

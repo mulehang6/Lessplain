@@ -1,141 +1,52 @@
 # Lessplain
 
-Lessplain 是一个 JetBrains IDE 的插件，用来帮助理解陌生代码及其调用链路。灵感来自 [Understand-Anything](https://github.com/Egonex-AI/Understand-Anything) 和 [Walkthrough](https://github.com/forketyfork/walkthrough-plugin)
+Lessplain 把 Agent 读过的真实代码组织成可交互的理解结果，保存在 IntelliJ IDEA 项目内。流程使用图，概念可以并排解释，完整 JSON、字段对照与状态变化使用组件。点击源码链接可回到原生编辑器核对实现。
 
-以往你向 AI Agent 提问，Agent 读源码后只是输出了一大堆解释文本，而且非常不适合像我一样的初学者，如果你经常使用 GPT 模型进行学习，你就会知道我在说什么，长此以往，阅读障碍都被练出来了。以下是一个**绝望**的例子
+当前分支 experiment/jcef-react 使用 JCEF、React、React Flow、elkjs Worker 和 json-render。这是重新实现的实验版本，实际界面仍需安装后验收。
 
-```text
-我：A 是什么意思？有什么作用
-Agent：A 是......。但是在其中混入了你还不知道的 B、C 等概念，因此理所当然地，
-你问：那B是什么（因为是输出了一大段，所以你在看到B的时候就已经很疑惑了，根本不会想去看C）
+## 使用
 
-于是，Agent又引出了D，E等概念，此时我就已经迷失了，唯一的选择就是硬着头皮继续看，
-但大多数时候我都放弃了
-```
+1. 在包含 JCEF 的 JetBrains Runtime 中运行 IDEA 2026.1 或更新版本，启用内置 MCP Server。
+2. 从本地 ZIP 安装插件，让已配置的 Agent 连接 IDE MCP。
+3. 将 skills/lessplain 复制到 Agent 的技能目录。需要互动教学时，另安装独立的 skills/lessplain-teach；原 teach 不受影响。
+4. 在 Agent 中提出当前问题。Agent 用 lessplain_context 固定上下文，读取实际源码后用 lessplain_present 提交完整页面。
+5. 插件主页显示全部历史记录。工具窗口名称为 Lessplain，原生标题栏提供历史记录和“在编辑器打开”。进入答案后，在节点或生成式组件上添加注释；也可在原生编辑器中选中代码后提问。
+6. 点击图内右侧中间的“复制全部问题”，把简洁的问题列表粘贴到自己的 Agent。它收集当前理解根及其所有追问的待答项，并一并带上独立源码问题。复制成功后在插件页面内短暂提示数量，失败同样在页面内显示原因。Agent 逐条读取引用并通过 MCP 回复；提交成功后该问题才退出待答列表。
 
-而这个插件要做的，就是尽量解决这种痛苦，把答案画成一张图交给插件。图里的每个节点都对应一段真实代码，点一下就能跳过去。看不明白的节点可以直接追问，可以一直嵌套询问，回答会画成新图，挂载到对应的节点下面。
+插件只暴露三个 MCP 工具。创建和更新共用 lessplain_present，反馈用 lessplain_finish_feedback 确认。完整协议见 [协议](skills/lessplain/references/protocol.md)。
 
-所有问题、图和源码依据都保存在项目本地。
+## 当前能力
 
-不想看大段 AI 生成的 README ？看下面的演示视频就够了
+- React 问题树、搜索、历史、追问、反馈、标题和归属管理、删除确认。
+- 工具窗口和编辑器标签页使用同一 React 应用，各自保留浏览器实例。
+- React Flow 图交互；根据实测节点尺寸在独立 ELK Worker 中布局，使用 ELK 返回的正交路径。
+- 整页是一个画布，Board/Cluster 组织分组；节点、生成式组件和隔离示例一起平移缩放。真实关系可跨组连接，图页无嵌套图窗、外层滚动条或重复前言。
+- 图左上缩放、显示全图和自动排版，左下上/下一步；右侧中间提供复制、画布行为及有追问时的层级导航。行为设置包含方向、自动跳源码、路径流动和跟随节点，按结果及宿主保存。
+- 旧版右键平移、滚轮纵移、Shift 横移和 Ctrl 缩放；节点点击、步骤和组件选择共用平滑跟焦，节点操作采用 hover 图标。
+- json-render 标准 shadcn 组件、自定义源码/图/JSON/示例组件、官方 Zustand 状态适配器。
+- 自定义示例保存在结果中，在隔离 iframe 中运行，与页面共享允许的 JSON 状态。
+- 独立教学代码随页面保存，在 IDEA 原生只读标签中定位；支持选区追问、版本校验和按需创建 Scratch 练习副本。交互推演明确标为演示，运行与调试按需进行。
+- 已有组件注释常驻数量或历史标记，保留统一画布；字段、源码入口与练习细节可在 Cluster 内按需展开。
+- 精确源码片段校验，原生源码导航、当前选择提示，以及重新定位/变化/歧义状态。
+- 原生编辑器短 Inlay 和柔和 hover 高亮，选中源码后就地打开原生提问弹层；不跳转到插件输入页。
+- 原生 inline 与画布共用步骤导航；分叉会聚焦并高亮全部候选。节点注释不展示源码，源码选区问题的详情复用原生问题弹层。
+- 固定原问题和来源、事务保存、网络重试去重、并发版本冲突、取消与编辑检查。
 
-TODO 待补 演示视频 中/英文版
+新记录保存在当前项目 .idea/lessplain-experiment/views.db。旧 .idea/lessplain 数据保留，不自动导入。尚未验收当前版本的视觉质量、JCEF 中的 Worker 行为与输入流畅度；浏览器离屏测试不能替代 IDE 实机验收。
 
-## 它能做什么
+## 构建
 
-- **用图回答问题。** 流程、调用、数据来源、条件分支这类问题，Agent 画成节点和连线，而不是几屏文字。
-- **点节点跳源码。** 节点锚定到具体代码，点击后打开并定位。当前文件已经打开时平滑滚动过去，源码里也会在对应位置显示一条提示，悬停时高亮关联代码。
-- **沿着图读代码。** 点一个节点，插件展开所有能走到它的路径。用“上一步／下一步”顺着连线读，遇到分叉时你自己选走哪条。控制流、调用、数据流、结构、依赖五种关系都能读。
-- **在节点上追问。** 需要不停嵌套询问 side question ？在对应节点写下你的疑惑即可。Agent 之后会一次读走所有待答注释，逐条画图回答，答完注释自动消失。回答是挂在该节点下的新图。
-- **看追问。** 有追问的节点会显示“？”，点它进入这个节点的追问画布。追问可以一层一层往下，窗口里的“返回”和“层级”菜单带你回到任意一层。
-- **看历史。** 欢迎页显示最近记录，历史页可以搜问题和回答。
+开发需要 JDK 21、Node 22.12 或更新版本、pnpm。安装后的插件只运行打包资源，不启动 Node 或开发服务器。
 
-## 需要什么
+在本仓库执行：
 
-- JetBrains IDE 2026.1 或更新版本。开发时用 2026.1.5 编译，2026.2.3 实测。
-- IDE 自带的 MCP Server 已启用。插件还依赖 IDE 内置的 Compose，不需要 Diagrams。
-- 一个能连接 IDE MCP 的 AI Agent。
+- pnpm --dir webview install --frozen-lockfile
+- pnpm --dir webview test
+- pnpm --dir webview test:browser
+- .\gradlew.bat test
+- .\gradlew.bat buildPlugin
+- .\gradlew.bat verifyPlugin --offline
 
-## 安装
+离屏浏览器检查默认使用本机 Edge，不打开可见窗口。ZIP 位于 build/distributions。离线兼容检查需要缓存 IDEA 2026.1.5 与 2026.2.3。
 
-后续个人认为比较成熟后会上传到 JetBrains Marketplace，目前仅限压缩包安装。
-
-1. 拿到安装包 ZIP，没有现成的话参考下面“从源码构建”。
-2. 在 IDEA 中打开 Settings → Plugins，点齿轮图标，选 Install Plugin from Disk，选择 ZIP，重启 IDE。
-3. 让 Agent 连上 IDE 的 MCP Server。
-4. 把仓库里的 `skills/lessplain/`（含 `SKILL.md` 和 `references/`）复制到 Agent 的 skills 目录下的 `lessplain/` 中。这个 skill 告诉 Agent 什么时候该画图、图该怎么画、怎么处理待答注释。
-
-> [!TIP]
-> 强烈建议根据个人情况修改一下这个 skill：你是希望尽可能详细地解答（具体到代码逻辑块或者每一行），还是仅链路清晰（一般情况下一个函数就对应一个节点）就够了。
->
-> 默认的 skill 只是我个人的偏好，不一定会对你的胃口。
-
-## 怎么用
-
-想在一项开发任务开始前先学习相关代码、审查修改方案，可以试用 [annoy-me](skills/annoy-me/SKILL.md)。它由用户主动开启，在 Agent 中逐轮提问，并用 Lessplain 呈现必要材料。它目前是个人试验，不随插件 ZIP 自动安装；所有 Agent 使用同一份技能目录，安装与调用方式见 [宿主说明](skills/annoy-me/references/agents.md)。
-
-1. 打开 IDE 右侧的 Understanding 工具窗口，保持项目打开，确保 Agent 已连接 IDE MCP。
-2. 向 Agent 问一个关于代码的问题，比如“这个请求从进来到写库经过哪些步骤”。最好手动触发一下 skill 。Agent 读源码后把图提交给插件，工具窗口里出现新记录。
-3. 点节点读代码。单个值、类型这种一句话能答完的问题，Agent 会直接在对话里回答，不画图。
-4. 想深入哪个节点，就给它写一条注释，再让 Agent 回答待答注释。回答出来后，这个节点会出现“？”。
-
-### 图上的操作
-
-| 操作         | 效果                     |
-|--------------|--------------------------|
-| 滚轮         | 上下平移                 |
-| Shift + 滚轮 | 左右平移                 |
-| Ctrl + 滚轮  | 以光标为中心缩放         |
-| 右键按住拖动 | 在任意位置平移           |
-| 右键单击节点 | 打开节点菜单             |
-| 左键拖节点   | 手动调整位置，连线跟着走 |
-
-图内还有缩放、全图、一键整理、连线流动、固定源码跳转和自动跟踪节点这几个开关。一键整理只清除当前方向的手动位置。每条历史的根图和每个节点的追问图各自记住这些开关、当前路径、缩放、视口和手动位置。
-
-## 数据存在哪
-
-项目的 `.idea/lessplain/understanding.db`，是一个 SQLite 文件，包含问题、回答、图的各个版本、源码依据和浏览状态。
-
-- 同一项目在第二个 IDE 实例里打开时，数据库只读。
-- 数据库结构升级前会先备份，升级失败会回滚。
-
-## 源码定位的限制
-
-定位基于当前编辑器里的内容，包括没保存的修改。节点会记录文件、符号、一段文本和文件哈希。
-
-- 同一段文本出现多次时，插件不会替你猜是哪一处，界面显示定位失败。
-- 文件改过但片段仍然唯一、所属符号也对得上时，会重新定位，但不代表原来的解释还成立。
-- 源码变化后的证据对比提示还没做完。跨文件移动和依赖语义变化需要更完整的语言适配。
-
-## 目前没有的东西
-
-- 真实运行的 Trace
-- 对代码改动的完整 Diff 理解
-- 覆盖整个项目的全局图
-- 自动把任务交给 Agent。现在只能复制节点来源，再粘贴给 Agent 或 添加注释后主动询问
-
-产品目标和还没实现的部分见 [设计文档](docs/code-understanding-design-v0.5.md)。（不建议人工阅读）
-
-## 给 Agent 开发者：MCP 工具
-
-插件向 IDE 的 MCP Server 注册了两个工具。
-
-| 工具                        | 作用                                                                                    |
-|-----------------------------|-----------------------------------------------------------------------------------------|
-| `get_understanding_context` | 读取当前来源或固定来源，返回 `contextToken`、协议版本、`capabilities`，以及待答注释队列 |
-| `present_understanding`     | 提交一张理解图并保存。必须带图，纯文字回答不会被接受                                    |
-
-
-`graph` 参数是 JSON 字符串，形如：
-
-```json
-{"nodes":[{"id":"start","label":"检查输入","anchor":{"path":"src/Main.kt","symbol":"main","text":"if (valid)","version":"内容哈希","lineHint":12}},{"id":"yes","label":"继续保存"}],"edges":[{"id":"valid","from":"start","to":"yes","relation":"control_flow","condition":"valid=true","coverage":"当前分析范围"}],"evidence":[]}
-```
-
-- 节点和边都用稳定 ID，不要提交坐标，布局由插件算。
-- `relation` 可以是 `control_flow`、`call`、`data_flow`、`dependency`、`structure`。只有 `control_flow` 的 `condition` 会显示在线上，同一节点有多条控制流出边时每条都要写。
-- 节点的 `flowRoles` 可以是 `["start"]`、`["end"]`、`["start","end"]`，普通节点省略。结束节点可以用 `endOutcome` 标 `success` 或 `failure`，不确定就留空。提交前先确认上下文里 `capabilities.nodeSemantics` 为 true。
-- 分支图标由插件根据后继数量自己算，不要提交 `decision`。
-- 新记录要么设 `placement=root`，要么用 `child`、`sibling` 挂到已有记录下，要么用 `explicit` 加 `parentId`。节点追问和待答注释用 `child`。
-
-字段细节、归属规则、待答注释批处理流程见 [协议细则](skills/lessplain/references/protocol.md) （也不建议人工阅读）和 [配套 skill](skills/lessplain/SKILL.md)。
-
-## 从源码构建
-
-需要 JDK 21。仓库自带 Gradle Wrapper，在本目录运行：
-
-```powershell
-.\gradlew.bat test
-.\gradlew.bat buildPlugin
-.\gradlew.bat verifyPlugin --offline
-```
-
-安装包生成在 `build/distributions/`。`verifyPlugin` 会检查 2026.1.5 和 2026.2.3 两个版本，离线运行需要对应 IDE 已经缓存。
-
-开发时在 IDEA 里打开上一级的 `Agent-dev` 工程，用仓库里的 `Lessplain IDE` 运行配置启动开发实例（2026.2.3）。`runIde` 任务运行 2026.1.5，用来复查最低兼容版本。代码约定、运行配置的细节和 MCP 连接说明见 [AGENTS.md](AGENTS.md)。
-
-## 更多文档（最好给 Agent 看）
-
-- [设计文档](docs/code-understanding-design-v0.5.md)
-- [更新记录](CHANGELOG.md)
-- [历史交接记录](docs/agents/)：每一轮改动的实现细节、测试结果和待验收项
+实现和验收边界见 [实验设计](docs/jcef-react-experiment.md)。
