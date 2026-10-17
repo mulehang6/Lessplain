@@ -22,7 +22,7 @@
 
 通过当前宿主的技能发现信息定位并读取已安装的 lessplain skill，以及它自己的协议参考。可以使用宿主技能加载器，也可以直接读取文件；不要假定存在名为 Skill 的专用工具，不让用户再手动触发 lessplain 才能呈现材料。
 
-确认 Lessplain 工具连接的是目标项目。按当前可见的工具描述与 schema 调用 `get_understanding_context`，记录 `contextToken`、来源及 `capabilities`。用户提供 token 时固定该来源，不因随后界面选择改变而换项目、节点或记录。不把某个宿主的 MCP 前缀、服务器名称或本机路径写成通用约定。
+确认 Lessplain 工具连接的是目标项目。按当前可见的工具描述与 schema 调用 `lessplain_context`，记录 `context`、原问题、来源及 `catalog`。用户提供 ref 时先读取该固定引用，不因随后界面选择改变而换项目、节点或记录。不把某个宿主的 MCP 前缀、服务器名称或本机路径写成通用约定。
 
 ## 每轮一个主问题
 

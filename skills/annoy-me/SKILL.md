@@ -8,6 +8,8 @@ disable-model-invocation: true
 
 这是供用户主动选择的编程学习流程。一次调用启动围绕当前任务的连续学习；用户结束学习后，后续任务不会自动继承。
 
+范围是当前任务的理解与 AI 改动评审，不维护持续课程进度。单次理解材料由 lessplain 呈现；用户需要长期学习目标、课程安排和复习记录时，主动调用 lessplain-teach。
+
 进入学习前读取 [教学流程](references/workflow.md)，按用户回答逐轮推进。
 
 安装、刷新或核对宿主支持时，读取 [宿主说明](references/agents.md)。所有宿主使用同一份技能目录。
