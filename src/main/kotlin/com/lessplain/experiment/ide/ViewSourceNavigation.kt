@@ -5,7 +5,6 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.fileEditor.FileEditorManager
-import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.project.Project
 import com.lessplain.experiment.model.EditorSourceBinding
 import com.lessplain.experiment.model.SourceStepDirection
@@ -23,6 +22,7 @@ data class SourceStatus(val location: String, val evidence: String)
 internal class ViewSourceNavigation(private val project: Project, private val service: ViewService) : Disposable {
     private val generation = AtomicLong()
     private val marker = SourceInsightMarker(project, this)
+    private val scrollAnimation = SourceScrollAnimation()
 
     suspend fun open(
         source: ResolvedSource,
@@ -40,7 +40,7 @@ internal class ViewSourceNavigation(private val project: Project, private val se
 
             val offset = resolved.located.offset
             if (offset != null && resolved.file != null) {
-                OpenFileDescriptor(project, resolved.file, offset).navigate(true)
+                navigateToSource(project, source.anchor(), scrollAnimation, resolved.located, resolved.file)
             }
             val editor = FileEditorManager.getInstance(project).selectedTextEditor
             if (editor != null && editor.document === resolved.document && offset != null &&
@@ -92,6 +92,7 @@ internal class ViewSourceNavigation(private val project: Project, private val se
     fun invalidateBinding(binding: EditorSourceBinding) = marker.invalidateBinding(binding)
 
     override fun dispose() {
+        scrollAnimation.dispose()
         marker.dispose()
     }
 
