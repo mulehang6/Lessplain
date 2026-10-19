@@ -25,6 +25,7 @@ export type LessonNodeData = {
   onPreview?(): void;
   down: boolean;
   followups: Followup[];
+  pendingNotes: number;
   onAnnotate(anchor: HTMLElement): void;
   onCopy(): void;
   onSelectFollowup(ref: string): void;
@@ -67,6 +68,7 @@ const LessonNode = memo(function LessonNode({ id, data, selected }: NodeProps<Le
   const copy = (event: ReactMouseEvent) => { event.stopPropagation(); data.onCopy(); };
 
   const semantic = data.roles?.includes("end") ? ` end end-${data.outcome ?? "neutral"}` : data.roles?.includes("start") ? " start" : "";
+  const annotationCount = data.followups.length + data.pendingNotes;
   return <div ref={hoverArea} className={"graph-node lesson-node" + semantic + (selected ? " selected" : "") + (data.attention ? ` ${data.attention}` : "")}
     data-node-id={data.nodeId} data-element-id={data.elementId}
     data-attention={data.attention} aria-label={data.label}
@@ -77,7 +79,8 @@ const LessonNode = memo(function LessonNode({ id, data, selected }: NodeProps<Le
     <div className="graph-node-hover-bridge nodrag nopan" aria-hidden="true" />
     <div className={"graph-node-actions" + (actionsVisible ? " is-visible" : "")} aria-label="节点操作">
       <CanvasButton className="graph-node-action node-annotation nodrag nopan" aria-label={`为节点“${data.label}”添加注释`}
-        title="注释与追问" onClick={annotate}><AnnotationIcon />{data.followups.length > 0 && <sup>{data.followups.length}</sup>}</CanvasButton>
+        title="注释与追问" data-pending-count={data.pendingNotes} data-followup-count={data.followups.length}
+        onClick={annotate}><AnnotationIcon />{annotationCount > 0 && <sup>{annotationCount}</sup>}</CanvasButton>
       <CanvasButton className="graph-node-action source-copy-button nodrag nopan" aria-label="复制节点上下文"
         title="复制节点上下文" onClick={copy}><CopyIcon /></CanvasButton>
     </div>

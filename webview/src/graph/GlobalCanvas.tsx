@@ -7,6 +7,7 @@ import type { ElkEdgeSection } from "elkjs/lib/elk-api";
 import type { Spec } from "@json-render/core";
 import { useShallow } from "zustand/react/shallow";
 import { beginAnnotation, currentView, readPointer, saveGraph, setLessonValueAtPointer, useApp } from "../runtime/store";
+import { notesForNode } from "../runtime/questions";
 import { call, type NavigationRequest } from "../runtime/bridge";
 import type { GraphBrowse, GraphOptions, View } from "../runtime/types";
 import { CanvasButton } from "../components/CanvasButton";
@@ -112,6 +113,7 @@ function GlobalCanvasScene({ spec, view, renderCompanion }: Props) {
   // 控制器只依赖稳定动作，避免发布控制器后又因 context 值更新重建自己。
   const selectCluster = workspace?.selectCluster;
   const followupViews = useApp(state => state.snapshot.views);
+  const notes = useApp(state => state.snapshot.notes);
   const followupsByNode = useMemo(() => {
     const grouped = new Map<string, { ref: string; label: string }[]>();
     followupViews.filter(item => item.origin.viewRef === viewRef && item.origin.elementId && item.origin.nodeId)
@@ -408,6 +410,7 @@ function GlobalCanvasScene({ spec, view, renderCompanion }: Props) {
           branch: branches.has(definition.id),
           down: direction === "DOWN",
           followups: [],
+          pendingNotes: 0,
           onAnnotate: anchor => {
             useApp.getState().focus(definition.elementId, definition.nodeId);
             beginAnnotation(undefined, elementAnchor(anchor));
@@ -460,11 +463,14 @@ function GlobalCanvasScene({ spec, view, renderCompanion }: Props) {
     flow.setNodes(nodes => nodes.map(node => {
       if (node.type !== "lesson") return node;
       const followups = followupsByNode.get(JSON.stringify([node.data.elementId, node.data.nodeId])) ?? [];
-      if (node.data.followups.length === followups.length && node.data.followups.every((item, index) =>
-        item.ref === followups[index].ref && item.label === followups[index].label)) return node;
-      return { ...node, data: { ...node.data, followups } };
+      const pendingNotes = notesForNode(notes, { viewRef, elementId: node.data.elementId, nodeId: node.data.nodeId })
+        .filter(note => note.status === "pending").length;
+      const sameFollowups = node.data.followups.length === followups.length && node.data.followups.every((item, index) =>
+        item.ref === followups[index].ref && item.label === followups[index].label);
+      if (sameFollowups && node.data.pendingNotes === pendingNotes) return node;
+      return { ...node, data: { ...node.data, followups, pendingNotes } };
     }));
-  }, [flow, followupsByNode, nodeData]);
+  }, [flow, followupsByNode, nodeData, notes, viewRef]);
 
   useLayoutEffect(() => {
     if (!stableInput || !queue.current || appliedLayoutKey.current === inputKey) return;

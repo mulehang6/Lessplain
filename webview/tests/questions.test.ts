@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { questionsForAgent } from "../src/runtime/questions";
+import { notesForComponent, notesForNode, questionsForAgent } from "../src/runtime/questions";
 import type { Note } from "../src/runtime/types";
 
 vi.stubGlobal("window", { addEventListener: vi.fn() });
@@ -63,5 +63,40 @@ describe("Agent 与插件的问答往返", () => {
     beginAnnotation({ ...origin(), entry: "sourceSelection", source });
     expect(useApp.getState().annotation).not.toBe(nodeKey);
     expect(useApp.getState().drafts[nodeKey].origin.source).toBeUndefined();
+  });
+  it("节点待答列表只收集同一页面、元素和节点的节点问题与源码选区", () => {
+    const source = { path: "ChatRunController.kt", text: "with", line: 87, version: "v1", selectionRange: { startOffset: 3274, endOffset: 3278 } };
+    const at = (ref: string, entry: "node" | "sourceSelection", patch: Record<string, unknown> = {}): Note => ({
+      ...note(ref, "pending", 1, "view:graph"),
+      origin: { entry, viewRef: "view:graph", elementId: "sendGraph", nodeId: "send", state: {}, ...patch },
+    });
+    const notes = [
+      at("note:node", "node"),
+      at("note:source", "sourceSelection", { source }),
+      { ...at("note:answered-source", "sourceSelection", { source }), status: "answered" },
+      at("note:other-node", "sourceSelection", { nodeId: "receive" }),
+      at("note:other-element", "sourceSelection", { elementId: "otherGraph" }),
+      at("note:other-view", "sourceSelection", { viewRef: "view:other" }),
+      at("note:unowned-same-element", "sourceSelection", { nodeId: undefined }),
+      at("note:unowned-source", "sourceSelection", { nodeId: undefined, elementId: undefined }),
+    ];
+
+    expect(notesForNode(notes, { viewRef: "view:graph", elementId: "sendGraph", nodeId: "send" }).map(item => item.ref))
+      .toEqual(["note:node", "note:source", "note:answered-source"]);
+    expect(notesForNode(notes, { viewRef: "view:graph", elementId: "sendGraph", nodeId: undefined })).toEqual([]);
+  });
+  it("组件列表不把节点源码选区或无归属源码选区算作组件注释", () => {
+    const component = (ref: string, entry: Note["origin"]["entry"], patch: Record<string, unknown> = {}): Note => ({
+      ...note(ref, "pending", 1, "view:graph"),
+      origin: { entry, viewRef: "view:graph", elementId: "sendGraph", state: {}, ...patch },
+    });
+    const notes = [
+      component("note:component", "component"),
+      component("note:node-source", "sourceSelection", { nodeId: "send", source: { path: "x.kt", text: "with", line: 87, version: "v1" } }),
+      component("note:unowned-source", "sourceSelection"),
+      component("note:other-component", "component", { elementId: "otherGraph" }),
+    ];
+
+    expect(notesForComponent(notes, "view:graph", "sendGraph").map(item => item.ref)).toEqual(["note:component"]);
   });
 });

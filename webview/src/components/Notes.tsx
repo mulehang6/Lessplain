@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { call } from "../runtime/bridge";
 import { closeAnnotation, useApp } from "../runtime/store";
-import { pendingQuestions, questionsForAgent, scopedQuestions } from "../runtime/questions";
+import { notesForComponent, notesForNode, pendingQuestions, questionsForAgent, scopedQuestions } from "../runtime/questions";
 import type { Note } from "../runtime/types";
 import { CanvasButton } from "./CanvasButton";
 import { ControlIcon } from "./ControlIcon";
@@ -54,9 +54,12 @@ export function CopyQuestions({ compact = false }: { compact?: boolean }) {
 /** 页面下方仅回看已添加的注释；全局待答列表收集所有页面和源码问题。 */
 export function Notes({ pendingOnly = false, elementId, nodeId, treeScope = false, compact = false }: { pendingOnly?: boolean; elementId?: string; nodeId?: string; treeScope?: boolean; compact?: boolean }) {
   const selected = useApp(s => s.selected), snapshot = useApp(s => s.snapshot), notes = snapshot.notes;
-  const scoped = treeScope && selected ? pendingQuestions(scopedQuestions(snapshot, selected))
-    : pendingOnly ? pendingQuestions(notes) : notes.filter(note => note.ownerRef === selected && note.status === "pending");
-  const visible = elementId || nodeId ? scoped.filter(note => note.origin.elementId === elementId && note.origin.nodeId === nodeId) : scoped;
+  let visible: Note[];
+  if (nodeId) visible = pendingQuestions(notesForNode(notes, { viewRef: selected, elementId, nodeId }));
+  else if (elementId) visible = pendingQuestions(notesForComponent(notes, selected, elementId));
+  else if (treeScope && selected) visible = pendingQuestions(scopedQuestions(snapshot, selected));
+  else if (pendingOnly) visible = pendingQuestions(notes);
+  else visible = notes.filter(note => note.ownerRef === selected && note.status === "pending");
   if (!visible.length) return pendingOnly ? <p className="muted">没有待答问题</p> : null;
   return <section className="notes" aria-label={pendingOnly ? "全部待答问题" : "当前答案的注释"}>
     <ol>{visible.map((note, index) => <NoteRow key={note.ref} note={note} number={index + 1} compact={compact} />)}</ol>

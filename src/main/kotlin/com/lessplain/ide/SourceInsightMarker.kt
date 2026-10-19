@@ -73,7 +73,7 @@ internal class SourceInsightMarker(private val project: Project, parent: Disposa
         factory.getEditors(value.document, project).forEach { attach(it, value) }
     }
 
-    /** 避免同一文件里的其他方法误继承当前 marker 节点的提问归属。 */
+    /** 当前源码编辑器中的真实选区沿用 marker 节点身份，精确选区仍由来源校验负责。 */
     fun bindingFor(editor: Editor): EditorSourceBinding? {
         if (editor.isDisposed) return null
         val marker = markers[editor] ?: return null

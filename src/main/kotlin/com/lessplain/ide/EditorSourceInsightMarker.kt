@@ -170,11 +170,10 @@ internal class EditorSourceInsightMarker(
         return sourceHighlightHoverBridge(hint, block, JBUI.scale(4))?.contains(point) == true
     }
 
-    /** 仅当完整选区仍位于当前 marker range 内，才继承该节点的来源身份。 */
+    /** 当前有效源码 marker 所在编辑器中的任意非空选区都可沿用其节点上下文。 */
     internal fun bindingForSelection(selectionStart: Int, selectionEnd: Int): EditorSourceBinding? {
         if (disposed || selectionStart >= selectionEnd) return null
-        val range = highlighter?.takeIf { it.isValid } ?: return null
-        if (selectionStart < range.startOffset || selectionEnd > range.endOffset) return null
+        highlighter?.takeIf { it.isValid } ?: return null
         return binding
     }
 

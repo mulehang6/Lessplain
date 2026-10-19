@@ -21,6 +21,25 @@ export function scopedQuestions(snapshot: Snapshot, ref: string): Note[] {
 export function pendingQuestions(notes: Note[]): Note[] {
   return notes.filter(note => note.status === "pending").sort((a, b) => a.createdAt - b.createdAt);
 }
+
+/** 仅当视图、元素和节点三个稳定来源字段都匹配时，才将问题归属到节点。 */
+export function notesForNode(notes: Note[], origin: Pick<Origin, "viewRef" | "elementId" | "nodeId">): Note[] {
+  if (!origin.viewRef || !origin.elementId || !origin.nodeId) return [];
+  return notes.filter(note => note.origin.viewRef === origin.viewRef &&
+    note.origin.elementId === origin.elementId && note.origin.nodeId === origin.nodeId);
+}
+
+/** 组件注释列表排除节点、源码、示例和组件选择来源的问题。 */
+export function ownsComponent(origin: Origin, viewRef: string | undefined, elementId: string): boolean {
+  return !!viewRef && origin.viewRef === viewRef && origin.elementId === elementId && !origin.nodeId &&
+    origin.entry !== "node" && origin.entry !== "sourceSelection" && origin.entry !== "sampleSelection" &&
+    origin.entry !== "componentSelection" && !origin.source && !origin.sample && !origin.componentSnapshot;
+}
+
+export function notesForComponent(notes: Note[], viewRef: string | undefined, elementId: string): Note[] {
+  return notes.filter(note => ownsComponent(note.origin, viewRef, elementId));
+}
+
 export function questionsForAgent(notes: Note[]): string {
   const pending = pendingQuestions(notes);
   if (!pending.length) return "";
