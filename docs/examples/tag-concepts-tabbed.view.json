@@ -1,0 +1,698 @@
+{
+  "title": "分清 tech-community 的 tag",
+  "question": "tech community 里面有哪几种 tag，分别有什么作用？",
+  "spec": {
+    "root": "tag-board",
+    "state": {
+      "tagMeaning": "article",
+      "configTag": "热门＋推荐 · 1,3",
+      "homeTab": "文章"
+    },
+    "elements": {
+      "article-purpose-badge": {
+        "type": "Badge",
+        "props": {
+          "text": "给文章分类",
+          "tone": "info"
+        }
+      },
+      "article-purpose": {
+        "type": "Text",
+        "props": {
+          "text": "给文章标记主题，用于按标签筛选文章、寻找相关文章。",
+          "variant": "body"
+        }
+      },
+      "article-fields": {
+        "type": "Text",
+        "props": {
+          "text": "TagDO 自己定义 tagName（名称）、tagType（类型）、status（发布状态）、deleted（删除标记）。",
+          "variant": "body"
+        }
+      },
+      "record-source": {
+        "type": "CodeExcerpt",
+        "props": {
+          "source": "article-record",
+          "label": "TagDO 结构"
+        }
+      },
+      "type-boundary": {
+        "type": "Text",
+        "props": {
+          "text": "tagType 的 1＝系统标签、2＝自定义标签，是文章主题标签内部的类型；它与另外两个页签不是同一层分类。",
+          "variant": "caption"
+        }
+      },
+      "base-fields": {
+        "type": "Text",
+        "props": {
+          "text": "id、createTime、updateTime 统一定义在基类；TagDO 没有重新声明这三个字段。",
+          "variant": "body"
+        }
+      },
+      "base-source": {
+        "type": "CodeExcerpt",
+        "props": {
+          "source": "base-do",
+          "label": "BaseDO 结构"
+        }
+      },
+      "article-base": {
+        "type": "Collapsible",
+        "props": {
+          "title": "继承自 BaseDO",
+          "defaultOpen": false
+        },
+        "children": [
+          "base-fields",
+          "base-source"
+        ]
+      },
+      "relation-purpose": {
+        "type": "Text",
+        "props": {
+          "text": "ArticleTagDO 用 articleId 和 tagId 连接文章与标签。标签记录和关联记录是两件事。",
+          "variant": "body"
+        }
+      },
+      "relation-source": {
+        "type": "CodeExcerpt",
+        "props": {
+          "source": "article-map",
+          "label": "文章与标签的关联"
+        }
+      },
+      "dto-purpose": {
+        "type": "Text",
+        "props": {
+          "text": "TagDTO 是接口表示：tagId 对应标签 ID，tag 放标签文字；它还携带 status 和 selected。不是新的业务标签类别。",
+          "variant": "body"
+        }
+      },
+      "dto-source": {
+        "type": "CodeExcerpt",
+        "props": {
+          "source": "article-dto",
+          "label": "TagDTO 结构"
+        }
+      },
+      "article-relations": {
+        "type": "Collapsible",
+        "props": {
+          "title": "文章、标签与接口对象",
+          "defaultOpen": false
+        },
+        "children": [
+          "relation-purpose",
+          "relation-source",
+          "dto-purpose",
+          "dto-source"
+        ]
+      },
+      "article-filter-purpose": {
+        "type": "Text",
+        "props": {
+          "text": "筛选时按 tagId 查文章；相关推荐先取当前文章的标签，再结合分类和标签找相关文章。",
+          "variant": "body"
+        }
+      },
+      "filter-source": {
+        "type": "SourceLink",
+        "props": {
+          "source": "article-filter",
+          "label": "按标签筛选"
+        }
+      },
+      "recommend-source": {
+        "type": "SourceLink",
+        "props": {
+          "source": "article-recommend",
+          "label": "相关文章推荐"
+        }
+      },
+      "article-usage": {
+        "type": "Collapsible",
+        "props": {
+          "title": "实际用在哪里",
+          "defaultOpen": false
+        },
+        "children": [
+          "article-filter-purpose",
+          "filter-source",
+          "recommend-source"
+        ]
+      },
+      "article-panel": {
+        "type": "Stack",
+        "props": {
+          "direction": "vertical",
+          "gap": "sm",
+          "className": null
+        },
+        "children": [
+          "article-purpose-badge",
+          "article-purpose",
+          "article-fields",
+          "record-source",
+          "type-boundary",
+          "article-base",
+          "article-relations",
+          "article-usage"
+        ],
+        "visible": {
+          "$state": "/tagMeaning",
+          "eq": "article"
+        }
+      },
+      "config-stored-0": {
+        "type": "Text",
+        "props": {
+          "text": "保存的 tags：\"1\"",
+          "variant": "code"
+        }
+      },
+      "config-output-0": {
+        "type": "Badge",
+        "props": {
+          "text": "生成的标题：热门",
+          "tone": "success"
+        }
+      },
+      "config-case-0": {
+        "type": "Stack",
+        "props": {
+          "direction": "vertical",
+          "gap": "sm",
+          "className": null
+        },
+        "children": [
+          "config-stored-0",
+          "config-output-0"
+        ],
+        "visible": {
+          "$state": "/configTag",
+          "eq": "热门 · 1"
+        }
+      },
+      "config-stored-1": {
+        "type": "Text",
+        "props": {
+          "text": "保存的 tags：\"2\"",
+          "variant": "code"
+        }
+      },
+      "config-output-1": {
+        "type": "Badge",
+        "props": {
+          "text": "生成的标题：官方",
+          "tone": "success"
+        }
+      },
+      "config-case-1": {
+        "type": "Stack",
+        "props": {
+          "direction": "vertical",
+          "gap": "sm",
+          "className": null
+        },
+        "children": [
+          "config-stored-1",
+          "config-output-1"
+        ],
+        "visible": {
+          "$state": "/configTag",
+          "eq": "官方 · 2"
+        }
+      },
+      "config-stored-2": {
+        "type": "Text",
+        "props": {
+          "text": "保存的 tags：\"3\"",
+          "variant": "code"
+        }
+      },
+      "config-output-2": {
+        "type": "Badge",
+        "props": {
+          "text": "生成的标题：推荐",
+          "tone": "success"
+        }
+      },
+      "config-case-2": {
+        "type": "Stack",
+        "props": {
+          "direction": "vertical",
+          "gap": "sm",
+          "className": null
+        },
+        "children": [
+          "config-stored-2",
+          "config-output-2"
+        ],
+        "visible": {
+          "$state": "/configTag",
+          "eq": "推荐 · 3"
+        }
+      },
+      "config-stored-3": {
+        "type": "Text",
+        "props": {
+          "text": "保存的 tags：\"1,3\"",
+          "variant": "code"
+        }
+      },
+      "config-output-3": {
+        "type": "Badge",
+        "props": {
+          "text": "生成的标题：热门,推荐",
+          "tone": "success"
+        }
+      },
+      "config-case-3": {
+        "type": "Stack",
+        "props": {
+          "direction": "vertical",
+          "gap": "sm",
+          "className": null
+        },
+        "children": [
+          "config-stored-3",
+          "config-output-3"
+        ],
+        "visible": {
+          "$state": "/configTag",
+          "eq": "热门＋推荐 · 1,3"
+        }
+      },
+      "config-stored-4": {
+        "type": "Text",
+        "props": {
+          "text": "保存的 tags：\"0\"",
+          "variant": "code"
+        }
+      },
+      "config-output-4": {
+        "type": "Badge",
+        "props": {
+          "text": "生成的标题：空字符串",
+          "tone": "success"
+        }
+      },
+      "config-case-4": {
+        "type": "Stack",
+        "props": {
+          "direction": "vertical",
+          "gap": "sm",
+          "className": null
+        },
+        "children": [
+          "config-stored-4",
+          "config-output-4"
+        ],
+        "visible": {
+          "$state": "/configTag",
+          "eq": "空标记 · 0"
+        }
+      },
+      "config-purpose-badge": {
+        "type": "Badge",
+        "props": {
+          "text": "装饰配置展示",
+          "tone": "info"
+        }
+      },
+      "config-purpose": {
+        "type": "Text",
+        "props": {
+          "text": "运营配置里的 tags 保存展示标记码值。已核对的订阅侧栏会把码值转成“热门”“推荐”等标题文案。",
+          "variant": "body"
+        }
+      },
+      "config-boundary": {
+        "type": "Text",
+        "props": {
+          "text": "它不是 TagDO 的标签 ID，也不关联 article_tag；即使同样出现数字 1，含义也不同。",
+          "variant": "body"
+        }
+      },
+      "config-choice": {
+        "type": "Select",
+        "props": {
+          "label": "试着切换展示标记（演示）",
+          "name": "configTag",
+          "options": [
+            "热门 · 1",
+            "官方 · 2",
+            "推荐 · 3",
+            "热门＋推荐 · 1,3",
+            "空标记 · 0"
+          ],
+          "value": {
+            "$bindState": "/configTag"
+          },
+          "placeholder": null
+        }
+      },
+      "config-simulation": {
+        "type": "Text",
+        "props": {
+          "text": "这是按已核对映射做的演示，不读取或修改线上配置。",
+          "variant": "caption"
+        }
+      },
+      "config-field-source": {
+        "type": "CodeExcerpt",
+        "props": {
+          "source": "config-storage",
+          "label": "ConfigDTO 结构"
+        }
+      },
+      "config-kind-source": {
+        "type": "CodeExcerpt",
+        "props": {
+          "source": "config-kinds",
+          "label": "展示码值定义"
+        }
+      },
+      "config-convert": {
+        "type": "Text",
+        "props": {
+          "text": "按英文逗号拆分 tags → 码值转整数 → ConfigTagEnum 查文案 → 用逗号拼接成标题。0 对应空文案。",
+          "variant": "body"
+        }
+      },
+      "config-render-source": {
+        "type": "CodeExcerpt",
+        "props": {
+          "source": "config-render",
+          "label": "侧栏标题转换"
+        }
+      },
+      "config-implementation": {
+        "type": "Collapsible",
+        "props": {
+          "title": "文案怎样生成",
+          "defaultOpen": false
+        },
+        "children": [
+          "config-convert",
+          "config-render-source"
+        ]
+      },
+      "config-panel": {
+        "type": "Stack",
+        "props": {
+          "direction": "vertical",
+          "gap": "sm",
+          "className": null
+        },
+        "children": [
+          "config-purpose-badge",
+          "config-purpose",
+          "config-boundary",
+          "config-choice",
+          "config-case-0",
+          "config-case-1",
+          "config-case-2",
+          "config-case-3",
+          "config-case-4",
+          "config-simulation",
+          "config-field-source",
+          "config-kind-source",
+          "config-implementation"
+        ],
+        "visible": {
+          "$state": "/tagMeaning",
+          "eq": "config"
+        }
+      },
+      "nav-result-article": {
+        "type": "Text",
+        "props": {
+          "text": "selectType＝article；selectDesc＝文章；selected＝true（演示中的当前选中项）。",
+          "variant": "body"
+        },
+        "visible": {
+          "$state": "/homeTab",
+          "eq": "文章"
+        }
+      },
+      "nav-result-read": {
+        "type": "Text",
+        "props": {
+          "text": "selectType＝read；selectDesc＝浏览记录；selected＝true（演示中的当前选中项）。",
+          "variant": "body"
+        },
+        "visible": {
+          "$state": "/homeTab",
+          "eq": "浏览记录"
+        }
+      },
+      "nav-result-follow": {
+        "type": "Text",
+        "props": {
+          "text": "selectType＝follow；selectDesc＝关注；selected＝true（演示中的当前选中项）。",
+          "variant": "body"
+        },
+        "visible": {
+          "$state": "/homeTab",
+          "eq": "关注"
+        }
+      },
+      "nav-result-collection": {
+        "type": "Text",
+        "props": {
+          "text": "selectType＝collection；selectDesc＝收藏；selected＝true（演示中的当前选中项）。",
+          "variant": "body"
+        },
+        "visible": {
+          "$state": "/homeTab",
+          "eq": "收藏"
+        }
+      },
+      "nav-purpose-badge": {
+        "type": "Badge",
+        "props": {
+          "text": "切换页面栏目",
+          "tone": "info"
+        }
+      },
+      "navigation-purpose": {
+        "type": "Text",
+        "props": {
+          "text": "TagSelectDTO 描述一个页面切换选项，告诉页面显示哪个栏目、显示什么文字、是否选中。",
+          "variant": "body"
+        }
+      },
+      "navigation-choice": {
+        "type": "Select",
+        "props": {
+          "label": "切换用户主页栏目（演示）",
+          "name": "homeTab",
+          "options": [
+            "文章",
+            "浏览记录",
+            "关注",
+            "收藏"
+          ],
+          "value": {
+            "$bindState": "/homeTab"
+          },
+          "placeholder": null
+        }
+      },
+      "navigation-structure": {
+        "type": "CodeExcerpt",
+        "props": {
+          "source": "ui-select",
+          "label": "TagSelectDTO 结构"
+        }
+      },
+      "navigation-labels": {
+        "type": "CodeExcerpt",
+        "props": {
+          "source": "ui-labels",
+          "label": "栏目码值与文案"
+        }
+      },
+      "navigation-visible": {
+        "type": "Text",
+        "props": {
+          "text": "主栏目包含文章、浏览记录、关注、收藏；看别人主页时不生成“浏览记录”选项。关注栏目内部另有 follow／fans 子切换。",
+          "variant": "body"
+        }
+      },
+      "navigation-choices-source": {
+        "type": "SourceLink",
+        "props": {
+          "source": "ui-choices",
+          "label": "栏目选项定义"
+        }
+      },
+      "navigation-restrict-source": {
+        "type": "SourceLink",
+        "props": {
+          "source": "ui-restrict",
+          "label": "浏览记录可见性"
+        }
+      },
+      "navigation-limits": {
+        "type": "Collapsible",
+        "props": {
+          "title": "可选栏目和可见性",
+          "defaultOpen": false
+        },
+        "children": [
+          "navigation-visible",
+          "navigation-choices-source",
+          "navigation-restrict-source"
+        ]
+      },
+      "navigation-panel": {
+        "type": "Stack",
+        "props": {
+          "direction": "vertical",
+          "gap": "sm",
+          "className": null
+        },
+        "children": [
+          "nav-purpose-badge",
+          "navigation-purpose",
+          "navigation-choice",
+          "nav-result-article",
+          "nav-result-read",
+          "nav-result-follow",
+          "nav-result-collection",
+          "navigation-structure",
+          "navigation-labels",
+          "navigation-limits"
+        ],
+        "visible": {
+          "$state": "/tagMeaning",
+          "eq": "navigation"
+        }
+      },
+      "tag-tabs": {
+        "type": "Tabs",
+        "props": {
+          "tabs": [
+            {
+              "label": "文章主题",
+              "value": "article"
+            },
+            {
+              "label": "展示标记",
+              "value": "config"
+            },
+            {
+              "label": "页面栏目",
+              "value": "navigation"
+            }
+          ],
+          "defaultValue": "article",
+          "value": {
+            "$bindState": "/tagMeaning"
+          }
+        },
+        "children": [
+          "article-panel",
+          "config-panel",
+          "navigation-panel"
+        ]
+      },
+      "tag-summary": {
+        "type": "Text",
+        "props": {
+          "text": "先看它绑定谁：文章主题给文章分类；展示标记生成配置文案；页面栏目控制当前看什么。它们共用 tag 这个名字，数据含义并不相同。",
+          "variant": "body"
+        }
+      },
+      "tag-overview": {
+        "type": "Stack",
+        "props": {
+          "direction": "vertical",
+          "gap": "sm",
+          "className": null
+        },
+        "children": [
+          "tag-summary",
+          "tag-tabs"
+        ]
+      },
+      "tag-board": {
+        "type": "Cluster",
+        "props": {
+          "title": "tech-community：分清三种 tag"
+        },
+        "slots": {
+          "companion": [
+            "tag-overview"
+          ]
+        }
+      }
+    }
+  },
+  "sources": {
+    "article-record": {
+      "path": "paicoding-service/src/main/java/com/github/paicoding/forum/service/article/repository/entity/TagDO.java",
+      "text": "@TableName(\"tag\")\npublic class TagDO extends BaseDO {\n    private static final long serialVersionUID = 3796460143933607644L;\n\n    /**\n     * 标签名称\n     */\n    private String tagName;\n\n    /**\n     * 标签类型：1-系统标签，2-自定义标签\n     */\n    private Integer tagType;\n\n    /**\n     * 状态：0-未发布，1-已发布\n     */\n    private Integer status;\n\n    /**\n     * 是否删除\n     */\n    private Integer deleted;\n}",
+      "symbol": "TagDO"
+    },
+    "article-map": {
+      "path": "paicoding-service/src/main/java/com/github/paicoding/forum/service/article/repository/entity/ArticleTagDO.java",
+      "text": "@TableName(\"article_tag\")\npublic class ArticleTagDO extends BaseDO {\n\n    private static final long serialVersionUID = 1L;\n\n    /**\n     * 文章ID\n     */\n    private Long articleId;\n\n    /**\n     * 标签id\n     */\n    private Long tagId;\n\n    private Integer deleted;\n}",
+      "symbol": "ArticleTagDO"
+    },
+    "article-dto": {
+      "path": "paicoding-api/src/main/java/com/github/paicoding/forum/api/model/vo/article/dto/TagDTO.java",
+      "text": "public class TagDTO implements Serializable {\n    private static final long serialVersionUID = -8614833588325787479L;\n\n    private Long tagId;\n\n    private String tag;\n\n    private Integer status;\n\n    private Boolean selected;\n}",
+      "symbol": "TagDTO"
+    },
+    "base-do": {
+      "path": "paicoding-api/src/main/java/com/github/paicoding/forum/api/model/entity/BaseDO.java",
+      "text": "public class BaseDO implements Serializable {\n\n    @TableId(type = IdType.AUTO)\n    private Long id;\n\n    private Date createTime;\n\n    private Date updateTime;\n}",
+      "symbol": "BaseDO"
+    },
+    "config-storage": {
+      "path": "paicoding-api/src/main/java/com/github/paicoding/forum/api/model/vo/banner/dto/ConfigDTO.java",
+      "text": "public class ConfigDTO extends BaseDTO {\n\n    /**\n     * 类型\n     */\n    private Integer type;\n\n    /**\n     * 名称\n     */\n    private String name;\n\n    /**\n     * 图片链接\n     */\n    @JsonSerialize(using = CdnImgSerializer.class)\n    private String bannerUrl;\n\n    /**\n     * 跳转链接\n     */\n    private String jumpUrl;\n\n    /**\n     * 内容\n     */\n    private String content;\n\n    /**\n     * 排序\n     */\n    private Integer rank;\n\n    /**\n     * 状态：0-未发布，1-已发布\n     */\n    private Integer status;\n\n    /**\n     * json格式扩展信息\n     */\n    private String extra;\n\n    /**\n     * 配置相关的标签：如 火，推荐，精选 等等，英文逗号分隔\n     *\n     * @see ConfigTagEnum#getCode()\n     */\n    private String tags;\n\n    public ConfigDTO setBannerUrl(String bannerUrl) {\n        this.bannerUrl = CdnUtil.autoTransCdn(bannerUrl);\n        return this;\n    }\n}",
+      "symbol": "ConfigDTO"
+    },
+    "config-kinds": {
+      "path": "paicoding-api/src/main/java/com/github/paicoding/forum/api/model/enums/ConfigTagEnum.java",
+      "text": "public enum ConfigTagEnum {\n\n    EMPTY(0, \"\"),\n    HOT(1, \"热门\"),\n    OFFICAL(2, \"官方\"),\n    COMMENT(3, \"推荐\"),\n    ;\n\n    ConfigTagEnum(Integer code, String desc) {\n        this.code = code;\n        this.desc = desc;\n    }\n\n    private final Integer code;\n    private final String desc;\n\n    public static ConfigTagEnum formCode(Integer code) {\n        for (ConfigTagEnum value : ConfigTagEnum.values()) {\n            if (value.getCode().equals(code)) {\n                return value;\n            }\n        }\n        return ConfigTagEnum.EMPTY;\n    }\n}",
+      "symbol": "ConfigTagEnum"
+    },
+    "ui-select": {
+      "path": "paicoding-api/src/main/java/com/github/paicoding/forum/api/model/vo/article/dto/TagSelectDTO.java",
+      "text": "public class TagSelectDTO implements Serializable {\n\n    /**\n     * 类型\n     */\n    private String selectType;\n\n    /**\n     * 描述\n     */\n    private String selectDesc;\n\n    /**\n     * 是否选中\n     */\n    private Boolean selected;\n}",
+      "symbol": "TagSelectDTO"
+    },
+    "ui-labels": {
+      "path": "paicoding-api/src/main/java/com/github/paicoding/forum/api/model/enums/HomeSelectEnum.java",
+      "text": "public enum HomeSelectEnum {\n\n    ARTICLE(\"article\", \"文章\"),\n    READ(\"read\", \"浏览记录\"),\n    FOLLOW(\"follow\", \"关注\"),\n    COLLECTION(\"collection\", \"收藏\");\n\n    HomeSelectEnum(String code, String desc) {\n        this.code = code;\n        this.desc = desc;\n    }\n\n    private final String code;\n    private final String desc;\n\n    public static HomeSelectEnum fromCode(String code) {\n        for (HomeSelectEnum value : HomeSelectEnum.values()) {\n            if (value.getCode().equals(code)) {\n                return value;\n            }\n        }\n        return HomeSelectEnum.ARTICLE;\n    }\n}",
+      "symbol": "HomeSelectEnum"
+    },
+    "article-filter": {
+      "path": "paicoding-service/src/main/java/com/github/paicoding/forum/service/article/service/impl/ArticleReadServiceImpl.java",
+      "text": "public PageListVo<ArticleDTO> queryArticlesByTag(Long tagId, PageParam page) {\n        List<ArticleDO> records = articleDao.listRelatedArticlesOrderByReadCount(null, Arrays.asList(tagId), page);\n        return buildArticleListVo(records, page.getPageSize());"
+    },
+    "article-recommend": {
+      "path": "paicoding-service/src/main/java/com/github/paicoding/forum/service/article/service/impl/ArticleRecommendServiceImpl.java",
+      "text": "List<Long> tagIds = articleTagDao.listArticleTags(articleId).stream()\n                .map(ArticleTagDO::getTagId).collect(Collectors.toList());\n        if (CollectionUtils.isEmpty(tagIds)) {\n            return PageListVo.emptyVo();\n        }\n\n        List<ArticleDO> recommendArticles = articleDao.listRelatedArticlesOrderByReadCount(article.getCategoryId(), tagIds, page);"
+    },
+    "config-render": {
+      "path": "paicoding-service/src/main/java/com/github/paicoding/forum/service/sidebar/service/SidebarServiceImpl.java",
+      "text": "String tagsDesc = \"\";\n        if (StringUtils.isNotBlank(config.getTags())) {\n            tagsDesc = Splitter.on(\",\").splitToStream(config.getTags())\n                    .map(s -> ConfigTagEnum.formCode(Integer.parseInt(s.trim())).getDesc())\n                    .collect(Collectors.joining(\",\"));\n        }\n        return new SideBarDTO().setTitle(tagsDesc).setSubTitle(config.getName())"
+    },
+    "ui-choices": {
+      "path": "paicoding-web/src/main/java/com/github/paicoding/forum/web/front/user/view/UserViewController.java",
+      "text": "private static final List<String> homeSelectTags = Arrays.asList(\"article\", \"read\", \"follow\", \"collection\");\n    private static final List<String> followSelectTags = Arrays.asList(\"follow\", \"fans\");"
+    },
+    "ui-restrict": {
+      "path": "paicoding-web/src/main/java/com/github/paicoding/forum/web/front/user/view/UserViewController.java",
+      "text": "if (!isAuthor && \"read\".equals(tag)) {\n                // 只有本人才能看自己的阅读历史\n                return;"
+    }
+  }
+}

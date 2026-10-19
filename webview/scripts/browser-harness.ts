@@ -38,7 +38,7 @@ export function fixture(): View {
 export type BridgeCall = { method: string; params: Record<string, any> };
 
 /** Headless, file interception only: no HTTP server, IDE, screenshots or visible browser. */
-export async function harness(browser: Browser, snapshot: Snapshot, editor = false) {
+export async function harness(browser: Browser, snapshot: Snapshot, editor = false, diagnostics = false) {
   const page = await browser.newPage({ viewport: { width: 1080, height: 780 } });
   page.setDefaultTimeout(10000);
   const calls: BridgeCall[] = [], errors: string[] = [];
@@ -54,7 +54,7 @@ export async function harness(browser: Browser, snapshot: Snapshot, editor = fal
     const file = path.join(process.cwd(), "dist", new URL(route.request().url()).pathname);
     let body = await readFile(file);
     if (file.endsWith("index.html")) body = Buffer.from(body.toString().replace("<head>", `<head><script>
-      window.__lessplainBoot=${JSON.stringify({ title: "Lessplain", hostId: editor ? "editor-id" : "tool-id", host: editor ? "editor" : "toolwindow", ...(editor ? { ref: "view:fixture" } : {}) })};
+      window.__lessplainBoot=${JSON.stringify({ title: "Lessplain", diagnostics, hostId: editor ? "editor-id" : "tool-id", host: editor ? "editor" : "toolwindow", ...(editor ? { ref: "view:fixture" } : {}) })};
       Object.entries({"--background":"#1e1f22","--card":"#2b2d30","--foreground":"#cccccc","--ide-color-scheme":"dark","--diagram-purple":"#967bef","--diagram-warning":"#d6ae58","--diagram-success":"#5fad65","--diagram-failure":"#db5860"}).forEach(([name,value])=>document.documentElement.style.setProperty(name,value));
     </script>`));
     await route.fulfill({ body, contentType: file.endsWith(".js") ? "text/javascript" : file.endsWith(".css") ? "text/css" : "text/html", headers: {

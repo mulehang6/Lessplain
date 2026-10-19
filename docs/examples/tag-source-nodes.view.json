@@ -1,0 +1,105 @@
+{
+  "title": "tech-community：三种 tag 的职责",
+  "question": "tech community 里面有哪几种 tag，分别有什么作用？",
+  "spec": {
+    "root": "tag-board",
+    "elements": {
+      "tag-board": {
+        "type": "Cluster",
+        "props": {
+          "title": "三种 tag，分别定位源码"
+        },
+        "slots": {
+          "diagram": [
+            "tag-sources"
+          ]
+        }
+      },
+      "tag-sources": {
+        "type": "Graph",
+        "props": {
+          "nodes": [
+            {
+              "id": "article",
+              "label": "文章主题标签\n给文章分类",
+              "source": "article-record"
+            },
+            {
+              "id": "config",
+              "label": "配置展示标记\n标示热门、推荐等",
+              "source": "config-storage"
+            },
+            {
+              "id": "navigation",
+              "label": "页面切换项\n选择文章、收藏等栏目",
+              "source": "ui-select"
+            }
+          ],
+          "edges": []
+        }
+      }
+    }
+  },
+  "sources": {
+    "article-record": {
+      "path": "paicoding-service/src/main/java/com/github/paicoding/forum/service/article/repository/entity/TagDO.java",
+      "text": "@TableName(\"tag\")\npublic class TagDO extends BaseDO {\n    private static final long serialVersionUID = 3796460143933607644L;\n\n    /**\n     * 标签名称\n     */\n    private String tagName;\n\n    /**\n     * 标签类型：1-系统标签，2-自定义标签\n     */\n    private Integer tagType;\n\n    /**\n     * 状态：0-未发布，1-已发布\n     */\n    private Integer status;\n\n    /**\n     * 是否删除\n     */\n    private Integer deleted;\n}",
+      "symbol": "TagDO"
+    },
+    "article-map": {
+      "path": "paicoding-service/src/main/java/com/github/paicoding/forum/service/article/repository/entity/ArticleTagDO.java",
+      "text": "@TableName(\"article_tag\")\npublic class ArticleTagDO extends BaseDO {\n\n    private static final long serialVersionUID = 1L;\n\n    /**\n     * 文章ID\n     */\n    private Long articleId;\n\n    /**\n     * 标签id\n     */\n    private Long tagId;\n\n    private Integer deleted;\n}",
+      "symbol": "ArticleTagDO"
+    },
+    "article-dto": {
+      "path": "paicoding-api/src/main/java/com/github/paicoding/forum/api/model/vo/article/dto/TagDTO.java",
+      "text": "public class TagDTO implements Serializable {\n    private static final long serialVersionUID = -8614833588325787479L;\n\n    private Long tagId;\n\n    private String tag;\n\n    private Integer status;\n\n    private Boolean selected;\n}",
+      "symbol": "TagDTO"
+    },
+    "base-do": {
+      "path": "paicoding-api/src/main/java/com/github/paicoding/forum/api/model/entity/BaseDO.java",
+      "text": "public class BaseDO implements Serializable {\n\n    @TableId(type = IdType.AUTO)\n    private Long id;\n\n    private Date createTime;\n\n    private Date updateTime;\n}",
+      "symbol": "BaseDO"
+    },
+    "config-storage": {
+      "path": "paicoding-api/src/main/java/com/github/paicoding/forum/api/model/vo/banner/dto/ConfigDTO.java",
+      "text": "public class ConfigDTO extends BaseDTO {\n\n    /**\n     * 类型\n     */\n    private Integer type;\n\n    /**\n     * 名称\n     */\n    private String name;\n\n    /**\n     * 图片链接\n     */\n    @JsonSerialize(using = CdnImgSerializer.class)\n    private String bannerUrl;\n\n    /**\n     * 跳转链接\n     */\n    private String jumpUrl;\n\n    /**\n     * 内容\n     */\n    private String content;\n\n    /**\n     * 排序\n     */\n    private Integer rank;\n\n    /**\n     * 状态：0-未发布，1-已发布\n     */\n    private Integer status;\n\n    /**\n     * json格式扩展信息\n     */\n    private String extra;\n\n    /**\n     * 配置相关的标签：如 火，推荐，精选 等等，英文逗号分隔\n     *\n     * @see ConfigTagEnum#getCode()\n     */\n    private String tags;\n\n    public ConfigDTO setBannerUrl(String bannerUrl) {\n        this.bannerUrl = CdnUtil.autoTransCdn(bannerUrl);\n        return this;\n    }\n}",
+      "symbol": "ConfigDTO"
+    },
+    "config-kinds": {
+      "path": "paicoding-api/src/main/java/com/github/paicoding/forum/api/model/enums/ConfigTagEnum.java",
+      "text": "public enum ConfigTagEnum {\n\n    EMPTY(0, \"\"),\n    HOT(1, \"热门\"),\n    OFFICAL(2, \"官方\"),\n    COMMENT(3, \"推荐\"),\n    ;\n\n    ConfigTagEnum(Integer code, String desc) {\n        this.code = code;\n        this.desc = desc;\n    }\n\n    private final Integer code;\n    private final String desc;\n\n    public static ConfigTagEnum formCode(Integer code) {\n        for (ConfigTagEnum value : ConfigTagEnum.values()) {\n            if (value.getCode().equals(code)) {\n                return value;\n            }\n        }\n        return ConfigTagEnum.EMPTY;\n    }\n}",
+      "symbol": "ConfigTagEnum"
+    },
+    "ui-select": {
+      "path": "paicoding-api/src/main/java/com/github/paicoding/forum/api/model/vo/article/dto/TagSelectDTO.java",
+      "text": "public class TagSelectDTO implements Serializable {\n\n    /**\n     * 类型\n     */\n    private String selectType;\n\n    /**\n     * 描述\n     */\n    private String selectDesc;\n\n    /**\n     * 是否选中\n     */\n    private Boolean selected;\n}",
+      "symbol": "TagSelectDTO"
+    },
+    "ui-labels": {
+      "path": "paicoding-api/src/main/java/com/github/paicoding/forum/api/model/enums/HomeSelectEnum.java",
+      "text": "public enum HomeSelectEnum {\n\n    ARTICLE(\"article\", \"文章\"),\n    READ(\"read\", \"浏览记录\"),\n    FOLLOW(\"follow\", \"关注\"),\n    COLLECTION(\"collection\", \"收藏\");\n\n    HomeSelectEnum(String code, String desc) {\n        this.code = code;\n        this.desc = desc;\n    }\n\n    private final String code;\n    private final String desc;\n\n    public static HomeSelectEnum fromCode(String code) {\n        for (HomeSelectEnum value : HomeSelectEnum.values()) {\n            if (value.getCode().equals(code)) {\n                return value;\n            }\n        }\n        return HomeSelectEnum.ARTICLE;\n    }\n}",
+      "symbol": "HomeSelectEnum"
+    },
+    "article-filter": {
+      "path": "paicoding-service/src/main/java/com/github/paicoding/forum/service/article/service/impl/ArticleReadServiceImpl.java",
+      "text": "public PageListVo<ArticleDTO> queryArticlesByTag(Long tagId, PageParam page) {\n        List<ArticleDO> records = articleDao.listRelatedArticlesOrderByReadCount(null, Arrays.asList(tagId), page);\n        return buildArticleListVo(records, page.getPageSize());"
+    },
+    "article-recommend": {
+      "path": "paicoding-service/src/main/java/com/github/paicoding/forum/service/article/service/impl/ArticleRecommendServiceImpl.java",
+      "text": "List<Long> tagIds = articleTagDao.listArticleTags(articleId).stream()\n                .map(ArticleTagDO::getTagId).collect(Collectors.toList());\n        if (CollectionUtils.isEmpty(tagIds)) {\n            return PageListVo.emptyVo();\n        }\n\n        List<ArticleDO> recommendArticles = articleDao.listRelatedArticlesOrderByReadCount(article.getCategoryId(), tagIds, page);"
+    },
+    "config-render": {
+      "path": "paicoding-service/src/main/java/com/github/paicoding/forum/service/sidebar/service/SidebarServiceImpl.java",
+      "text": "String tagsDesc = \"\";\n        if (StringUtils.isNotBlank(config.getTags())) {\n            tagsDesc = Splitter.on(\",\").splitToStream(config.getTags())\n                    .map(s -> ConfigTagEnum.formCode(Integer.parseInt(s.trim())).getDesc())\n                    .collect(Collectors.joining(\",\"));\n        }\n        return new SideBarDTO().setTitle(tagsDesc).setSubTitle(config.getName())"
+    },
+    "ui-choices": {
+      "path": "paicoding-web/src/main/java/com/github/paicoding/forum/web/front/user/view/UserViewController.java",
+      "text": "private static final List<String> homeSelectTags = Arrays.asList(\"article\", \"read\", \"follow\", \"collection\");\n    private static final List<String> followSelectTags = Arrays.asList(\"follow\", \"fans\");"
+    },
+    "ui-restrict": {
+      "path": "paicoding-web/src/main/java/com/github/paicoding/forum/web/front/user/view/UserViewController.java",
+      "text": "if (!isAuthor && \"read\".equals(tag)) {\n                // 只有本人才能看自己的阅读历史\n                return;"
+    }
+  }
+}

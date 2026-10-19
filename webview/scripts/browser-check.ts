@@ -1,3 +1,7 @@
+import { checkComponentPreviews, checkDiagnosticBatches } from "./browser-component-previews-check";
+import { checkCanvasIdle } from "./browser-idle-check";
+import { checkDiagonalWheel } from "./browser-wheel-check";
+import { checkCacheUnderstanding, checkSourceNodes } from "./browser-understanding-check";
 import { chromium } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import assert from "node:assert/strict";
@@ -215,7 +219,13 @@ try {
   await checkAnnotationStability(browser);
   await checkResizeAndHover(browser);
   await checkTagConcepts(browser);
+  await checkSourceNodes(browser);
+  await checkCacheUnderstanding(browser);
   await checkCodeSamples(browser);
+  await checkComponentPreviews(browser);
+  await checkDiagnosticBatches(browser);
+  await checkDiagonalWheel(browser);
+  await checkCanvasIdle(browser);
   await checkRedisResume(browser);
   const actual = JSON.parse(await readFile("../docs/examples/redis-history.view.json", "utf8"));
   snapshot.views.push({ ...root, ref: "view:redis-actual", document: actual, sources: Object.fromEntries(Object.entries(actual.sources).map(([id, value]) => [id, { ...(value as object), version: "offline-fixture", line: 1 }])) } as View);

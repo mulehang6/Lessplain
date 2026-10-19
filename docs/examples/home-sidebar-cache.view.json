@@ -1,0 +1,55 @@
+{
+  "title": "热门文章为什么暂未更新",
+  "question": "底层文章数据已经变化，为什么首页热门文章仍显示旧结果，什么时候才会更新？",
+  "spec": {
+    "root": "home-cache",
+    "elements": {
+      "home-cache": {
+        "type": "Cluster",
+        "props": {
+          "title": "热门文章为什么暂未更新"
+        },
+        "slots": {
+          "companion": [
+            "cache-lab"
+          ]
+        }
+      },
+      "cache-lab": {
+        "type": "Demo",
+        "props": {
+          "demo": "home-cache-lab",
+          "title": "缓存与返回结果",
+          "height": 550
+        }
+      }
+    }
+  },
+  "sources": {
+    "home-cache": {
+      "path": "paicoding-service/src/main/java/com/github/paicoding/forum/service/sidebar/service/SidebarServiceImpl.java",
+      "text": "@Cacheable(key = \"'homeSidebar'\", cacheManager = \"caffeineCacheManager\", cacheNames = \"home\")"
+    },
+    "hot-limit": {
+      "path": "paicoding-service/src/main/java/com/github/paicoding/forum/service/sidebar/service/SidebarServiceImpl.java",
+      "text": "private SideBarDTO hotArticles() {\n        PageListVo<SimpleArticleDTO> vo = articleReadService.queryHotArticlesForRecommend(PageParam.newPageInstance(1, 8));\n        List<SideBarItemDTO> items = vo.getList().stream().map(s -> new SideBarItemDTO().setTitle(s.getTitle()).setUrl(\"/article/detail/\" + s.getId()).setTime(s.getCreateTime().getTime())).collect(Collectors.toList());\n        return new SideBarDTO().setTitle(\"热门文章\").setItems(items).setStyle(SidebarStyleEnum.ARTICLES.getStyle());"
+    },
+    "hot-sql": {
+      "path": "paicoding-service/src/main/resources/mapper/ArticleMapper.xml",
+      "text": "<select id=\"listArticlesByReadCounts\"\n            resultType=\"com.github.paicoding.forum.api.model.vo.article.dto.SimpleArticleDTO\">\n        select rc.document_id as id, a.user_id as authorId, a.title as title, a.create_time as createTime\n        from read_count as rc left join article as a on rc.document_id = a.id\n        where rc.document_type = ${@com.github.paicoding.forum.api.model.enums.DocumentTypeEnum@ARTICLE.code}\n        and a.status = ${@com.github.paicoding.forum.api.model.enums.PushStatusEnum@ONLINE.code}\n        and a.deleted = ${@com.github.paicoding.forum.api.model.enums.YesOrNoEnum@NO.code} order by rc.cnt desc\n        <include refid=\"limit\"/>\n    </select>"
+    },
+    "local-ttl": {
+      "path": "paicoding-core/src/main/java/com/github/paicoding/forum/core/ForumCoreAutoConfig.java",
+      "text": "@Bean(\"caffeineCacheManager\")\n    public CacheManager cacheManager() {\n        CaffeineCacheManager cacheManager = new CaffeineCacheManager();\n        cacheManager.setCaffeine(Caffeine.newBuilder()\n                // 设置过期时间，写入后五分钟过期\n                .expireAfterWrite(5, TimeUnit.MINUTES)\n                // 设置缓存的初始容量和最大容量\n                .initialCapacity(100)\n                .maximumSize(200)\n        );\n        return cacheManager;"
+    },
+    "home-entry": {
+      "path": "paicoding-web/src/main/java/com/github/paicoding/forum/web/front/home/helper/IndexRecommendHelper.java",
+      "text": ".async(() -> vo.setSideBarItems(sidebarService.queryHomeSidebarList()), \"侧边栏\")"
+    }
+  },
+  "demos": {
+    "home-cache-lab": {
+      "html": "<!doctype html>\n<html lang=\"zh-CN\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<style>\n*{box-sizing:border-box}body{margin:0;padding:18px;background:var(--demo-background,#1e1f22);color:var(--demo-foreground,#ddd);font:14px/1.55 system-ui,sans-serif}\nbutton{font:inherit;color:inherit;border:1px solid color-mix(in srgb,currentColor 24%,transparent);border-radius:7px;background:color-mix(in srgb,currentColor 6%,transparent);padding:7px 11px;cursor:pointer}\nbutton:hover{background:color-mix(in srgb,currentColor 13%,transparent)}button:focus-visible{outline:2px solid #679dff;outline-offset:3px}button.primary{background:#376ac7;color:#fff;border-color:#679dff}\n.intro{margin:0 0 12px}.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.clock{margin-left:auto;font-variant-numeric:tabular-nums}.muted{opacity:.75;font-size:12px}\n.scene{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:16px 0 10px}.panel{border:1px solid color-mix(in srgb,var(--tone) 55%,transparent);background:color-mix(in srgb,var(--tone) 7%,transparent);border-radius:9px;padding:12px;min-width:0}\nh2{margin:0;font-size:14px}.sub{font-size:12px;opacity:.75;margin:3px 0 12px;min-height:38px}.list{margin:0;padding-left:23px;min-height:100px}.list li{padding:4px 0}.number{float:right;font-variant-numeric:tabular-nums}.source{padding:4px 0;border:0;background:transparent;color:light-dark(#24559e,#79a7ff);font-size:12px;text-align:left}.source:hover{background:transparent;text-decoration:underline}\n.state{font-size:12px;margin:8px 0;min-height:20px}.feedback{min-height:88px;margin:0;padding:10px 12px;border-left:3px solid #c5a24f;background:color-mix(in srgb,#c5a24f 7%,transparent)}.scope{margin:12px 0 0}.sources{display:flex;gap:18px;flex-wrap:wrap;margin-top:8px}\n@media(max-width:480px){.scene{grid-template-columns:1fr}.list{min-height:70px}.sub{min-height:0}}\n</style></head><body>\n<p class=\"intro\">数据库变了，缓存和这次返回会一起变吗？</p>\n<div class=\"bar\"><button class=\"primary\" id=\"visit\">访问侧栏</button><button id=\"change\">修改模拟数据</button><button id=\"advance\">推进 1 分钟</button><button id=\"reset\">重置</button><span class=\"clock\">模拟时间 <strong id=\"clock\">0:00</strong></span></div>\n<div class=\"scene\">\n <section class=\"panel\" style=\"--tone:#79a7ff\"><h2>数据库当前内容</h2><p class=\"sub\">模拟阅读数决定热门文章的排序。</p><ol class=\"list\" id=\"database\"></ol><p class=\"state\">查库次数 <strong id=\"queries\">0</strong></p><button class=\"source\" data-source=\"hot-sql\">查看查询与排序 ↗</button></section>\n <section class=\"panel\" style=\"--tone:#d6ae58\"><h2>本地缓存中的结果</h2><p class=\"sub\">home / homeSidebar<br>这里只画热门文章部分。</p><ol class=\"list\" id=\"cache\"></ol><p class=\"state\" id=\"ttl\">尚未写入</p><button class=\"source\" data-source=\"local-ttl\">查看写入后 5 分钟过期 ↗</button></section>\n <section class=\"panel\" style=\"--tone:#67b982\"><h2>最近一次返回</h2><p class=\"sub\">保留最近一次访问实际取到的模拟结果。</p><ol class=\"list\" id=\"returned\"></ol><p class=\"state\" id=\"origin\">尚未访问</p><button class=\"source\" data-source=\"home-cache\">查看命中时跳过方法体 ↗</button></section>\n</div>\n<p id=\"feedback\" class=\"feedback\" role=\"status\" aria-live=\"polite\"></p>\n<p class=\"scope muted\">源码推演，非运行记录。实际缓存整个首页侧栏列表；模拟只突出热门文章，假定缓存已启用且未提前淘汰。文章与阅读数均为虚构。</p>\n<div class=\"sources\"><button class=\"source\" data-source=\"home-entry\">首页侧栏调用 ↗</button><button class=\"source\" data-source=\"hot-limit\">组装热门文章 ↗</button></div>\n<script>\nconst initial = () => ({ now:0, db:[{name:'文章 A',reads:100},{name:'文章 B',reads:80},{name:'文章 C',reads:40}], cached:null, writtenAt:null, returned:null, queries:0, visits:0, hit:null, message:'先访问一次侧栏，再修改模拟数据，比较这三处的变化。' });\nlet state=initial();\nconst $=id=>document.getElementById(id);\nconst send=(method,params)=>parent.postMessage({channel:'lessplain-demo',method,params},'*');\nconst time=seconds=>Math.floor(seconds/60)+':'+String(seconds%60).padStart(2,'0');\nfunction list(id,values,empty,counts=false){const el=$(id);el.replaceChildren();if(!values){const li=document.createElement('li');li.textContent=empty;el.append(li);return}for(const value of values){const li=document.createElement('li');li.textContent=counts?value.name:value;if(counts){const n=document.createElement('span');n.className='number';n.textContent=value.reads;li.append(n)}el.append(li)}}\nfunction render(){\n list('database',state.db,null,true);list('cache',state.cached,'尚无结果');list('returned',state.returned,'尚无返回');\n $('clock').textContent=time(state.now);$('queries').textContent=state.queries;\n const remaining=state.cached?Math.max(0,300-(state.now-state.writtenAt)):0;\n $('ttl').textContent=!state.cached?'尚未写入':remaining?'剩余 '+time(remaining):'已过期，等待下次访问';\n $('origin').textContent=state.hit===null?'尚未访问':state.hit?'第 '+state.visits+' 次：缓存命中':'第 '+state.visits+' 次：查库并写入';\n $('feedback').textContent=state.message;\n}\nfunction commit(){render();send('setState',{path:'/cacheLab',value:state})}\n$('visit').onclick=()=>{const hit=state.cached!==null&&state.now-state.writtenAt<300;state.visits++;state.hit=hit;if(hit){state.returned=[...state.cached];state.message='命中缓存，直接返回旧的侧栏列表；这次没有执行热门文章查询。'}else{state.queries++;state.cached=[...state.db].sort((a,b)=>b.reads-a.reads).slice(0,8).map(a=>a.name);state.writtenAt=state.now;state.returned=[...state.cached];state.message='没有可用缓存，进入方法体查库，重新组装侧栏列表并缓存；过期时间从这次写入算起。'}commit()};\n$('change').onclick=()=>{state.db=state.db.map(a=>a.name==='文章 C'?{...a,reads:a.reads+100}:a);state.message='只修改了模拟数据库。缓存和最近一次返回保持原样，再访问一次看看。';commit()};\n$('advance').onclick=()=>{state.now+=60;state.message=state.cached&&state.now-state.writtenAt>=300?'缓存已到期，但没有新请求，因此没有查库；下次访问才重新构建侧栏。':'只推进模拟时间；时间流逝本身不会查询数据库。';commit()};\n$('reset').onclick=()=>{state=initial();commit()};\ndocument.querySelectorAll('[data-source]').forEach(button=>button.onclick=()=>send('openSource',{source:button.dataset.source}));\naddEventListener('message',event=>{if(event.source!==parent||event.data?.channel!=='lessplain-demo'||event.data?.method!=='state')return;const saved=event.data.params?.state?.cacheLab;if(saved&&Array.isArray(saved.db)){state=structuredClone(saved);render()}});\nrender();\nlet lastHeight=0;\nnew ResizeObserver(()=>{const height=Math.ceil(document.body.getBoundingClientRect().height);if(height!==lastHeight){lastHeight=height;send('resize',{height})}}).observe(document.body);\n</script></body></html>"
+    }
+  }
+}

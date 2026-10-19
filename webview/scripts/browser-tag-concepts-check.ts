@@ -27,12 +27,13 @@ export async function checkTagConcepts(browser: Browser) {
     await choose("article-panel", "文章关联");
     await page.getByText("article_tag 保存文章与标签的关系，不是另一类标签。", { exact: true }).waitFor();
     await choose("config-panel", "热门＋推荐 · 1,3");
-    await page.getByText(/"title": "热门,推荐"/).waitFor();
+    await page.getByText("生成的标题：热门,推荐", { exact: true }).waitFor();
     await config.getByRole("button", { name: "源码入口", exact: true }).click();
     await config.getByRole("button", { name: /subscribeSideBar · 码值转换为标题/ }).click();
     assert.equal(h.calls.findLast(c => c.method === "source")?.params.source, "config-render");
     await choose("navigation-panel", "浏览记录 · read");
-    await page.getByText(/"selectType": "read"/).waitFor();
+    await navigation.getByRole("button", { name: /TagSelectDTO 示例/ }).click();
+    assert.equal(h.calls.findLast(c => c.method === "componentCode")?.params.value.selectType, "read");
     await fit(page);
     const geometry = await page.locator(".canvas-companion-node").evaluateAll(nodes => nodes.map(node => (node as HTMLElement).offsetHeight));
     const camera = await viewport(page).getAttribute("style");
