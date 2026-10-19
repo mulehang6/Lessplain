@@ -56,6 +56,18 @@ main { flex:1; min-width:0; overflow:auto; padding:18px; }
 .annotation-history-dot { position:absolute; top:0; right:0; width:6px; height:6px; border-radius:50%; background:var(--muted-foreground); }
 .sample-button { display:flex; align-items:center; gap:8px; color:var(--foreground); border:0; background:transparent; padding:4px 0; text-align:left; }
 .sample-kind { font-size:.8em; color:var(--muted-foreground); }
+.fold-trigger { display:flex; width:100%; align-items:center; justify-content:space-between; gap:12px; padding:9px 12px; text-align:left; }
+.fold-content { padding-top:8px; }
+.fold-content[hidden] { display:none; }
+.lesson-accordion>.lesson-fold+.lesson-fold { margin-top:6px; }
+.semantic-card,.semantic-badge { --tone:var(--foreground); }
+[data-tone=info] { --tone:var(--primary); }
+[data-tone=success] { --tone:var(--diagram-success); }
+[data-tone=warning] { --tone:var(--diagram-warning); }
+[data-tone=danger] { --tone:var(--diagram-failure); }
+.semantic-card[data-tone]>*,.semantic-badge[data-tone]>* { background:color-mix(in srgb,var(--tone) 10%,var(--card)); border-color:color-mix(in srgb,var(--tone) 55%,var(--border)); color:var(--foreground); }
+.semantic-badge[data-tone]>* { box-shadow:inset 3px 0 var(--tone); padding-inline:9px; }
+.code-entry { padding-block:6px; }
 .source-button { color:var(--primary); border:0; background:transparent; padding:3px 0; text-align:left; }
 .code { font:var(--ide-code-font-size,12px)/1.7 var(--ide-code-font,ui-monospace,monospace); white-space:pre-wrap; overflow-wrap:anywhere; border:1px solid var(--border); background:var(--card); border-radius:6px; padding:12px; max-height:400px; overflow:auto; user-select:text; }
 .notes { border-top:1px solid var(--border); margin-top:24px; padding-top:16px; }

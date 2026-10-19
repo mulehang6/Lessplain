@@ -15,14 +15,26 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import com.intellij.util.concurrency.AppExecutorUtil
+import java.util.concurrent.TimeUnit
 
 /** 不依赖页面 JS 的内部模式探针。回调不阻塞，不读取源码、问题或 bridge payload。 */
-internal class BrowserDiagnostics(private val browser: JBCefBrowser, private val hostId: String) : Disposable {
+internal class BrowserDiagnostics(
+    private val browser: JBCefBrowser,
+    private val hostId: String,
+    private val showing: () -> Boolean,
+) : Disposable {
     private val log = Logger.getInstance(BrowserDiagnostics::class.java)
     private val events = BrowserDiagnosticEvents()
     private val capturing = AtomicBoolean()
     private val captures = AtomicInteger()
     @Volatile private var disposed = false
+    private val heartbeat = HeartbeatWatchdog()
+    private val saving = AtomicBoolean()
+    private val saved = AtomicInteger()
+    private val watchdog = AppExecutorUtil.getAppScheduledExecutorService().scheduleWithFixedDelay({
+        if (!disposed && heartbeat.poll(showing())) anomaly("heartbeat-missed")
+    }, 2, 2, TimeUnit.SECONDS)
     private val life = object : CefLifeSpanHandlerAdapter() {
         override fun onAfterCreated(browser: CefBrowser) = mark("browser-created", "browserId" to browser.identifier)
         override fun onBeforeClose(browser: CefBrowser) = mark("browser-closing", "browserId" to browser.identifier)
@@ -30,13 +42,52 @@ internal class BrowserDiagnostics(private val browser: JBCefBrowser, private val
     private val requests = object : CefRequestHandlerAdapter() {
         override fun onRenderProcessTerminated(browser: CefBrowser, status: CefRequestHandler.TerminationStatus, errorCode: Int, errorString: String?) {
             mark("renderer-terminated", "status" to status.name, "errorCode" to errorCode, "browserId" to browser.identifier)
+            anomaly("renderer-terminated")
+        }
+    }
+
+    /** 只接收有界数值字段；正常批次只进入内存，不向 idea.log 写每条事件。 */
+    fun receive(params: JsonObject) {
+        if (disposed) return
+        heartbeat.receive(params["visible"]?.jsonPrimitive?.booleanOrNull == true)
+        val batch = params["events"] as? JsonArray ?: return
+        for (item in batch.takeLast(128)) {
+            val objectValue = item as? JsonObject ?: continue
+            val kind = objectValue["kind"]?.jsonPrimitive?.contentOrNull ?: continue
+            if (!kind.matches(Regex("[a-z-]{1,40}"))) continue
+            val fields = objectValue.entries.take(20).mapNotNull { (key, value) ->
+                val number = (value as? JsonPrimitive)?.doubleOrNull
+                if (number?.isFinite() == true && key.matches(Regex("[A-Za-z]{1,30}"))) key to JsonPrimitive(number) else null
+            }.toMap()
+            events.record("js-$kind", fields)
+        }
+    }
+
+    private fun anomaly(reason: String) {
+        if (disposed || saved.get() >= 10 || !saving.compareAndSet(false, true)) return
+        AppExecutorUtil.getAppExecutorService().execute {
+            try {
+                if (!disposed) {
+                    val file = DiagnosticSnapshots.save(hostId, reason, events.snapshot())
+                    saved.incrementAndGet()
+                    log.info("Lessplain diagnostic snapshot: $file")
+                }
+            } catch (failure: Exception) { log.warn("Lessplain diagnostic snapshot failed", failure) }
+            finally { saving.set(false) }
         }
     }
 
     init {
-        browser.jbCefClient.addLifeSpanHandler(life, browser.cefBrowser)
-        browser.jbCefClient.addRequestHandler(requests, browser.cefBrowser)
-        mark("diagnostics-installed")
+        try {
+            browser.jbCefClient.addLifeSpanHandler(life, browser.cefBrowser)
+            browser.jbCefClient.addRequestHandler(requests, browser.cefBrowser)
+            mark("diagnostics-installed")
+        } catch (failure: Exception) {
+            watchdog.cancel(false)
+            runCatching { browser.jbCefClient.removeLifeSpanHandler(life, browser.cefBrowser) }
+            runCatching { browser.jbCefClient.removeRequestHandler(requests, browser.cefBrowser) }
+            throw failure
+        }
     }
 
     fun mark(kind: String, vararg fields: Pair<String, Any>) {
@@ -93,6 +144,7 @@ internal class BrowserDiagnostics(private val browser: JBCefBrowser, private val
         if (disposed) return
         mark("diagnostics-detaching")
         disposed = true
+        watchdog.cancel(false)
         browser.jbCefClient.removeLifeSpanHandler(life, browser.cefBrowser)
         browser.jbCefClient.removeRequestHandler(requests, browser.cefBrowser)
     }

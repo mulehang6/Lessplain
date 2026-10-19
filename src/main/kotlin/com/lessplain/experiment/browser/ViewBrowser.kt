@@ -6,6 +6,7 @@ import com.intellij.openapi.actionSystem.UiDataProvider
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
+import com.intellij.openapi.util.SystemInfoRt
 import com.intellij.ui.jcef.JBCefApp
 import com.intellij.ui.jcef.JBCefBrowser
 import com.intellij.ui.jcef.JBCefBrowserBase
@@ -59,12 +60,14 @@ internal class ViewBrowser(project: Project, private val ref: String? = null) : 
     private val hostId = UUID.randomUUID().toString()
     private val hostKind = if (ref == null) BrowserHostKind.TOOL_WINDOW else BrowserHostKind.EDITOR
     private val initialRef = if (hostKind == BrowserHostKind.TOOL_WINDOW) service.toolWindowRef else ref
-    private val boot = buildJsonObject {
+    private val boot: JsonObject get() = buildJsonObject {
         put("hostId", hostId)
         put("host", hostKind.wireValue)
         initialRef?.let { put("ref", it) }
         put("title", "Lessplain")
         put("diagnostics", ApplicationManager.getApplication().isInternal)
+        // Windows OSR 的横向 wheel 与 IDEA 原生编辑器方向相反；只校正该实际渲染通道。
+        put("horizontalWheelSign", if (SystemInfoRt.isWindows && browser?.isOffScreenRendering == true) -1 else 1)
     }
     @Volatile private var pageTheme = theme()
     private val resources = StaticResources { initialPage(it, pageTheme, boot) }
@@ -78,7 +81,7 @@ internal class ViewBrowser(project: Project, private val ref: String? = null) : 
     private val jobs = ConcurrentHashMap.newKeySet<Job>()
     @Volatile private var disposed = false
     @Volatile private var generation = 0L
-    private val commands = ViewCommands(project, service, hostId, hostKind)
+    private val commands = ViewCommands(project, service, hostId, hostKind) { diagnostics }
     private val outbox = BridgeOutbox { raw ->
         val page = generation
         ApplicationManager.getApplication().invokeLater {
@@ -104,7 +107,7 @@ internal class ViewBrowser(project: Project, private val ref: String? = null) : 
                 val created = JBCefBrowser.createBuilder().setOffScreenRendering(false).build()
                 browser = created
                 Disposer.register(this, created)
-                if (ApplicationManager.getApplication().isInternal) diagnostics = BrowserDiagnostics(created, hostId)
+                if (ApplicationManager.getApplication().isInternal) diagnostics = BrowserDiagnostics(created, hostId) { component.isShowing }
                 created.setPageBackgroundColor(pageTheme["--background"]?.jsonPrimitive?.content ?: "#ffffff")
                 val noNativeContextMenu = object : CefContextMenuHandlerAdapter() {
                     override fun onBeforeContextMenu(

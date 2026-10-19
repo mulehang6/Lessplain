@@ -18,12 +18,14 @@ internal class ViewCommands(
     private val service: ViewService,
     private val hostId: String,
     private val hostKind: BrowserHostKind,
+    private val diagnostics: () -> BrowserDiagnostics? = { null },
 ) {
     private val json = service.json
     suspend fun execute(method: String, params: JsonObject): JsonElement {
         fun ref() = params.getValue("ref").jsonPrimitive.content
         fun text(key: String) = params.getValue(key).jsonPrimitive.content
         when (method) {
+            "diagnosticBatch" -> { diagnostics()?.receive(params); return JsonNull }
             "ready" -> {
                 val initialTheme = withContext(Dispatchers.EDT) { theme() }
                 val (snapshot, sequence) = service.published()
@@ -82,6 +84,14 @@ internal class ViewCommands(
                     params["elementId"]?.jsonPrimitive?.contentOrNull, params["nodeId"]?.jsonPrimitive?.contentOrNull,
                     params["state"]?.let { JsonPayload(it.jsonObject) } ?: JsonPayload.empty())
                 service.samples.open(location)
+                return JsonNull
+            }
+            "componentCode" -> {
+                check(service.isBrowserShowing(hostId, ref())) { "当前浏览器已切换到其他页面" }
+                val location = service.engine.componentLocation(ref(), params.getValue("revision").jsonPrimitive.int,
+                    text("elementId"), params["value"] ?: JsonNull, JsonPayload(params.getValue("state").jsonObject))
+                try { service.samples.open(location) }
+                catch (failure: Exception) { service.engine.releaseComponentSnapshot(location.target.id); throw failure }
                 return JsonNull
             }
             else -> error("未知操作")

@@ -8,8 +8,8 @@ import { elementAnchor } from "./popupGeometry";
 /** 元数据订阅只更新当前组件标记，不重建 registry 或改变流内测量。 */
 export function ComponentFrame({ id, type, source, children }: { id: string; type: string; source?: string; children: ReactNode }) {
   const [pending, answered] = useApp(useShallow(state => {
-    const owns = (origin: { viewRef?: string; elementId?: string; nodeId?: string; source?: unknown; sample?: unknown }) =>
-      origin.viewRef === state.selected && origin.elementId === id && !origin.nodeId && !origin.source && !origin.sample;
+    const owns = (origin: { viewRef?: string; elementId?: string; nodeId?: string; source?: unknown; sample?: unknown; componentSnapshot?: unknown }) =>
+      origin.viewRef === state.selected && origin.elementId === id && !origin.nodeId && !origin.source && !origin.sample && !origin.componentSnapshot;
     return [state.snapshot.notes.filter(note => note.status === "pending" && owns(note.origin)).length,
       state.snapshot.views.filter(view => owns(view.origin)).length];
   }));

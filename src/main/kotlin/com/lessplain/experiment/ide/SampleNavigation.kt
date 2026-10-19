@@ -17,6 +17,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.testFramework.LightVirtualFile
 import com.lessplain.experiment.core.digest
+import com.lessplain.experiment.core.componentSnapshotCurrent
 import com.lessplain.experiment.model.*
 import com.lessplain.model.SourceSelectionRange
 import com.lessplain.ui.UnderstandingUiStyle
@@ -47,7 +48,7 @@ internal fun sampleFileName(sample: CodeSample): String {
 }
 
 /** 原生样例标签的所有权、当前定位及失效处理均属于项目服务。 */
-internal class SampleNavigation(private val project: Project) : Disposable {
+internal class SampleNavigation(private val project: Project, private val releaseSnapshot: (String) -> Unit = {}) : Disposable {
     private val files = mutableMapOf<Pair<String, String>, SampleVirtualFile>()
     private var publishedViews: Map<String, ViewRecord>? = null
     private var highlight: RangeHighlighter? = null
@@ -58,13 +59,14 @@ internal class SampleNavigation(private val project: Project) : Disposable {
             override fun fileClosed(source: FileEditorManager, file: VirtualFile) {
                 if (file !is SampleVirtualFile) return
                 files.entries.removeIf { it.value === file }
+                file.location.componentSnapshot?.let { releaseSnapshot(it.id) }
                 if (highlightedFile === file) clearHighlight()
             }
         })
     }
 
     suspend fun open(location: SampleLocation) = withContext(Dispatchers.EDT) {
-        check(publishedViews?.let { it[location.viewRef]?.document?.codeSamples.orEmpty()[location.target.id] != location.sample } != true) {
+        check(publishedViews?.let { !currentLocation(it[location.viewRef], location) } != true) {
             "教学代码已变化或页面已删除，请重新定位"
         }
         val key = location.viewRef to location.target.id
@@ -77,6 +79,8 @@ internal class SampleNavigation(private val project: Project) : Disposable {
         val editor = FileEditorManager.getInstance(project).selectedTextEditor ?: return@withContext
         if (editor.document !== document) return@withContext
         clearHighlight()
+        // 组件预览没有具体执行步骤，不把第一行伪装成当前关注位置。
+        if (location.componentSnapshot != null) return@withContext
         val start = document.getLineStartOffset(location.target.startLine - 1)
         val end = document.getLineEndOffset((location.target.endLine ?: location.target.startLine) - 1)
         highlight = editor.markupModel.addRangeHighlighter(start, end, HighlighterLayer.SELECTION - 1,
@@ -97,8 +101,9 @@ internal class SampleNavigation(private val project: Project) : Disposable {
         val manager = FileEditorManager.getInstance(project)
         manager.openFiles.filterIsInstance<SampleVirtualFile>().forEach { file ->
             val view = views[file.location.viewRef]
-            if (view == null || view.document.codeSamples.orEmpty()[file.location.target.id] != file.location.sample) {
+            if (!currentLocation(view, file.location)) {
                 file.current = false
+                file.location.componentSnapshot?.let { releaseSnapshot(it.id) }
                 if (highlightedFile === file) clearHighlight()
                 if (view == null) manager.closeFile(file)
             }
@@ -106,11 +111,21 @@ internal class SampleNavigation(private val project: Project) : Disposable {
     }
 
     private fun clearHighlight() { highlight?.dispose(); highlight = null; highlightedFile = null }
-    override fun dispose() { clearHighlight(); files.values.forEach { it.current = false }; files.clear() }
+    override fun dispose() {
+        clearHighlight()
+        files.values.forEach { it.current = false; it.location.componentSnapshot?.let { snapshot -> releaseSnapshot(snapshot.id) } }
+        files.clear()
+    }
 }
+
+private fun currentLocation(view: ViewRecord?, location: SampleLocation): Boolean = location.componentSnapshot?.let {
+    componentSnapshotCurrent(view, it)
+} ?: (view != null && view.document.codeSamples.orEmpty()[location.target.id] == location.sample)
 
 /** 只使用打开时的样例和当前选区；正文变更由保存端再次拒绝。 */
 internal fun SampleLocation.selection(start: Int, end: Int): ViewOrigin {
+    componentSnapshot?.let { return origin.copy(entry = ViewOriginEntry.COMPONENT_SELECTION,
+        componentSnapshot = ComponentSelection(it, SourceSelectionRange(start, end))) }
     val lines = sample.code.lines()
     val targetStart = lines.take(target.startLine - 1).sumOf { it.length + 1 }
     val targetEnd = lines.take(target.endLine ?: target.startLine).sumOf { it.length + 1 } - 1

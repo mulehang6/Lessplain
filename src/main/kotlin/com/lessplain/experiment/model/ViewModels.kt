@@ -57,6 +57,7 @@ data class ViewOrigin(
     /** 产生注释的入口；源码选择即使绑定图节点也始终是 sourceSelection。 */
     val entry: String? = null,
     val sample: SampleSelection? = null,
+    val componentSnapshot: ComponentSelection? = null,
 )
 
 /** 页面交互入口，避免各个原生提问调用自行拼接协议字符串。 */
@@ -65,6 +66,7 @@ object ViewOriginEntry {
     const val COMPONENT = "component"
     const val SOURCE_SELECTION = "sourceSelection"
     const val SAMPLE_SELECTION = "sampleSelection"
+    const val COMPONENT_SELECTION = "componentSelection"
 }
 
 @Serializable

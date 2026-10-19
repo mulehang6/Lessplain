@@ -27,4 +27,5 @@ data class SampleLocation(
     val target: CodeSampleTarget,
     val sample: CodeSample,
     val origin: ViewOrigin,
+    val componentSnapshot: ComponentSnapshot? = null,
 )

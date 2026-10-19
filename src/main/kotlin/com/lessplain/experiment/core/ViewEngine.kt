@@ -16,6 +16,7 @@ class ViewEngine(
     private val resolveSources: (Map<String, SourceReference>) -> Map<String, ResolvedSource>,
 ) {
     private val json = store.json
+    private val componentSnapshots = java.util.concurrent.ConcurrentHashMap<String, SampleLocation>()
 
     init {
         NoteHistory.upgrade(store)
@@ -194,6 +195,7 @@ class ViewEngine(
             origin.viewRef?.let { record(it) }
             origin.source?.let(::validateSelectionSource)
             origin.sample?.let { validateSampleOrigin(record(requireNotNull(origin.viewRef)), origin) }
+            origin.componentSnapshot?.let { validateComponentOrigin(record(requireNotNull(origin.viewRef)), origin, componentSnapshots[it.snapshot.id]) }
         }
         val note = ViewNote(newRef("note") + "@1", kind, text.trim(), origin, createdAt = System.currentTimeMillis(), ownerRef = origin.viewRef)
         put("notes", baseRef(note.ref), json.encodeToString(note))
@@ -219,6 +221,7 @@ class ViewEngine(
     fun sourceRef(origin: ViewOrigin): String = store.transaction {
         origin.viewRef?.let { record(it) }
         origin.sample?.let { validateSampleOrigin(record(requireNotNull(origin.viewRef)), origin) }
+        origin.componentSnapshot?.let { validateComponentOrigin(record(requireNotNull(origin.viewRef)), origin, componentSnapshots[it.snapshot.id]) }
         newRef("source").also { put("origins", it, json.encodeToString(origin)) }
     }
 
@@ -233,6 +236,21 @@ class ViewEngine(
         record(ref)
         put("browse", ref, state.value.toString())
     }
+
+    /** 快照签发与版本检查同一次读取完成；未保存的预览只占用有界内存。 */
+    fun componentLocation(ref: String, revision: Int, elementId: String, value: JsonElement, state: JsonPayload): SampleLocation = store.read {
+        val view = record(ref)
+        check(view.revision == revision) { "页面已变化，请重新打开代码" }
+        val next = componentLocation(view, elementId, value, state)
+        componentSnapshots.values.firstOrNull { it.viewRef == ref && it.origin == next.origin && it.sample == next.sample &&
+            it.componentSnapshot?.componentVersion == next.componentSnapshot?.componentVersion } ?: run {
+            require(componentSnapshots.size < 100) { "打开的组件快照过多，请先关闭部分代码标签" }
+            next.also { componentSnapshots[it.target.id] = it }
+        }
+    }
+
+    fun releaseComponentSnapshot(id: String) { componentSnapshots.remove(id) }
+    fun clearComponentSnapshots() { componentSnapshots.clear() }
 
     fun rename(ref: String, title: String) = store.transaction {
         require(title.isNotBlank()) { "标题不能为空" }
@@ -340,6 +358,7 @@ class ViewEngine(
     }
 
     private fun ViewStore.Transaction.validateOriginEntry(origin: ViewOrigin) {
+        require(origin.componentSnapshot == null || origin.entry == ViewOriginEntry.COMPONENT_SELECTION) { "组件快照入口无效" }
         when (origin.entry) {
             ViewOriginEntry.NODE -> require(
                 origin.viewRef != null && origin.elementId != null && origin.nodeId != null && origin.source == null && origin.sample == null,
@@ -349,6 +368,7 @@ class ViewEngine(
             ) { "组件备注必须绑定组件且不能包含源码选区" }
             ViewOriginEntry.SOURCE_SELECTION -> require(origin.source != null && origin.sample == null) { "源码选择备注缺少冻结源码" }
             ViewOriginEntry.SAMPLE_SELECTION -> require(origin.viewRef != null && origin.sample != null && origin.source == null) { "教学代码问题缺少冻结样例" }
+            ViewOriginEntry.COMPONENT_SELECTION -> require(origin.viewRef != null && origin.elementId != null && origin.nodeId == null && origin.source == null && origin.sample == null && origin.componentSnapshot != null) { "组件代码问题缺少冻结快照" }
             null -> Unit
             else -> error("备注入口类型无效")
         }

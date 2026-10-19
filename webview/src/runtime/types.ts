@@ -3,7 +3,8 @@ export type Source = { path: string; text: string; symbol?: string; version: str
 export type CodeSample = { title: string; language: string; code: string };
 export type CodeSampleTarget = { id: string; startLine?: number; endLine?: number };
 export type SampleSelection = { id: string; sample: CodeSample; version: string; selectionRange: { startOffset: number; endOffset: number } };
-export type Origin = { entry?: "node" | "component" | "sourceSelection" | "sampleSelection"; viewRef?: string; elementId?: string; nodeId?: string; nodeLabel?: string; source?: Source; sample?: SampleSelection; state: Record<string, unknown> };
+export type ComponentSelection = { snapshot: { id: string; elementId: string; componentVersion: string; content: CodeSample; version: string; originalText?: string }; selectionRange: { startOffset: number; endOffset: number } };
+export type Origin = { entry?: "node" | "component" | "sourceSelection" | "sampleSelection" | "componentSelection"; viewRef?: string; elementId?: string; nodeId?: string; nodeLabel?: string; source?: Source; sample?: SampleSelection; componentSnapshot?: ComponentSelection; state: Record<string, unknown> };
 export type View = {
   ref: string; revision: number; parentRef?: string; createdAt: number; updatedAt: number;
   origin: Origin; sources: Record<string, Source>; answeredNote?: Note;

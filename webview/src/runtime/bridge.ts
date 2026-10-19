@@ -3,7 +3,7 @@ declare global {
   interface Window {
     __lessplainQuery?: (raw: string) => void;
     __lessplainReceive?: (message: BridgeMessage) => void;
-    __lessplainBoot?: { ref?: string; title?: string; hostId?: string; host?: "toolwindow" | "editor"; diagnostics?: boolean };
+    __lessplainBoot?: { ref?: string; title?: string; hostId?: string; host?: "toolwindow" | "editor"; diagnostics?: boolean; horizontalWheelSign?: 1 | -1 };
     __lessplainReceiveChunk?: (packet: string, index: number, total: number, chunk: string) => void;
   }
 }

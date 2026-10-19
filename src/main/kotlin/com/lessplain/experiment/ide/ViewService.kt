@@ -30,11 +30,12 @@ class ViewService(internal val project: Project, private val scope: CoroutineSco
     private val validation by lazy {
         ViewValidation(requireNotNull(javaClass.getResourceAsStream("/webview/catalog.json")) { "前端 catalog 未打包" }.bufferedReader().use { it.readText() })
     }
-    val engine by lazy {
+    private val engineDelegate = lazy {
         ViewEngine(store, { validation.catalog }, validation::validate, { validateViewSelection(project, it) }) {
             resolveViewSources(project, it)
         }
     }
+    val engine by engineDelegate
     private val listeners = CopyOnWriteArrayList<(AppSnapshot, Long, String?, Boolean) -> Unit>()
     private val publication = Mutex()
     private var sequence = 0L
@@ -44,7 +45,7 @@ class ViewService(internal val project: Project, private val scope: CoroutineSco
         internal set
     private val browserHosts = ConcurrentHashMap<String, BrowserHostSession>()
     internal val sources = ViewSourceNavigation(project, this).also { Disposer.register(this, it) }
-    internal val samples = SampleNavigation(project).also { Disposer.register(this, it) }
+    internal val samples = SampleNavigation(project) { engine.releaseComponentSnapshot(it) }.also { Disposer.register(this, it) }
     internal val sourceQuestionDrafts = SourceQuestionDrafts()
 
     private class BrowserHostSession(
@@ -240,6 +241,7 @@ class ViewService(internal val project: Project, private val scope: CoroutineSco
         listeners.clear()
         browserHosts.clear()
         sourceQuestionDrafts.clear()
+        if (engineDelegate.isInitialized()) engine.clearComponentSnapshots()
         store.close()
     }
 }

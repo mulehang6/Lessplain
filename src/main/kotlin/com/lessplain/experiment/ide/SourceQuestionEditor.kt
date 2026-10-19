@@ -53,7 +53,10 @@ internal fun ViewService.openSampleQuestion(editor: Editor, location: SampleLoca
     openFrozenQuestion(editor, origin, location.sample.title, samplePreview(origin))
 }
 
-private fun ViewService.samplePreview(origin: ViewOrigin): SelectedCodePreview? = origin.sample?.let {
+private fun ViewService.samplePreview(origin: ViewOrigin): SelectedCodePreview? = origin.componentSnapshot?.let {
+    SelectedCodePreview(project, text = it.snapshot.content.code.substring(it.selectionRange.startOffset, it.selectionRange.endOffset),
+        fileName = sampleFileName(it.snapshot.content))
+} ?: origin.sample?.let {
     SelectedCodePreview(project, text = it.sample.code.substring(it.selectionRange.startOffset, it.selectionRange.endOffset),
         fileName = sampleFileName(it.sample))
 }

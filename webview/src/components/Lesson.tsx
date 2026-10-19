@@ -13,18 +13,24 @@ import type { View } from "../runtime/types";
 import { WorkspaceHost } from "./WorkspaceHost";
 import { WorkspaceProvider } from "./WorkspaceContext";
 import { wrapRootContent } from "./WorkspaceGeometry";
+import { FoldAccordion, FoldCollapsible } from "./Folding";
 
 const built = defineRegistry(catalog, {
   components: {
-    Stack: ui.Stack, Grid: ui.Grid, Card: ui.Card, Heading: ui.Heading, Text: ui.Text,
-    Badge: ui.Badge, Separator: ui.Separator, Tabs: ui.Tabs, Accordion: ui.Accordion, Collapsible: ui.Collapsible,
+    Stack: ui.Stack, Grid: ui.Grid,
+    Card: component => <div className="semantic-card" data-tone={component.props.tone}><ui.Card {...component} /></div>,
+    Heading: ui.Heading, Text: ui.Text,
+    Badge: component => <span className="semantic-badge" data-tone={component.props.tone}><ui.Badge {...component} /></span>,
+    Separator: ui.Separator, Tabs: ui.Tabs, Accordion: FoldAccordion, Collapsible: FoldCollapsible,
     Button: ui.Button, Input: ui.Input, Select: ui.Select, Slider: ui.Slider, Switch: ui.Switch,
     // Board, Cluster and Graph are represented by the single GlobalCanvas, never nested Renderers.
     Board: () => null, Cluster: () => null, Graph: () => null,
     SourceLink: ({ props }) => <button className="source-button" onClick={() => open(props.source, elementId(props))}>{props.label} ↗</button>,
-    CodeExcerpt: ({ props }) => <section><button className="source-button" onClick={() => open(props.source, elementId(props))}>{props.label ?? currentView()?.sources[props.source]?.path} ↗</button>
-      <pre className="code">{currentView()?.sources[props.source]?.text}</pre></section>,
-    JsonView: ({ props }) => <section>{props.label && <div className="component-title">{props.label}</div>}<pre className="code">{JSON.stringify(props.value, null, 2)}</pre></section>,
+    CodeExcerpt: ({ props }) => <section className="code-entry"><button className="sample-button" onClick={() => openComponentCode(elementId(props))}>
+      <span className="sample-kind">源码快照</span>{props.label ?? "查看保存的代码"} ↗</button>
+      <button className="source-button" onClick={() => open(props.source, elementId(props))}>定位当前源码 ↗</button></section>,
+    JsonView: ({ props }) => <button className="sample-button code-entry" onClick={() => openComponentCode(elementId(props), props.value)}>
+      <span className="sample-kind">{props.format === "text" ? "原始文本" : "JSON"}</span>{props.label ?? "查看内容"} ↗</button>,
     CodeSample: ({ props }) => <button className="sample-button" onClick={() => openCodeSample({ id: props.sample, startLine: props.startLine, endLine: props.endLine }, elementId(props))}>
       <span className="sample-kind">教学代码</span><span>{props.label ?? currentView()?.document.codeSamples?.[props.sample]?.title ?? props.sample} ↗</span>
     </button>,
@@ -38,6 +44,14 @@ const built = defineRegistry(catalog, {
 
 function elementId(props: object): string | undefined {
   return (props as { __elementId?: string }).__elementId;
+}
+
+/** 值和状态在点击时同时克隆，原生标签不受之后的控件变化影响。 */
+function openComponentCode(id: string | undefined, value: unknown = null) {
+  const state = useApp.getState(), view = currentView();
+  if (!view || !id) return;
+  const params = structuredClone({ ref: view.ref, revision: view.revision, elementId: id, value, state: state.lesson });
+  void call("componentCode", params).catch(error => useApp.getState().setError(error instanceof Error ? error.message : String(error)));
 }
 
 function open(source: string, id?: string) {
