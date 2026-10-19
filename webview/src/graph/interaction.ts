@@ -8,7 +8,17 @@ export type WheelInput = {
   deltaY: number;
   shiftKey: boolean;
   ctrlKey: boolean;
+  deltaMode?: number;
 };
+
+/** 保留触摸板双轴矢量；Shift 仅把没有横向分量的传统滚轮转为横移。 */
+export function wheelPanDelta(event: Pick<WheelInput, "deltaX" | "deltaY" | "deltaMode" | "shiftKey">,
+  bounds: Pick<GraphBounds, "width" | "height">, horizontalSign = 1) {
+  const unitX = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? bounds.width : 1;
+  const unitY = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? bounds.height : 1;
+  if (event.shiftKey && event.deltaX === 0) return { x: event.deltaY * unitX, y: 0 };
+  return { x: event.deltaX * unitX * horizontalSign, y: event.deltaY * unitY };
+}
 
 /** 将滚轮手势限定在图画布内，并在 Ctrl 缩放时固定指针下的图上位置。 */
 export function wheelViewport(
@@ -17,6 +27,7 @@ export function wheelViewport(
   event: WheelInput,
   minZoom = 0.2,
   maxZoom = 2,
+  horizontalSign = 1,
 ): Viewport | undefined {
   if (event.ctrlKey) {
     if (!event.deltaY) return undefined;
@@ -29,11 +40,8 @@ export function wheelViewport(
     return { x: x - worldX * zoom, y: y - worldY * zoom, zoom };
   }
 
-  if (event.shiftKey) {
-    const delta = event.deltaX || event.deltaY;
-    return delta ? { ...viewport, x: viewport.x - delta } : undefined;
-  }
-  return event.deltaY ? { ...viewport, y: viewport.y - event.deltaY } : undefined;
+  const delta = wheelPanDelta(event, bounds, horizontalSign);
+  return delta.x || delta.y ? { ...viewport, x: viewport.x - delta.x, y: viewport.y - delta.y } : undefined;
 }
 
 /** 计算保留当前缩放级别的节点居中视口。 */

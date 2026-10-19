@@ -1,10 +1,14 @@
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
-import { bindBridge, ready } from "./runtime/bridge";
+import { bindBridge, call, ready } from "./runtime/bridge";
+import { recordCanvasEvent, setDiagnosticSender } from "./graph/diagnostics";
 import { useApp } from "./runtime/store";
 import "@xyflow/react/dist/style.css";
 import "./style.css";
 
+setDiagnosticSender(batch => call("diagnosticBatch", batch));
+recordCanvasEvent("page-ready");
+window.addEventListener("lessplain-connected", () => recordCanvasEvent("bridge-ready"));
 bindBridge(message => {
   if (message.snapshot && message.sequence !== undefined) {
     if (message.sequence < useApp.getState().sequence) return;

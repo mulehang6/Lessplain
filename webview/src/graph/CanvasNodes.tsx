@@ -1,4 +1,6 @@
-import { memo, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import { memo, useCallback, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import { FoldContext } from "../components/Folding";
+import { ReservedSpace } from "./reservedSpace";
 import {
   BaseEdge, EdgeLabelRenderer, Handle, Position, type Edge, type EdgeProps, type Node, type NodeProps,
 } from "@xyflow/react";
@@ -87,27 +89,40 @@ const CompanionNode = memo(function CompanionNode({ data, selected }: NodeProps<
   return <CompanionContent key={data.contentKey} data={data} selected={selected} />;
 });
 
-/** 状态切换只增长预留空间；结构内容替换通过 key 重建，弹层不参与流内测量。 */
+/** 测量自然内容而非已预留的外框；显式折叠使用独立预留空间。 */
 function CompanionContent({ data, selected }: { data: CompanionNodeData; selected?: boolean }) {
   const element = useRef<HTMLDivElement>(null);
+  const natural = useRef<HTMLDivElement>(null);
+  const reserve = useRef(new ReservedSpace());
+  const folds = useRef(new Map<string, string>());
+  const [foldKey, setFoldKey] = useState("[]");
+  const reportFold = useCallback((id: string, value: string | undefined) => {
+    if (value === undefined) folds.current.delete(id); else folds.current.set(id, value);
+    setFoldKey(JSON.stringify([...folds.current].sort(([a], [b]) => a.localeCompare(b))));
+  }, []);
   const [space, setSpace] = useState({ width: 0, height: 0 });
   useLayoutEffect(() => {
     const node = element.current;
-    if (!node) return;
+    const content = natural.current;
+    if (!node || !content) return;
     const measure = () => setSpace(previous => {
-      const width = Math.max(previous.width, node.offsetWidth), height = Math.max(previous.height, node.offsetHeight);
+      // 首次自然宽度确定后固定逻辑宽度；展开内容不能靠变宽把整组推向邻组。
+      const width = previous.width || node.offsetWidth;
+      const css = getComputedStyle(node);
+      const chrome = parseFloat(css.paddingTop) + parseFloat(css.paddingBottom) + parseFloat(css.borderTopWidth) + parseFloat(css.borderBottomWidth);
+      const height = reserve.current.measure(foldKey, content.offsetHeight + chrome);
       return width === previous.width && height === previous.height ? previous : { width, height };
     });
     measure();
     const observer = new ResizeObserver(measure);
-    observer.observe(node);
+    observer.observe(content);
     return () => observer.disconnect();
-  }, []);
+  }, [foldKey]);
   return <div ref={element} className={"canvas-companion-node" + (selected ? " selected" : "")} data-element-id={data.elementId}
-    style={{ minHeight: space.height || undefined,
+    style={{ width: space.width || undefined, minHeight: space.height || undefined,
       minWidth: space.width ? `min(${space.width}px, calc(var(--canvas-content-width, 100vw) * .76))` : undefined }}>
     <Handle type="target" position={Position.Left} id="in" />
-    <div className="canvas-companion-content">{data.content}</div>
+    <div ref={natural} className="canvas-companion-content"><FoldContext.Provider value={reportFold}>{data.content}</FoldContext.Provider></div>
     <Handle type="source" position={Position.Right} id="out" />
   </div>;
 }

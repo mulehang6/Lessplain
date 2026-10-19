@@ -13,7 +13,7 @@ import { CanvasButton } from "../components/CanvasButton";
 import { elementAnchor } from "../components/popupGeometry";
 import { useWorkspace, type GraphController } from "../components/WorkspaceContext";
 import { canvasBrowseKey } from "../components/WorkspaceBrowseState";
-import { centeredViewport, fitBoundsViewport, ViewportAnimator, wheelViewport, type Viewport } from "./interaction";
+import { centeredViewport, fitBoundsViewport, ViewportAnimator, wheelPanDelta, wheelViewport, type Viewport } from "./interaction";
 import { buildCanvasModel, graphNodeId, type CanvasEdgeDefinition, type CanvasModel, type CanvasNodeDefinition } from "./canvasModel";
 import { LayoutQueue, layoutInput, type Layout, type Measure } from "./layout";
 import { mergeMeasuredSizes, retainMeasuredSizes } from "./measurements";
@@ -26,9 +26,9 @@ import { branchNodes, cyclePreview } from "./navigation";
 import { dismissTooltips } from "../components/tooltipInput";
 import { NodeActionsProvider } from "./NodeActions";
 import { useCanvasWidth } from "./useCanvasWidth";
-import { anchorLayout } from "./layoutGeometry";
+import { preserveMeasuredLayout } from "./layoutGeometry";
 import { componentContentKey } from "./componentGeometry";
-import { recordCanvasEvent } from "./diagnostics";
+import { recordCanvasEvent, recordWheel } from "./diagnostics";
 import { openCodeSample } from "../runtime/samples";
 import "./graph.css";
 
@@ -99,10 +99,18 @@ function GlobalCanvasScene({ spec, view, renderCompanion }: Props) {
   }, [contentWidth, width]);
   const direction = options.direction === "AUTO" ? autoDirection : options.direction;
   const appliedLayoutKey = useRef<string | undefined>(undefined);
+  const appliedDirection = useRef<string | undefined>(undefined);
+  const appliedStructure = useRef<string | undefined>(undefined);
+  const structureKey = useMemo(() => JSON.stringify([
+    model.nodes.map(node => [node.id, node.parentId, node.kind]),
+    model.edges.map(edge => [edge.id, edge.source, edge.target]),
+  ]), [model]);
   const manual = useRef<Record<string, Point>>(compatibleBrowse ? saved?.positions ?? {} : {});
   const flow = useReactFlow<CanvasFlowNode, CanvasFlowEdge>();
   const edgeRepair = useEdgeRepair(flow, model, layout, direction === "DOWN");
   const workspace = useWorkspace();
+  // 控制器只依赖稳定动作，避免发布控制器后又因 context 值更新重建自己。
+  const selectCluster = workspace?.selectCluster;
   const followupViews = useApp(state => state.snapshot.views);
   const followupsByNode = useMemo(() => {
     const grouped = new Map<string, { ref: string; label: string }[]>();
@@ -261,7 +269,7 @@ function GlobalCanvasScene({ spec, view, renderCompanion }: Props) {
         useApp.getState().focus(sourceNode.elementId, sourceNode.nodeId, sourceNode.source);
         updateNodeSelection(sourceNode);
         const group = model.groups.find(item => item.nodeId === sourceNode.parentId);
-        if (group) workspace?.selectCluster(group.id);
+        if (group) selectCluster?.(group.id);
       }
       persist(manual.current, [startId]);
     }
@@ -274,7 +282,7 @@ function GlobalCanvasScene({ spec, view, renderCompanion }: Props) {
     } else if (frozen) {
       centerNodes([startId]);
     }
-  }, [centerNodes, choose, model, persist, showChoices, updateNodeSelection, workspace]);
+  }, [centerNodes, choose, model, persist, showChoices, updateNodeSelection, selectCluster]);
 
   const selectChoice = useCallback((edgeId: string) => {
     const choice = choices?.edges.find(edge => edge.id === edgeId);
@@ -463,13 +471,18 @@ function GlobalCanvasScene({ spec, view, renderCompanion }: Props) {
     queue.current.invalidate();
     // 等当前帧所有 ResizeObserver 测量合并，不增加停拖后的固定等待。
     const frame = requestAnimationFrame(() => queue.current?.request(stableInput, next => {
-      const growing = model.nodes.find(node => node.kind === "companion" && layout?.sizes[node.id]
-        && (sizesById.get(node.id)?.height ?? 0) > layout.sizes[node.id].height);
-      const anchorId = growing?.parentId;
-      const anchor = anchorId ? flow.getNode(anchorId)?.position : undefined;
-      const result = anchorId && anchor && !fitAfterLayout.current
-        ? anchorLayout(next, model.groups.map(group => group.nodeId), anchorId, anchor) : next;
+      const sameStructure = layout && appliedStructure.current === structureKey
+        && Object.keys(layout.positions).length === model.nodes.length
+        && model.nodes.every(node => layout.positions[node.id]);
+      const result = sameStructure && appliedDirection.current === direction && !fitAfterLayout.current
+        ? preserveMeasuredLayout(model, next, layout, flow.getNodes(), direction === "DOWN") : next;
+      if (result !== next) {
+        // 局部避让或组内尺寸差同样更新手动坐标，否则下一次渲染会用旧坐标覆盖修正。
+        manual.current = Object.fromEntries(Object.entries(manual.current).map(([id, point]) => [id, result.positions[id] ?? point]));
+      }
       appliedLayoutKey.current = inputKey;
+      appliedDirection.current = direction;
+      appliedStructure.current = structureKey;
       recordCanvasEvent("layout-applied", { nodes: Object.keys(result.positions).length });
       setLayout(result);
       setError(undefined);
@@ -584,17 +597,37 @@ function GlobalCanvasScene({ spec, view, renderCompanion }: Props) {
 
   const handleWheel = useCallback((event: WheelEvent) => {
     if (!shell.current?.contains(event.target as globalThis.Node)) return;
+    const receivedAt = performance.now();
     const target = event.target as HTMLElement;
-    if (target.closest(".graph-popup, .graph-context-menu, .graph-node-details, button, input, textarea, select, iframe")) return;
+    if (target.closest(".graph-popup, .graph-context-menu, .graph-node-details, button, input, textarea, select, iframe")) {
+      recordWheel(event, { receivedAt, route: 0 });
+      return;
+    }
+    const bounds = shell.current.getBoundingClientRect();
+    const { x: nativeX, y: nativeY } = wheelPanDelta(event, bounds);
+    for (let node: HTMLElement | null = target; node && node !== shell.current; node = node.parentElement) {
+      const css = getComputedStyle(node);
+      const vertical = /auto|scroll/.test(css.overflowY) && node.scrollHeight > node.clientHeight &&
+        (nativeY > 0 ? node.scrollTop + node.clientHeight < node.scrollHeight : nativeY < 0 && node.scrollTop > 0);
+      const horizontal = /auto|scroll/.test(css.overflowX) && node.scrollWidth > node.clientWidth &&
+        (nativeX > 0 ? node.scrollLeft + node.clientWidth < node.scrollWidth : nativeX < 0 && node.scrollLeft > 0);
+      if (!event.ctrlKey && (vertical || horizontal)) {
+        recordWheel(event, { receivedAt, route: 1 });
+        return;
+      }
+    }
     event.preventDefault();
     cameraInteracted.current = true;
     cancelCamera();
-    const bounds = shell.current.getBoundingClientRect();
-    const next = wheelViewport(flow.getViewport(), bounds, event, 0.08, 2);
+    const before = flow.getViewport();
+    const next = wheelViewport(before, bounds, event, 0.08, 2, window.__lessplainBoot?.horizontalWheelSign ?? 1);
     if (next) {
       void flow.setViewport(next, { duration: 0 });
       schedulePersist();
     }
+    const after = flow.getViewport();
+    recordWheel(event, { receivedAt, route: 2, beforeX: before.x, beforeY: before.y,
+      beforeZoom: before.zoom, afterX: after.x, afterY: after.y, afterZoom: after.zoom });
   }, [cancelCamera, flow, schedulePersist]);
   useEffect(() => {
     const element = shell.current;

@@ -74,7 +74,11 @@
   max-width: 100%;
 }
 
-.canvas-companion-content .demo { min-width: 260px; }
+.canvas-companion-content .demo {
+  width: min(720px, calc(var(--canvas-content-width, 100vw) * .76 - 48px));
+  min-width: 260px;
+  max-width: 100%;
+}
 .canvas-companion-content .demo iframe { width: 100%; }
 
 .react-flow__edge .react-flow__edge-path { transition: stroke-width 120ms ease; }
