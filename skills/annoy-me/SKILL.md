@@ -10,6 +10,8 @@ disable-model-invocation: true
 
 范围是当前任务的理解与 AI 改动评审，不维护持续课程进度。单次理解材料由 lessplain 呈现；用户需要长期学习目标、课程安排和复习记录时，主动调用 lessplain-teach。
 
+评审材料按问题选择载体：调用和影响关系用图，理由与取舍用短文字，行为变化用交互。代码对照优先使用原生编辑器；具体页面规则沿用 lessplain 的呈现协议。
+
 进入学习前读取 [教学流程](references/workflow.md)，按用户回答逐轮推进。
 
 安装、刷新或核对宿主支持时，读取 [宿主说明](references/agents.md)。所有宿主使用同一份技能目录。

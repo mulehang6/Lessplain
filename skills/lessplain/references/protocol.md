@@ -36,10 +36,14 @@ codeSamples 是 ID 到 {title,language,code} 的映射，保存独立教学代�
 | SourceLink | source, label |
 | CodeExcerpt | source, label 可选 |
 | CodeSample | sample, label 可选, startLine/endLine 可选，一基闭区间 |
-| JsonView | value, label 可选 |
+| JsonView | value, label 可选，format=json/text 可选；默认在原生只读编辑器打开 JSON，text 只用于原始字符串 |
 | Demo | demo, title, height 可选 |
 
 Graph 节点是 {id,label,detail?,source?,sample?,roles?,outcome?}；roles 为 start/end，outcome 为 success/failure。边是 {id,source,target,kind,label?,summary?,evidence?,inferred?}。边 source/target 是节点 ID；节点 source 与 evidence 是 sources 中的 ID。来源/示例 ID 使用固定字面量。节点和关系结构由 Agent 提交，坐标、测量与 ELK sections 由插件前端计算。
+
+Card、Badge 可设置 tone=neutral/info/success/warning/danger；省略时沿用既有样式，显式 tone 控制语义色。CodeExcerpt 默认打开保存的源码快照，另有定位当前源码入口。JsonView 的 value 可绑定当前状态，打开后冻结，不随之后的操作变化；少量结果使用 Text 直接呈现。
+
+组件代码选区使用 entry=componentSelection，origin.componentSnapshot 保存组件身份、内容版本、全文和 UTF-16 选区，origin.state 保留打开时状态。该来源由插件签发，Agent 直接读取，不改写或伪造成项目源码及静态 codeSamples。原始文本保存在 originalText，原生编辑器使用规范化换行后的正文定位。页面删除或组件内容改版使旧入口失效，已保存的问题仍保留冻结快照。
 
 节点 sample 为 {id,startLine?,endLine?}，id 引用 codeSamples。省略 startLine 使用第 1 行，省略 endLine 只定位起始行；范围必须在资源内。同一节点只绑定 source 或 sample 之一。CodeSample 组件的资源 ID 与行号使用固定字面量。openSample action 参数为同一 target 对象。
 
@@ -48,6 +52,8 @@ label 只保留必要的短分支条件，使用单行轻量文字；参数、�
 Graph 可设置 selectionPath 为固定 JSON Pointer，用于和组件双向共享选中节点。不同图的选择路径必须独立，不能相同或互为父子路径。节点只默认显示两行以内的 label；detail 不作为常驻说明区。完整源码优先通过 source 定位到原生编辑器，CodeExcerpt 仅用于用户确实需要的字段或代码对照。
 
 Cluster 不使用 children。diagram 必须直接引用 Graph；companion 中不能嵌套 Graph、Board 或 Cluster。标题在组内显示。单组可直接作为 root；多组使用 Board.children。整个页面只有一个画布，分组、节点和组件一起平移与缩放；Graph 是逻辑节点集合，不是独立图窗。
+
+分组单位是用户的问题。需要比较的对象保持同时可见，职责区别可用无边源码节点表达；Tabs、折叠和状态显隐按当前阅读任务选择。CodeExcerpt 只用于有价值的源码快照对照，保留各文件的独立真实来源。数据示例只在有助理解时添加，入口使用短用途名，模拟值及限制由附近文字说明。代码与 JSON 继续在 IDEA 编辑器标签打开。
 
 含图页面必须以 Board、Cluster 或 Graph 为根。Stack、Grid、Card 等普通容器放在 companion 中，不能包裹图；Graph 本身不接收 children 或 slots。纯组件页面仍可使用普通容器根。插件对已存历史提供显示投影，但新提交必须使用上述结构。示例：
 
