@@ -29,7 +29,7 @@ internal fun ViewService.openSourceQuestion(
     binding: EditorSourceBinding?,
 ) {
     check(SwingUtilities.isEventDispatchThread())
-    val project = editor.project ?: return
+    if (editor.project == null) return
     if (editor.isDisposed) return
     val source = anchor.snapshot()
     val origin = if (binding == null) {
@@ -45,12 +45,12 @@ internal fun ViewService.openSourceQuestion(
             entry = ViewOriginEntry.SOURCE_SELECTION,
         )
     }
-    openFrozenQuestion(editor, origin, binding?.label ?: "当前源码", SelectedCodePreview(project, anchor), binding)
+    openFrozenQuestion(editor, origin, binding?.label ?: "当前源码", binding)
 }
 
 internal fun ViewService.openSampleQuestion(editor: Editor, location: SampleLocation) {
     val origin = location.selection(editor.selectionModel.selectionStart, editor.selectionModel.selectionEnd)
-    openFrozenQuestion(editor, origin, location.sample.title, samplePreview(origin))
+    openFrozenQuestion(editor, origin, location.sample.title)
 }
 
 private fun ViewService.samplePreview(origin: ViewOrigin): SelectedCodePreview? = origin.componentSnapshot?.let {
@@ -61,12 +61,11 @@ private fun ViewService.samplePreview(origin: ViewOrigin): SelectedCodePreview? 
         fileName = sampleFileName(it.sample))
 }
 
-/** 两类代码共用原生输入和草稿生命周期，保存校验仍由各自来源负责。 */
+/** 编辑器内的选区已在原标签可见，不重复创建预览；保存仍校验冻结来源。 */
 private fun ViewService.openFrozenQuestion(
     editor: Editor,
     origin: ViewOrigin,
     label: String,
-    preview: SelectedCodePreview?,
     binding: EditorSourceBinding? = null,
 ) {
     check(SwingUtilities.isEventDispatchThread())
@@ -96,7 +95,6 @@ private fun ViewService.openFrozenQuestion(
         multiline = true,
         save = { text -> engine.createNote(text, "question", origin, binding) },
         onClosed = { sourceQuestionDrafts.closeSelection(origin, draft) },
-        selectionPreview = preview,
         saveDispatch = saveDispatch,
         onSaved = { launch { changed() } },
     )

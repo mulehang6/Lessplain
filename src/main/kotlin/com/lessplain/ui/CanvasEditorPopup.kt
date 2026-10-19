@@ -1,5 +1,7 @@
 package com.lessplain.ui
 
+import com.intellij.icons.AllIcons
+import com.intellij.openapi.ui.popup.IconButton
 import com.intellij.openapi.ui.popup.JBPopup
 import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.ui.popup.JBPopupListener
@@ -15,7 +17,7 @@ import java.awt.Rectangle
 import java.awt.Toolkit
 import javax.swing.SwingUtilities
 
-/** 原生编辑弹层允许输入法窗口临时激活，并管理所有输入监听器。 */
+/** 原生提问弹层显式关闭，保留草稿，允许输入法窗口临时激活。 */
 internal class CanvasEditorPopup(
     owner: Component,
     point: Point,
@@ -55,12 +57,14 @@ internal class CanvasEditorPopup(
     private val popup: JBPopup = try {
         JBPopupFactory.getInstance().createComponentPopupBuilder(editor, editor.input)
         .setTitle(title)
+        .setCancelButton(IconButton("关闭", AllIcons.Actions.Close))
         .setMovable(true)
         .setResizable(false)
         .setLocateWithinScreenBounds(true)
         .setFocusable(true)
         .setRequestFocus(true)
-        .setCancelOnClickOutside(true)
+        .setCancelOnClickOutside(false)
+        .setCancelOnOtherWindowOpen(false)
         .setCancelKeyEnabled(false)
         .setCancelOnWindowDeactivation(false)
         .setCancelCallback { !editor.composition.active }
