@@ -8,15 +8,12 @@ import com.intellij.util.ui.JBUI
 import com.lessplain.model.GraphEdge
 import java.awt.Dimension
 import java.awt.Point
-import javax.swing.JMenuItem
-import javax.swing.JPopupMenu
+import com.lessplain.ui.NativeMenuItem
+import com.lessplain.ui.showNativeMenu
 
 /** 右键查看只读依据，不触发节点选择和阅读路径变更。 */
 internal fun UnderstandingDiagram.showEdgeMenu(edge: GraphEdge, point: Point) {
-    JPopupMenu().apply {
-        add(JMenuItem("查看依据").apply { addActionListener { showEdgeEvidence(edge, point) } })
-        show(this@showEdgeMenu, point.x, point.y)
-    }
+    showNativeMenu(this, listOf(NativeMenuItem("查看依据") { showEdgeEvidence(edge, point) }), point)
 }
 
 internal fun UnderstandingDiagram.showEdgeEvidence(edge: GraphEdge, point: Point) {

@@ -1,8 +1,8 @@
 package com.lessplain.diagram
 
 import java.awt.Point
-import javax.swing.JMenuItem
-import javax.swing.JPopupMenu
+import com.lessplain.ui.NativeMenuItem
+import com.lessplain.ui.showNativeMenu
 
 internal data class DiagramTitleState(var hovered: String? = null, var pressed: String? = null, var selected: String? = null)
 
@@ -57,15 +57,8 @@ internal class DiagramOverlayInteraction(private val diagram: UnderstandingDiagr
 
 internal fun UnderstandingDiagram.showNodeMenu(nodeId: String, point: Point) {
     overlays.pressed(point)
-    JPopupMenu().apply {
-        add(JMenuItem("重新选择来路").apply {
-            isEnabled = routeNavigation != null
-            addActionListener { routeNavigation?.complete(nodeId) }
-        })
-        add(JMenuItem("添加注释").apply {
-            isEnabled = addNoteCallbacks.isNotEmpty()
-            addActionListener { addNoteCallbacks.toList().forEach { it(nodeId) } }
-        })
-        show(this@showNodeMenu, point.x, point.y)
-    }
+    showNativeMenu(this, listOf(
+        NativeMenuItem("重新选择来路", routeNavigation != null) { routeNavigation?.complete(nodeId) },
+        NativeMenuItem("添加注释", addNoteCallbacks.isNotEmpty()) { addNoteCallbacks.toList().forEach { it(nodeId) } },
+    ), point)
 }
