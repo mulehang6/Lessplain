@@ -5,12 +5,12 @@ description: 当用户明确要求使用 lessplain 或要求可视化的代码�
 
 # Lessplain
 
-把源码理解组织成图，交给 Lessplain 校验、保存和呈现。本 skill 只使用插件的两个工具。
+把源码理解组织成图，或在用户主动学习时生成教材，交给 Lessplain 校验、保存和呈现。本 skill 只使用插件的两个工具。
 
 | 工具                        | 用途                                                       |
 |-----------------------------|------------------------------------------------------------|
-| `get_understanding_context` | 读取提问时的来源（`contextToken`、所在图）和图上的待答注释 |
-| `present_understanding`     | 提交一张新图，或修订已有的图                               |
+| `get_understanding_context` | 读取冻结来源、图上的待答注释或教材的局部问题 |
+| `present_understanding`     | 提交或修订图，保存教材或教材原位补充 |
 
 读源码、核对调用关系的方法由当前 Agent 自行决定。参数名和类型以工具自带的 schema 为准。字段细节见 [协议细则](references/protocol.md)。
 
@@ -40,6 +40,8 @@ present_understanding --schemaVersion "1.4" --requestId "<新 ID>" --question "<
 | 工具不可见    | 说明找不到哪个工具，然后停止。不伪造保存成功，也不替用户启动或重启 IDE |
 
 ## 什么时候画图
+
+先检查用户是否提供教材问题。`contextToken` 以 `lesson:` 开头、载荷含 `lessonId`，或用户明确要求生成教材时，走 [教材工作流](references/lessons.md)，不套用下表的画图要求。教材文字正常展开，默认讲概念与作用，语法基础由用户局部追问。读取 `lessonProtocol.version` 后使用其支持的格式；版本 2 可用受限富文本和经源码核实的精确概念关联，不根据同名词猜测绑定。
 
 | 答案的形态                               | 处理                                             |
 |------------------------------------------|--------------------------------------------------|
