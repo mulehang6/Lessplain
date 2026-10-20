@@ -1,0 +1,213 @@
+{
+  "title": "Flow 与 AgentStreamEvent：从类型到事件",
+  "blocks": [
+    {
+      "id": "intro",
+      "kind": "text",
+      "richText": [
+        {
+          "text": "读懂返回值，先拆成两个概念。",
+          "style": "strong"
+        },
+        {
+          "text": "Flow 负责陆续交付值，AgentStreamEvent 规定这些值代表什么。这份示例分别关联源码中的两个词，可以在对应段落写笔记，再回源码悬停查看。"
+        }
+      ]
+    },
+    {
+      "id": "signature",
+      "kind": "code",
+      "text": "override fun run(request: AgentRunRequest): Flow<AgentStreamEvent> = if (streamRunner != null) {",
+      "source": {
+        "path": "shared/src/jvmMain/kotlin/com/agent/shared/agent/koog/KoogAgentGateway.kt",
+        "symbol": "KoogAgentGateway.run",
+        "text": "override fun run(request: AgentRunRequest): Flow<AgentStreamEvent> = if (streamRunner != null) {"
+      }
+    },
+    {
+      "id": "flow-heading",
+      "kind": "text",
+      "level": 2,
+      "text": "Flow：陆续交付值"
+    },
+    {
+      "id": "flow",
+      "kind": "text",
+      "richText": [
+        {
+          "text": "Flow",
+          "style": "code"
+        },
+        {
+          "text": " 描述一系列可以被收集的值。执行还未结束时，调用方就可以处理陆续到来的事件。这里的 channelFlow 创建冷流，收集时才执行其中的生产逻辑。"
+        }
+      ],
+      "sourceBindings": [
+        {
+          "id": "flow",
+          "label": "Flow",
+          "focus": {
+            "anchor": {
+              "path": "shared/src/jvmMain/kotlin/com/agent/shared/agent/koog/KoogAgentGateway.kt",
+              "symbol": "KoogAgentGateway.run",
+              "text": "override fun run(request: AgentRunRequest): Flow<AgentStreamEvent> = if (streamRunner != null) {"
+            },
+            "start": 44,
+            "end": 48
+          },
+          "start": 0,
+          "end": 4
+        }
+      ]
+    },
+    {
+      "id": "events-heading",
+      "kind": "text",
+      "level": 2,
+      "text": "AgentStreamEvent：每个值表达什么"
+    },
+    {
+      "id": "events",
+      "kind": "text",
+      "richText": [
+        {
+          "text": "AgentStreamEvent",
+          "style": "code"
+        },
+        {
+          "text": " 是项目定义的事件类型。Started 表示运行开始，TextDelta 携带正文增量，Completed 携带最终正文。收集方根据事件种类做不同处理。"
+        }
+      ],
+      "sourceBindings": [
+        {
+          "id": "events",
+          "label": "AgentStreamEvent",
+          "focus": {
+            "anchor": {
+              "path": "shared/src/jvmMain/kotlin/com/agent/shared/agent/koog/KoogAgentGateway.kt",
+              "symbol": "KoogAgentGateway.run",
+              "text": "override fun run(request: AgentRunRequest): Flow<AgentStreamEvent> = if (streamRunner != null) {"
+            },
+            "start": 49,
+            "end": 65
+          },
+          "start": 0,
+          "end": 16
+        }
+      ]
+    },
+    {
+      "id": "members",
+      "kind": "table",
+      "columns": [
+        "事件",
+        "含义",
+        "携带的数据"
+      ],
+      "rows": [
+        [
+          "Started",
+          "执行开始",
+          "无额外正文"
+        ],
+        [
+          "TextDelta",
+          "又有一段新正文",
+          "text：本次增量"
+        ],
+        [
+          "Completed",
+          "得到了最终正文",
+          "text：最终正文"
+        ]
+      ]
+    },
+    {
+      "id": "figure",
+      "kind": "diagram",
+      "graph": {
+        "nodes": [
+          {
+            "id": "producer",
+            "label": "生产者\n发送执行事件"
+          },
+          {
+            "id": "flow",
+            "label": "Flow\n陆续交付"
+          },
+          {
+            "id": "collector",
+            "label": "收集方\n按事件种类处理"
+          }
+        ],
+        "edges": [
+          {
+            "id": "send",
+            "from": "producer",
+            "to": "flow",
+            "relation": "data_flow",
+            "summary": "send(event)"
+          },
+          {
+            "id": "collect",
+            "from": "flow",
+            "to": "collector",
+            "relation": "data_flow",
+            "summary": "collect"
+          }
+        ],
+        "evidence": []
+      }
+    },
+    {
+      "id": "example-title",
+      "kind": "text",
+      "level": 2,
+      "text": "独立运行一个教学简化模型"
+    },
+    {
+      "id": "example-note",
+      "kind": "text",
+      "text": "下面只保留三种事件，不连接模型、工具或数据库，不依赖业务模块编译输出。使用项目同版本协程库。先读代码，也可以打开完整示例设置断点，再运行或 Debug。"
+    },
+    {
+      "id": "example",
+      "kind": "code",
+      "exampleId": "flow-events"
+    },
+    {
+      "id": "cold",
+      "kind": "text",
+      "richText": [
+        {
+          "text": "观察输出顺序。",
+          "style": "strong"
+        },
+        {
+          "text": "先打印“已拿到 Flow”，开始 collect 后才打印“生产者开始”。Completed 是普通事件值，不会自动关闭 Flow；本例在生产块自然结束后完成收集。"
+        }
+      ]
+    },
+    {
+      "id": "reference",
+      "kind": "text",
+      "richText": [
+        {
+          "text": "Kotlin 官方 channelFlow 文档",
+          "style": "link",
+          "href": "https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines.flow/channel-flow.html"
+        }
+      ]
+    }
+  ],
+  "examples": [
+    {
+      "id": "flow-events",
+      "fileName": "flow-events.main.kts",
+      "dependencies": [
+        "org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.10.2"
+      ],
+      "code": "// 教学简化模型，真实定义请对照项目的 AgentStreamEvent。\nimport kotlinx.coroutines.delay\nimport kotlinx.coroutines.flow.Flow\nimport kotlinx.coroutines.flow.channelFlow\nimport kotlinx.coroutines.flow.collect\nimport kotlinx.coroutines.runBlocking\n\nsealed interface DemoEvent {\n    data object Started : DemoEvent\n    data class TextDelta(val text: String) : DemoEvent\n    data class Completed(val text: String) : DemoEvent\n}\n\nfun runDemo(): Flow<DemoEvent> = channelFlow {\n    println(\"生产者开始\")\n    send(DemoEvent.Started)\n    delay(300)\n    send(DemoEvent.TextDelta(\"你好\"))\n    delay(300)\n    send(DemoEvent.TextDelta(\"，Flow\"))\n    send(DemoEvent.Completed(\"你好，Flow\"))\n}\n\nrunBlocking {\n    val events = runDemo()\n    println(\"已拿到 Flow\")\n    delay(300)\n    events.collect { event ->\n        when (event) {\n            DemoEvent.Started -> println(\"开始\")\n            is DemoEvent.TextDelta -> println(\"增量：${event.text}\")\n            is DemoEvent.Completed -> println(\"最终正文：${event.text}\")\n        }\n    }\n    println(\"收集结束\")\n}\n"
+    }
+  ]
+}
