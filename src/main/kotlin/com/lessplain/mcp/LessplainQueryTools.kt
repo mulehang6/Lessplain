@@ -3,13 +3,14 @@ package com.lessplain.mcp
 import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool
 import com.intellij.openapi.fileEditor.FileEditorManager
+import com.lessplain.storage.recordsPage
 import com.lessplain.tutorial.*
 import com.intellij.mcpserver.McpToolCallResult
 
 class LessplainQueryTools : LessplainToolsSupport() {
     @McpTool(name = "lessplain_context_capture")
     @McpDescription("冻结当前选区或图节点，返回 contextId 和插件解析的 sourceId。")
-    suspend fun capture(question: String): McpToolCallResult = result {
+    suspend fun capture(question: String): McpToolCallResult = durableResult {
         val service = tutorial()
         val context = service.capture(question)
         mapOf("contextId" to context.id, "sourceId" to context.sourceIds.singleOrNull(), "context" to context, "sources" to context.sourceIds.map(service.store::source))
@@ -17,7 +18,7 @@ class LessplainQueryTools : LessplainToolsSupport() {
 
     @McpTool(name = "lessplain_context_read")
     @McpDescription("读取复制载荷提供的冻结上下文与源码，普通读取没有消费副作用。")
-    suspend fun contextRead(contextId: String): McpToolCallResult = result {
+    suspend fun contextRead(contextId: String): McpToolCallResult = durableResult {
         val tutorials = tutorial()
         val context = try { tutorials.store.context(contextId) } catch (_: TutorialProblem) { importContext(tutorials, graph().core.context(contextId)) }
         mapOf("context" to context, "sources" to context.sourceIds.map(tutorials.store::source), "graphContext" to context.graphContextToken?.let { graph().core.context(it) })
@@ -26,20 +27,28 @@ class LessplainQueryTools : LessplainToolsSupport() {
     @McpTool(name = "lessplain_materials_list")
     @McpDescription("按标题或正文查找 tutorial/graph，返回摘要和分页游标。")
     suspend fun materials(kind: String, query: String = "", limit: Int = 20, cursor: String = ""): McpToolCallResult = result {
-        val tutorials = tutorial()
-        val items = when (kind) {
-            "tutorial" -> tutorials.store.list().filter { it.title.contains(query, true) || it.markdown.contains(query, true) }.sortedByDescending { it.createdAt }.map {
-                mapOf("id" to it.id, "title" to it.title, "revision" to it.revision, "sources" to it.sourceIds.map(tutorials.store::source))
+        val start = pageStart(limit, cursor)
+        when (kind) {
+            "tutorial" -> {
+                val tutorials = tutorial()
+                val items = tutorials.store.list().filter { it.title.contains(query, true) || it.markdown.contains(query, true) }
+                    .sortedWith(compareByDescending<TutorialRecord> { it.createdAt }.thenByDescending { it.id })
+                val selected = items.drop(start).take(limit).map {
+                    mapOf("id" to it.id, "title" to it.title, "revision" to it.revision, "sources" to it.sourceIds.map(tutorials.store::source))
+                }
+                page(selected, items.size, start)
             }
-            "graph" -> graph().repository.recentRecords(query, 500).map { mapOf("id" to it.id, "title" to (it.displayTitle ?: it.question), "revision" to it.revision, "parentId" to it.parentId) }
+            "graph" -> {
+                val records = graph().repository.recordsPage(query, start, limit)
+                page(records.items.map { mapOf("id" to it.id, "title" to (it.displayTitle ?: it.question), "revision" to it.revision, "parentId" to it.parentId) }, records.total, start)
+            }
             else -> throw TutorialProblem("INVALID_KIND", "kind", "kind 为 tutorial 或 graph")
         }
-        page(items, limit, cursor)
     }
 
     @McpTool(name = "lessplain_item_read")
     @McpDescription("读取教程、图、批注或 tutorialId/diagrams/id、tutorialId/simulations/id 资源及其当前版本。")
-    suspend fun item(id: String): McpToolCallResult = result {
+    suspend fun item(id: String): McpToolCallResult = durableResult {
         val tutorials = tutorial()
         when {
             id.contains("/diagrams/") -> tutorials.store.resource(id.substringBefore('/')).diagrams.find { it.id == id.substringAfterLast('/') } ?: throw TutorialProblem("NOT_FOUND", "id", "插图不存在")
@@ -63,7 +72,7 @@ class LessplainQueryTools : LessplainToolsSupport() {
 
     @McpTool(name = "lessplain_source_resolve")
     @McpDescription("使用项目相对路径、唯一定位上下文及关注文本解析精确源码引用。歧义返回候选行，绝不绑定第一个同名词。")
-    suspend fun source(path: String, context: String, focus: String): McpToolCallResult = result {
+    suspend fun source(path: String, context: String, focus: String): McpToolCallResult = durableResult {
         val service = tutorial()
         val source = edt { service.sources.resolve(path, context, focus) }
         mapOf("sourceId" to source.id, "source" to source)

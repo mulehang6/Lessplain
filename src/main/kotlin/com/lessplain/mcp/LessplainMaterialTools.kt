@@ -3,6 +3,7 @@ package com.lessplain.mcp
 import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool
 import com.lessplain.model.UNDERSTANDING_SCHEMA_REVISION
+import com.lessplain.model.UnderstandingRevisionConflict
 import com.lessplain.model.ClusterUpdate
 import com.lessplain.storage.sha256
 import com.lessplain.tutorial.*
@@ -25,9 +26,12 @@ class LessplainMaterialTools : LessplainToolsSupport() {
     @McpDescription("修订理解图。保留节点与连线 ID、顺序、端点和关系类型；不改变原问题、归属或批注。")
     suspend fun graphRevise(id: String, expectedRevision: Int, graph: TutorialGraph): McpToolCallResult = writeResult("graph_revise", listOf(id, expectedRevision, graph)) {
         val tutorials = tutorial(); val graphs = graph(); val old = graphs.repository.getRecord(id)
-        if (old.revision != expectedRevision) throw TutorialProblem("REVISION_CONFLICT", "expectedRevision", "图已更新", old.revision)
         val value = graph.toUnderstanding(tutorials.sources::anchor)
-        val record = graphs.core.revise(UNDERSTANDING_SCHEMA_REVISION, sha256(gson.toJson(listOf("graph_revise", id, expectedRevision, graph))), old.question, value, id, expectedRevision, ClusterUpdate.Replace(value.clusters))
+        val record = try {
+            graphs.core.revise(UNDERSTANDING_SCHEMA_REVISION, sha256(gson.toJson(listOf("graph_revise", id, expectedRevision, graph))), old.question, value, id, expectedRevision, ClusterUpdate.Replace(value.clusters))
+        } catch (conflict: UnderstandingRevisionConflict) {
+            throw TutorialProblem("REVISION_CONFLICT", "expectedRevision", "图已更新", conflict.currentRevision)
+        }
         graphs.resultSaved(recordId = record.id, questionId = record.questionId, revision = record.revision)
         graphResult(tutorials, record)
     }

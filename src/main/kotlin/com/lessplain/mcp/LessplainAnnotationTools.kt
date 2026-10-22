@@ -2,6 +2,7 @@ package com.lessplain.mcp
 
 import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool
+import com.lessplain.storage.questionsPage
 import com.lessplain.storage.answerMaterialQuestion
 import com.lessplain.storage.readQuestion
 import com.lessplain.storage.sha256
@@ -13,31 +14,32 @@ import com.intellij.mcpserver.McpToolCallResult
 class LessplainAnnotationTools : LessplainToolsSupport() {
     @McpTool(name = "lessplain_annotations_list")
     @McpDescription("查询当前项目或指定产物的笔记/追问/反馈。status=pending 仅返回已提交待答问题；返回冻结来源，读取不删除记录。")
-    suspend fun annotations(materialId: String? = null, kind: String = "question", status: String = "", limit: Int = 20, cursor: String = ""): McpToolCallResult = result {
+    suspend fun annotations(materialId: String? = null, kind: String = "question", status: String = "", limit: Int = 20, cursor: String = ""): McpToolCallResult = durableResult {
         val tutorials = tutorial(); val graphs = graph()
         tutorialRequire(kind in setOf("note", "question", "feedback"), "INVALID_KIND", "kind", "kind 为 note/question/feedback")
-        val items = tutorials.store.annotations(materialId).filter { it.kind == kind && (status.isBlank() || it.status == status) }.map { annotation ->
+        val start = pageStart(limit, cursor)
+        val annotations = tutorials.store.annotations(materialId).filter { it.kind == kind && (status.isBlank() || it.status == status) }
+        val items = annotations.drop(start).take(limit).map { annotation ->
             mapOf("id" to annotation.id, "questionId" to annotation.id.takeIf { annotation.kind == "question" },
                 "materialId" to annotation.materialId, "kind" to annotation.kind, "status" to annotation.status,
                 "text" to annotation.text, "quote" to annotation.quote, "orphaned" to annotation.orphaned,
                 "answer" to annotation.answer, "answerMaterialId" to annotation.answerMaterialId,
                 "context" to annotation.contextId?.let(tutorials.store::context))
         }.toMutableList<Map<String, Any?>>()
-        if (materialId == null || !materialId.startsWith("tut_")) {
-            graphs.repository.recentQuestions(limit = 500).filter { (materialId == null || it.ownerRecordId == materialId) && (status.isBlank() || it.status == status) }.forEach { question ->
+        var total = annotations.size
+        if (kind != "note" && (materialId == null || !materialId.startsWith("tut_"))) {
+            val questions = graphs.repository.questionsPage(materialId, status.ifBlank { "" }, kind == "feedback",
+                (start - annotations.size).coerceAtLeast(0), limit - items.size)
+            total += questions.total
+            questions.items.forEach { question ->
                 val frozen = graphs.core.context(question.contextToken)
-                if (kind == "question" || kind == "feedback" && frozen.nodeId != null) {
-                    val context = importContext(tutorials, frozen, question.text)
-                    items += mapOf("id" to question.id, "questionId" to question.id, "kind" to "question", "feedbackEligible" to (frozen.nodeId != null), "status" to question.status, "text" to question.text, "materialId" to question.ownerRecordId, "context" to context,
-                        "answers" to graphs.repository.answersForQuestion(question.id))
-                }
+                val context = importContext(tutorials, frozen, question.text)
+                items += mapOf("id" to question.id, "questionId" to question.id, "kind" to "question", "feedbackEligible" to (frozen.nodeId != null), "status" to question.status, "text" to question.text, "materialId" to question.ownerRecordId, "context" to context,
+                    "answers" to graphs.repository.answersForQuestion(question.id))
             }
         }
-        val paged = page(items, limit, cursor)
-        @Suppress("UNCHECKED_CAST")
-        val selected = paged["items"] as List<Map<String, Any?>>
-        val sourceIds = selected.mapNotNull { it["context"] as? TutorialContext }.flatMap { it.sourceIds }.distinct()
-        paged + ("sources" to sourceIds.map(tutorials.store::source))
+        val sourceIds = items.mapNotNull { it["context"] as? TutorialContext }.flatMap { it.sourceIds }.distinct()
+        page(items, total, start) + ("sources" to sourceIds.map(tutorials.store::source))
     }
 
     @McpTool(name = "lessplain_question_answer")

@@ -27,15 +27,24 @@ abstract class LessplainToolsSupport : McpToolset {
         val store = tutorial().store
         val key = com.lessplain.storage.sha256(gson.toJson(listOf(operation, arguments)))
         store.toolReceipt(key)?.let { return response(Json.parseToJsonElement(it) as JsonObject) }
-        val response = resultObject { action().also { store.flush() } }
-        if (response["ok"].toString() == "true") store.saveToolReceipt(key, response.toString())
+        val response = resultObject {
+            action().also { value ->
+                store.flush()
+                store.saveToolReceipt(key, success(value).toString())
+                store.flush()
+            }
+        }
         return response(response)
+    }
+    /** 冻结来源或上下文的读取也必须在成功返回 ID 前落盘；反馈消费独立使用 SQLite。 */
+    protected suspend fun durableResult(action: suspend () -> Any?): McpToolCallResult = result {
+        action().also { tutorial().store.flush() }
     }
     protected suspend fun result(action: suspend () -> Any?): McpToolCallResult = response(resultObject(action))
     private fun response(value: JsonObject) = McpToolCallResult(arrayOf(McpToolCallResultContent.Text(value.toString())), value, value["ok"].toString() != "true")
     private suspend fun resultObject(action: suspend () -> Any?): JsonObject = try {
         val value = action()
-        buildJsonObject { put("ok", true); put("data", Json.parseToJsonElement(gson.toJson(value))) }
+        success(value)
     } catch (failure: CancellationException) { throw failure
     } catch (failure: Exception) {
         buildJsonObject {
@@ -47,6 +56,10 @@ abstract class LessplainToolsSupport : McpToolset {
                 (failure as? TutorialProblem)?.currentRevision?.let { put("currentRevision", it) }
             })
         }
+    }
+
+    private fun success(value: Any?): JsonObject = buildJsonObject {
+        put("ok", true); put("data", Json.parseToJsonElement(gson.toJson(value)))
     }
 
     protected fun importContext(service: TutorialService, context: UnderstandingContext, question: String = ""): TutorialContext {
@@ -68,11 +81,16 @@ abstract class LessplainToolsSupport : McpToolset {
         ),
     )
 
-    protected fun page(items: List<Any>, limit: Int, cursor: String): Map<String, Any?> {
+    protected fun pageStart(limit: Int, cursor: String): Int {
         tutorialRequire(limit in 1..100, "INVALID_LIMIT", "limit", "limit 需为 1..100")
         val start = if (cursor.isEmpty()) 0 else cursor.toIntOrNull() ?: throw TutorialProblem("INVALID_CURSOR", "cursor", "分页游标无效")
-        tutorialRequire(start in 0..items.size, "INVALID_CURSOR", "cursor", "分页游标超出结果范围")
-        val end = minOf(items.size, start + limit)
-        return mapOf("items" to items.subList(start, end), "nextCursor" to if (end < items.size) end.toString() else null)
+        tutorialRequire(start >= 0, "INVALID_CURSOR", "cursor", "分页游标无效")
+        return start
+    }
+
+    protected fun page(items: List<Any>, total: Int, start: Int): Map<String, Any?> {
+        tutorialRequire(start <= total, "INVALID_CURSOR", "cursor", "分页游标超出结果范围")
+        val end = start + items.size
+        return mapOf("items" to items, "nextCursor" to if (end < total) end.toString() else null)
     }
 }
