@@ -1,9 +1,10 @@
 package com.lessplain.storage
 
 import com.lessplain.model.requireInput
+import java.sql.Connection
 
-/** 清理 Agent 本次读取的缺陷反馈，不生成回答、处理记录或取消历史。 */
-internal fun UnderstandingRepository.consumeReadFeedback(items: List<PendingNoteItem>) = write { db ->
+/** 在调用方事务内清理反馈，使删除与工具回执一同提交或回滚。 */
+internal fun UnderstandingRepository.consumeReadFeedback(db: Connection, items: List<PendingNoteItem>) {
     items.forEach { item ->
         db.prepareStatement("DELETE FROM questions WHERE id=? AND context_token=? AND text=? AND status='pending'").use { statement ->
             statement.setString(1, item.questionId)

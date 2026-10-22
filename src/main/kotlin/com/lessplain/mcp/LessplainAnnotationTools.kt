@@ -3,7 +3,8 @@ package com.lessplain.mcp
 import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool
 import com.lessplain.storage.answerMaterialQuestion
-import com.lessplain.storage.pendingNoteBatch
+import com.lessplain.storage.readQuestion
+import com.lessplain.storage.sha256
 import com.lessplain.storage.PendingNoteItem
 import com.lessplain.storage.consumeReadFeedback
 import com.lessplain.tutorial.*
@@ -51,15 +52,20 @@ class LessplainAnnotationTools : LessplainToolsSupport() {
 
     @McpTool(name = "lessplain_feedback_consume")
     @McpDescription("显式消费已读取的缺陷反馈：返回全文，再清理指定反馈。源码追问不能用此工具消费，普通读取无此副作用。")
-    suspend fun feedback(ids: List<String>): McpToolCallResult = writeResult("feedback_consume", ids.sorted()) {
+    suspend fun feedback(ids: List<String>): McpToolCallResult = result {
         val service = graph()
-        val questions = ids.distinct().map(service.repository::getQuestion)
-        tutorialRequire(questions.all { it.status == "pending" && service.core.context(it.contextToken).nodeId != null }, "NOT_FEEDBACK", "ids", "只允许显式指定图节点上的待处理反馈；源码独立问题不能消费")
-        val items = questions.map { question -> PendingNoteItem(question.id, question.text, service.core.context(question.contextToken)) }
-        // 跨图也只用一次校验/删除事务；序列化失败不会提前清理任何反馈。
-        val response = gson.toJsonTree(mapOf("feedback" to items, "consumedIds" to ids.distinct()))
-        service.repository.consumeReadFeedback(items)
+        val normalized = ids.distinct().sorted()
+        val payload = gson.toJson(normalized)
+        // 回执与反馈在同一数据库事务内持久化，不依赖教程文件的异步写入。
+        val response = service.repository.request("feedback:${sha256(payload)}", "feedback_consume", payload) { db ->
+            val questions = normalized.map { service.repository.readQuestion(db, it) }
+            tutorialRequire(questions.all { it.status == "pending" && service.core.context(it.contextToken).nodeId != null }, "NOT_FEEDBACK", "ids", "只允许显式指定图节点上的待处理反馈；源码独立问题不能消费")
+            val items = questions.map { question -> PendingNoteItem(question.id, question.text, service.core.context(question.contextToken)) }
+            val serialized = gson.toJson(mapOf("feedback" to items, "consumedIds" to normalized))
+            service.repository.consumeReadFeedback(db, items)
+            serialized
+        }
         service.notifyChanged()
-        response
+        com.google.gson.JsonParser.parseString(response)
     }
 }

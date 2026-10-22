@@ -45,7 +45,8 @@ class UnderstandingNodeCountsTest {
                     counts.pending[NodeQuestionKey(record.id, node.id)] ?: 0)
             }
             repository.cancelPendingQuestion(second.id)
-            repository.consumeReadFeedback(repository.pendingNoteBatch(root.id).items.filter { it.context.recordId == root.id })
+            val feedback = repository.pendingNoteBatch(root.id).items.filter { it.context.recordId == root.id }
+            repository.write { db -> repository.consumeReadFeedback(db, feedback) }
             val updated = repository.nodeQuestionCounts(listOf(root.id, child.id))
             assertEquals(mapOf(NodeQuestionKey(child.id, "n") to 1), updated.pending)
             assertEquals(counts.answered, updated.answered)

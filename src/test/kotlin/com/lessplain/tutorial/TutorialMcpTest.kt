@@ -4,6 +4,8 @@ import com.intellij.mcpserver.*
 import com.intellij.mcpserver.impl.McpServerService
 import com.intellij.mcpserver.impl.util.asTools
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.PathManager
+import com.lessplain.storage.sha256
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.vfs.LocalFileSystem
@@ -107,6 +109,35 @@ class TutorialMcpTest {
             assertTrue(graphs.repository.recentQuestions().none { it.id == feedback.id })
             call("lessplain_reveal", """{"id":"$tutorialId"}""")
             assertEquals(tools.keys, seen)
+
+            val transactionalContext = graphs.core.captureContext(graphId, "flow", graphs.repository.getRecord(graphId).graph.nodes.single().anchor)
+            val transactional = graphs.core.prepareQuestion("回执写入失败时不能丢失反馈", transactionalContext.token).question
+            val feedbackArgs = """{"ids":["${transactional.id}"]}"""
+            graphs.repository.connect().use { db -> db.createStatement().use {
+                it.execute("CREATE TRIGGER fail_feedback_receipt BEFORE INSERT ON requests WHEN NEW.operation='feedback_consume' BEGIN SELECT RAISE(ABORT, '模拟回执写入失败'); END")
+            } }
+            assertTrue(invoke("lessplain_feedback_consume", feedbackArgs).isError)
+            assertEquals(transactional, graphs.repository.getQuestion(transactional.id))
+            assertEquals(transactionalContext, graphs.repository.getContext(transactionalContext.token))
+            graphs.repository.connect().use { db -> db.createStatement().use { it.execute("DROP TRIGGER fail_feedback_receipt") } }
+
+            tutorials.store.flush()
+            val blocked = PathManager.getConfigDir().resolve("lessplain/tutorials").resolve(sha256(project.locationHash))
+                .resolve(tutorialId).resolve("reading.json.tmp")
+            Files.createDirectory(blocked)
+            try {
+                tutorials.store.saveReading(tutorialId, TutorialReadingState())
+                assertEquals("PERSISTENCE_FAILED", assertFailsWith<TutorialProblem> { tutorials.store.flush() }.code)
+                val consumed = call("lessplain_feedback_consume", feedbackArgs)
+                assertEquals(transactional.text, consumed["feedback"]!!.jsonArray.single().jsonObject["question"]!!.jsonPrimitive.content)
+                assertEquals(consumed, call("lessplain_feedback_consume", feedbackArgs))
+                assertEquals(consumed, call("lessplain_feedback_consume", """{"ids":["${transactional.id}","${transactional.id}"]}"""))
+                com.lessplain.storage.UnderstandingRepository(Path.of(requireNotNull(project.basePath))).use { reopened ->
+                    val payload = com.google.gson.Gson().toJson(listOf(transactional.id))
+                    val replay = reopened.request("feedback:${sha256(payload)}", "feedback_consume", payload) { error("回执必须可从磁盘重放") }
+                    assertEquals(consumed, Json.parseToJsonElement(replay))
+                }
+            } finally { Files.delete(blocked) }
         } finally { onEdt { uiRead { FileEditorManager.getInstance(fixture.project).openFiles.forEach { FileEditorManager.getInstance(fixture.project).closeFile(it) } }; fixture.tearDown() } }
     }
     private fun onEdt(action: () -> Unit) = ApplicationManager.getApplication().invokeAndWait(action)

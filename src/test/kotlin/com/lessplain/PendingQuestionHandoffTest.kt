@@ -51,7 +51,8 @@ class PendingQuestionHandoffTest {
             assertEquals(1, repository.pendingNoteScope(other.id).count)
             repository.cancelPendingQuestion(a.id)
             assertEquals(2, repository.pendingNoteScope(child.id).count)
-            repository.consumeReadFeedback(repository.pendingNoteBatch(root.id).items.filter { it.questionId == b.id })
+            val feedback = repository.pendingNoteBatch(root.id).items.filter { it.questionId == b.id }
+            repository.write { db -> repository.consumeReadFeedback(db, feedback) }
             assertEquals(1, repository.pendingNoteScope(nested.id).count)
             core.present(4, "answer", c.text, graph, "child", questionId = c.id)
             assertEquals(0, repository.pendingNoteScope(root.id).count)

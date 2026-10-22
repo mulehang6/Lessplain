@@ -14,7 +14,6 @@ import com.lessplain.core.BackgroundTasks
 import com.lessplain.core.StaticExplorer
 import com.lessplain.core.UnderstandingCore
 import com.lessplain.diagram.UnderstandingVirtualFile
-import com.lessplain.model.UNDERSTANDING_SCHEMA_VERSION
 import com.lessplain.model.UnderstandingContext
 import com.lessplain.model.UnderstandingRecord
 import com.lessplain.storage.UnderstandingRepository

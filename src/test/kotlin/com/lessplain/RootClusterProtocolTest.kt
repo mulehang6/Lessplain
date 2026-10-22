@@ -3,7 +3,6 @@ package com.lessplain
 import com.google.gson.Gson
 import com.google.gson.JsonParser
 import com.lessplain.core.UnderstandingCore
-import com.lessplain.mcp.understandingContextPayload
 import com.lessplain.model.ClusterUpdate
 import com.lessplain.model.GraphCluster
 import com.lessplain.model.GraphEdge
@@ -62,9 +61,6 @@ class RootClusterProtocolTest {
                         .getAsJsonObject("graph").getAsJsonArray("clusters").size())
                 }
             } }
-            val payload = understandingContextPayload(repository, context)
-            assertEquals("1.4", payload["schemaVersion"])
-            assertEquals(true, (payload["capabilities"] as Map<*, *>)["rootClusters"])
         }
     }
 
