@@ -6,6 +6,7 @@ import com.intellij.openapi.project.Project
 import com.lessplain.model.UnderstandingQuestion
 import com.lessplain.model.UnderstandingRecord
 import com.lessplain.storage.editPendingQuestion
+import com.lessplain.storage.renameNodeLabel
 import com.lessplain.storage.updateDisplayTitle
 import com.lessplain.ui.SelectedCodePreview
 import com.lessplain.ui.questionEditorTitle
@@ -85,9 +86,7 @@ internal class UnderstandingContentActions(private val service: UnderstandingSer
         val node = record.graph.nodes.firstOrNull { it.id == nodeId } ?: return
         session(component).edit("node-label:${record.id}:$nodeId", "重命名节点", node.label, point, false,
             afterSave = service::refreshOpenDiagrams) { label ->
-            service.core.revise(com.lessplain.model.UNDERSTANDING_SCHEMA_REVISION,
-                com.lessplain.storage.sha256("rename:${record.id}:${record.revision}:$nodeId:$label"), record.question,
-                record.graph.copy(nodes = record.graph.nodes.map { if (it.id == nodeId) it.copy(label = label) else it }), record.id, record.revision)
+            service.repository.renameNodeLabel(record.id, nodeId, label, record.revision)
             service.storage.loadRecord(record.id)
         }
     }

@@ -65,6 +65,16 @@ internal fun UnderstandingRepository.reviseRecordGraph(
     return revised
 }
 
+/** 人工重命名只修订标签；源码已变化也保留冻结的锚点和批注。 */
+fun UnderstandingRepository.renameNodeLabel(recordId: String, nodeId: String, label: String, expectedRevision: Int): UnderstandingRecord {
+    val normalized = label.trim()
+    requireInput(normalized.isNotEmpty(), "节点标签不能为空")
+    val current = getRecord(recordId)
+    requireInput(current.graph.nodes.any { it.id == nodeId }, "节点不存在")
+    val graph = current.graph.copy(nodes = current.graph.nodes.map { if (it.id == nodeId) it.copy(label = normalized) else it })
+    return write { db -> reviseRecordGraph(db, recordId, expectedRevision, current.question, graph, ClusterUpdate.Keep) }
+}
+
 /** 标题修订保留原问题和图。 */
 fun UnderstandingRepository.updateDisplayTitle(recordId: String, title: String, expectedRevision: Int? = null): UnderstandingRecord {
     val normalized = title.trim()
