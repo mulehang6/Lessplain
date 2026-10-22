@@ -55,6 +55,7 @@ internal fun saveGraphViewState(
     val center = diagram.center
     store.update(key) { previous ->
         val browse = BrowseState(key.canvasId, nodeId, path, diagram.zoom, center.x, center.y, true, navigationState)
-        previous.withViewport(diagram.activeDirection, browse).copy(browse = browse)
+        previous.withPositions(diagram.activeDirection, diagram.nodePositions)
+            .withViewport(diagram.activeDirection, browse).copy(browse = browse)
     }
 }

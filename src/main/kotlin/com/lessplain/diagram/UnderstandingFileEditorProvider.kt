@@ -13,8 +13,10 @@ import com.intellij.testFramework.LightVirtualFile
 import com.intellij.util.ui.JBUI
 import com.lessplain.core.LatestBackgroundRead
 import com.lessplain.core.StaticExplorer
+import com.lessplain.ide.CanvasDraftHost
 import com.lessplain.ide.GraphLayerKey
 import com.lessplain.ide.UnderstandingService
+import com.lessplain.ide.uiRead
 import com.lessplain.model.UnderstandingRecord
 import com.lessplain.ui.*
 import java.awt.BorderLayout
@@ -26,16 +28,29 @@ import javax.swing.JComponent
 import javax.swing.JLabel
 import javax.swing.JPanel
 
-/** 编辑器标签页和工具窗口分别绘制同一个不可变记录版本。 */
+/** 标签页身份独立于记录版本；修订只更新展示元数据，不切断返回层级。 */
 class UnderstandingVirtualFile(record: UnderstandingRecord, val questionNodeId: String? = null) :
     LightVirtualFile(understandingTabTitle(record, questionNodeId), PlainTextFileType.INSTANCE, "") {
     val recordId: String = record.id
-    val revision: Int = record.revision
-    val fullTitle: String = if (questionNodeId == null) record.displayTitle ?: record.question else {
+    var revision: Int = record.revision
+        private set
+    var fullTitle: String = fullTitle(record)
+        private set
+    var parentFile: UnderstandingVirtualFile? = null
+
+    internal fun update(record: UnderstandingRecord) {
+        require(record.id == recordId)
+        if (record.revision < revision) return
+        revision = record.revision
+        fullTitle = fullTitle(record)
+        val title = understandingTabTitle(record, questionNodeId)
+        if (name != title) rename(this, title)
+    }
+
+    private fun fullTitle(record: UnderstandingRecord): String = if (questionNodeId == null) record.displayTitle ?: record.question else {
         val node = record.graph.nodes.firstOrNull { it.id == questionNodeId }?.label ?: "节点"
         "${record.displayTitle ?: record.question} / $node 的追问"
     }
-    var parentFile: UnderstandingVirtualFile? = null
 }
 
 internal fun understandingTabTitle(record: UnderstandingRecord, questionNodeId: String?): String {
@@ -60,7 +75,7 @@ class UnderstandingFileEditorProvider : FileEditorProvider, DumbAware {
 internal data class PreparedUnderstandingEditor(val record: UnderstandingRecord, val canvas: QuestionCanvas?)
 
 /** 同步创建只返回轻量外壳，数据库和追问画布在项目后台作用域准备。 */
-private class LoadingUnderstandingFileEditor(private val project: Project, private val file: UnderstandingVirtualFile) :
+internal class LoadingUnderstandingFileEditor(private val project: Project, private val file: UnderstandingVirtualFile) :
     UserDataHolderBase(), FileEditor {
     private val panel = JPanel(BorderLayout()).apply { add(JLabel("正在加载…"), BorderLayout.CENTER) }
     private val changes = PropertyChangeSupport(this)
@@ -69,22 +84,36 @@ private class LoadingUnderstandingFileEditor(private val project: Project, priva
     private var disableNavigation = false
     private val service = project.getService(UnderstandingService::class.java)
     private val loader = LatestBackgroundRead<PreparedUnderstandingEditor>(service::readBackground) { result ->
-        if (!disposed) result.onSuccess { prepared ->
+        if (!disposed) result.onSuccess { prepared -> uiRead {
+            delegate?.let(Disposer::dispose)
+            file.update(prepared.record)
             delegate = UnderstandingFileEditor(project, file, prepared).also {
                 if (disableNavigation) it.disableAutomaticSourceNavigation()
                 panel.removeAll()
                 panel.add(it.component, BorderLayout.CENTER)
                 panel.revalidate()
                 panel.repaint()
+                FileEditorManager.getInstance(project).updateFilePresentation(file)
             }
-        }
-            .onFailure { panel.removeAll(); panel.add(JLabel("图无法加载：${it.message}")); panel.revalidate(); panel.repaint() }
+        } }
+            .onFailure { failure ->
+                if (delegate == null) {
+                    panel.removeAll(); panel.add(JLabel("图无法加载：${failure.message}")); panel.revalidate(); panel.repaint()
+                } else service.storageFailed(failure)
+            }
     }
 
-    init {
+    init { reload() }
+
+    /** 只重建包含该记录的画布；无关标签页及其输入保持不动。 */
+    internal fun refreshRecord(recordId: String) {
+        if (!disposed && (recordId == file.recordId || delegate?.dependsOn(recordId) == true ||
+                delegate == null && file.questionNodeId != null)) reload()
+    }
+
+    private fun reload() {
         loader.request {
             val record = service.storage.loadRecord(file.recordId)
-            check(record.revision == file.revision) { "记录版本已变化，请重新打开图" }
             service.storage.rememberBrowse(record.id, service.storage.loadBrowse(record.id))
             val canvas = file.questionNodeId?.let { node ->
                 buildQuestionCanvas(service, record, node, questionsForNode(service, record, node), record.revision)
@@ -161,7 +190,8 @@ private class UnderstandingFileEditor(
         },
         { id -> questionCanvas?.clusterSources?.get(id) },
         titleRecord = record.takeIf { questionCanvas == null },
-        onStaleSource = navigation::close
+        onStaleSource = navigation::close,
+        draftHost = CanvasDraftHost(graphKey, editor = true),
     )
 
     private val backButton = JButton("‹ 返回").apply {
@@ -234,6 +264,9 @@ private class UnderstandingFileEditor(
         panel.revalidate()
         panel.repaint()
     }
+
+    fun dependsOn(recordId: String): Boolean = record.id == recordId ||
+        questionCanvas?.sources?.values?.any { it.record.id == recordId } == true
 
     fun disableAutomaticSourceNavigation() {
         builder.navigationPinned = true

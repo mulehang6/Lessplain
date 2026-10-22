@@ -3,6 +3,7 @@ package com.lessplain.ide
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.editor.RangeMarker
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.event.EditorFactoryEvent
 import com.intellij.openapi.editor.event.EditorFactoryListener
@@ -15,8 +16,8 @@ import javax.swing.SwingUtilities
 internal class SourceInsightMarker(private val project: Project, parent: Disposable) : Disposable {
     private data class Target(
         val document: Document,
-        val start: Int,
-        val end: Int,
+        val range: RangeMarker,
+        val text: String,
         val label: String,
         val navigation: SourceInlayNavigation,
         val binding: SourceNodeBinding?,
@@ -32,7 +33,7 @@ internal class SourceInsightMarker(private val project: Project, parent: Disposa
             override fun editorCreated(event: EditorFactoryEvent) {
                 val editor = event.editor
                 SwingUtilities.invokeLater {
-                    if (!disposed && factory.getAllEditors().any { it === editor }) target?.let { attach(editor, it) }
+                    if (!disposed && factory.getAllEditors().any { it === editor }) uiRead { target?.let { attach(editor, it) } }
                 }
             }
 
@@ -58,9 +59,10 @@ internal class SourceInsightMarker(private val project: Project, parent: Disposa
         val path = root.resolve(anchor.path).normalize()
         if (!path.startsWith(root)) return located
         val document = resolution.document ?: return located
-        val end = (start + anchor.text.length).coerceAtMost(document.textLength)
-        if (end <= start) return located
-        target = Target(document, start, end, label.replace('\n', ' '), navigation, binding)
+        val end = start + anchor.text.length
+        if (start < 0 || end > document.textLength || end <= start) return located
+        if (sourceExcerptChanged(document.charsSequence, start, end, anchor.text)) return located
+        target = Target(document, document.createRangeMarker(start, end), anchor.text, label.replace('\n', ' '), navigation, binding)
         refreshOpenEditors()
         return located
     }
@@ -73,17 +75,25 @@ internal class SourceInsightMarker(private val project: Project, parent: Disposa
 
     fun clear() {
         check(SwingUtilities.isEventDispatchThread())
+        target?.range?.dispose()
         target = null
         markers.values.forEach(EditorSourceInsightMarker::dispose)
         markers.clear()
     }
 
     private fun attach(editor: Editor, value: Target) {
-        if (editor.project != project || editor.document !== value.document || editor in markers) return
+        if (target !== value || editor.project != project || editor.document !== value.document) return
+        val range = value.range
+        if (!range.isValid || sourceExcerptChanged(value.document.charsSequence, range.startOffset, range.endOffset, value.text)) {
+            clear()
+            value.navigation.evidenceChanged()
+            return
+        }
+        if (editor in markers) return
         EditorSourceInsightMarker(
             editor,
-            value.start,
-            value.end,
+            range.startOffset,
+            range.endOffset,
             value.label,
             value.navigation,
             value.binding

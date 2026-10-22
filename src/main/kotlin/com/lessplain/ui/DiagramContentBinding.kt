@@ -4,6 +4,8 @@ import com.lessplain.diagram.bindNodeQuestionCounts
 import com.lessplain.diagram.bindPendingQuestionHandoff
 import com.lessplain.diagram.UnderstandingDiagram
 import com.lessplain.diagram.setDraftNoteNodes
+import com.lessplain.ide.CanvasDraftHost
+import com.lessplain.ide.GraphLayerKey
 import com.lessplain.ide.UnderstandingService
 import com.lessplain.model.UnderstandingRecord
 
@@ -17,8 +19,10 @@ internal fun UnderstandingDiagram.bindContentActions(
     clusterSource: (String) -> SourceCluster?,
     titleRecord: UnderstandingRecord? = null,
     onStaleSource: () -> Unit = {},
+    draftHost: CanvasDraftHost = CanvasDraftHost(GraphLayerKey(recordId), editor = false),
 ): AutoCloseable {
     val actions = service.contentActions
+    actions.attachCanvas(this, draftHost)
     val subscriptions = listOf(
         bindPendingQuestionHandoff(service, recordId, actions::notifyQuestionCopy),
         bindNodeQuestionCounts(service, source, onStaleSource),

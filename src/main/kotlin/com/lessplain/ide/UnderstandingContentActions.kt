@@ -19,9 +19,16 @@ internal class UnderstandingContentActions(private val service: UnderstandingSer
     AutoCloseable {
     internal val sourceQuestions = SourceSelectionQuestionSession(service)
     private val sessions = mutableMapOf<Component, CanvasContentSession>()
+    private val canvasDrafts = mutableMapOf<CanvasDraftHost, CanvasContentDrafts>()
 
-    private fun session(owner: Component): CanvasContentSession = sessions.getOrPut(owner) {
-        CanvasContentSession(service, owner, { sessions.remove(owner) }, ::addNodeNote, ::editNodeNote)
+    /** 草稿跟随逻辑画布，内部图组件因修订重建时不销毁输入。 */
+    fun attachCanvas(owner: Component, host: CanvasDraftHost) { session(owner, host) }
+
+    internal fun draftsFor(host: CanvasDraftHost): CanvasContentDrafts = canvasDrafts.getOrPut(host) { CanvasContentDrafts() }
+
+    private fun session(owner: Component, host: CanvasDraftHost? = null): CanvasContentSession = sessions.getOrPut(owner) {
+        val drafts = host?.let(::draftsFor) ?: CanvasContentDrafts()
+        CanvasContentSession(service, owner, { sessions.remove(owner) }, ::addNodeNote, ::editNodeNote, drafts)
     }
 
     fun addNodeNote(
@@ -72,7 +79,7 @@ internal class UnderstandingContentActions(private val service: UnderstandingSer
         target.prepare({ service.storage.loadRecord(recordId) }) { record ->
             target.edit(
                 "title:$recordId", "编辑标题", record.displayTitle ?: record.question, point, false,
-                afterSave = service::refreshOpenDiagrams
+                afterSave = { service.refreshOpenDiagrams(recordId) }
             ) { value ->
                 service.repository.updateDisplayTitle(recordId, value, record.revision)
                 service.storage.loadRecord(recordId)
@@ -85,7 +92,7 @@ internal class UnderstandingContentActions(private val service: UnderstandingSer
         if (service.readOnly) return
         val node = record.graph.nodes.firstOrNull { it.id == nodeId } ?: return
         session(component).edit("node-label:${record.id}:$nodeId", "重命名节点", node.label, point, false,
-            afterSave = service::refreshOpenDiagrams) { label ->
+            afterSave = { service.refreshOpenDiagrams(record.id) }) { label ->
             service.repository.renameNodeLabel(record.id, nodeId, label, record.revision)
             service.storage.loadRecord(record.id)
         }
@@ -102,5 +109,10 @@ internal class UnderstandingContentActions(private val service: UnderstandingSer
         sourceQuestions.close()
         sessions.values.toList().forEach { it.close() }
         sessions.clear()
+        canvasDrafts.values.forEach(CanvasContentDrafts::clear)
+        canvasDrafts.clear()
     }
 }
+
+/** 编辑器和工具窗口的输入互不覆盖；同一宿主的版本刷新共享草稿。 */
+internal data class CanvasDraftHost(val layer: GraphLayerKey, val editor: Boolean)

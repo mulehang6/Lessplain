@@ -34,8 +34,7 @@ internal fun sourceInlayControlBounds(left: Int, top: Int, height: Int, textWidt
 /** 测量和绘制源码说明及其导航控件。 */
 internal class InsightInlayRenderer(
     private val label: String,
-    private val start: Int,
-    private val end: Int,
+    private val range: () -> IntRange?,
     private val canPrevious: Boolean,
     private val canNext: Boolean,
 ) : EditorCustomElementRenderer {
@@ -63,7 +62,7 @@ internal class InsightInlayRenderer(
 
     private fun textWidth(inlay: Inlay<*>): Int = labelLayout(inlay).textWidth
 
-    private fun left(inlay: Inlay<*>): Int = sourceBlockBounds(inlay.editor, start, end)?.x
+    private fun left(inlay: Inlay<*>): Int = range()?.let { sourceBlockBounds(inlay.editor, it.first, it.last + 1)?.x }
         ?: inlay.bounds?.x ?: 0
 
     private fun controls(inlay: Inlay<*>): SourceInlayControlBounds {

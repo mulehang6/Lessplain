@@ -13,6 +13,7 @@ import com.intellij.openapi.wm.WindowManager
 import com.lessplain.core.BackgroundTasks
 import com.lessplain.core.StaticExplorer
 import com.lessplain.core.UnderstandingCore
+import com.lessplain.diagram.LoadingUnderstandingFileEditor
 import com.lessplain.diagram.UnderstandingVirtualFile
 import com.lessplain.model.UnderstandingContext
 import com.lessplain.model.UnderstandingRecord
@@ -80,7 +81,6 @@ class UnderstandingService(private val project: Project, coroutineScope: Corouti
     private var pendingAutoOpenKey: String? = resultInbox.pending().lastOrNull()?.key
     internal var panelPage: PanelPage = PanelPage.WELCOME
     internal var panelFocusQuestionId: String? = null
-    private var pageBeforeHistory = PanelPage.WELCOME
     private var previousLocation: PanelLocation? = null
     private var navigationGeneration = 0L
     internal val contentActions = UnderstandingContentActions(this, project)
@@ -112,21 +112,9 @@ class UnderstandingService(private val project: Project, coroutineScope: Corouti
         notifyChanged()
     }
 
-    internal fun toggleHistory() {
-        navigationGeneration++
-        if (panelPage == PanelPage.HISTORY) panelPage = pageBeforeHistory
-        else {
-            pageBeforeHistory = panelPage
-            panelPage = PanelPage.HISTORY
-        }
-        previousLocation = null
-        notifyChanged()
-    }
-
     internal fun showHistory() {
         navigationGeneration++
         if (panelPage == PanelPage.HISTORY) return
-        pageBeforeHistory = panelPage
         panelPage = PanelPage.HISTORY
         previousLocation = null
         notifyChanged()
@@ -174,6 +162,9 @@ class UnderstandingService(private val project: Project, coroutineScope: Corouti
             if (revision != null && revision > 1) "record:$it:revision:$revision" else "record:$it"
         } ?: return
         recordId?.let(storage::loadRecord)
+        if (recordId != null && revision != null && revision > 1) {
+            SwingUtilities.invokeLater { if (!disposed) refreshOpenDiagrams(recordId) }
+        }
         val isUpdate = (revision != null && revision > 1) || questionId != null || answerId != null ||
                 recordId?.let { storage.record(it)?.parentId != null } == true
         if (!resultInbox.register(
@@ -302,22 +293,17 @@ class UnderstandingService(private val project: Project, coroutineScope: Corouti
 
     fun editRecordTitle(recordId: String) = contentActions.editRecordTitle(recordId)
 
-    internal fun refreshOpenDiagrams() {
+    internal fun refreshOpenDiagrams(recordId: String) = uiRead {
         val manager = FileEditorManager.getInstance(project)
-        val opened = editorFiles.values.filter(manager::isFileOpen)
-        if (opened.isEmpty()) return
-        val selected = manager.selectedFiles.firstOrNull() as? UnderstandingVirtualFile
-        opened.forEach(manager::closeFile)
-        editorFiles.clear()
-        val replacements = opened.associateWith { old ->
-            val current = storage.record(old.recordId) ?: return@associateWith old
-            editorFile(current, old.questionNodeId)
+        storage.record(recordId)?.let { current ->
+            editorFiles.values.filter { it.recordId == recordId }.forEach {
+                it.update(current)
+                manager.updateFilePresentation(it)
+            }
         }
-        replacements.forEach { (old, replacement) ->
-            replacement.parentFile = old.parentFile?.let(replacements::get)
+        manager.openFiles.filterIsInstance<UnderstandingVirtualFile>().forEach { file ->
+            manager.getAllEditors(file).filterIsInstance<LoadingUnderstandingFileEditor>().forEach { it.refreshRecord(recordId) }
         }
-        opened.filter { it != selected }.forEach { manager.openFile(replacements.getValue(it), false) }
-        selected?.takeIf { it in replacements }?.let { manager.openFile(replacements.getValue(it), true) }
     }
 
     fun deleteRoot(recordId: String) {
@@ -386,9 +372,9 @@ class UnderstandingService(private val project: Project, coroutineScope: Corouti
     }
 
     fun editorFile(record: UnderstandingRecord, questionNodeId: String? = null): UnderstandingVirtualFile =
-        editorFiles.getOrPut("${record.id}:${record.revision}:${questionNodeId.orEmpty()}") {
+        editorFiles.getOrPut("${record.id}:${questionNodeId.orEmpty()}") {
             UnderstandingVirtualFile(record, questionNodeId)
-        }
+        }.also { it.update(record) }
 
     fun notifyChanged() {
         if (disposed) return

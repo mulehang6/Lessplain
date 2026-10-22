@@ -102,7 +102,8 @@ internal fun QuestionIndexView(
         }
         val navigation = bindDiagramSourceNavigation(service, graphKey, diagram, explorer, record, canvas)
         val copy = diagram.bindNodeContextCopy(service, canvas.sources::get)
-        val content = diagram.bindContentActions(service, record.id, canvas.sources::get, canvas.clusterSources::get)
+        val content = diagram.bindContentActions(service, record.id, canvas.sources::get, canvas.clusterSources::get,
+            draftHost = com.lessplain.ide.CanvasDraftHost(graphKey, editor = false))
         val questionSelection = diagram.onQuestionBadgeClicked { id ->
             canvas.sources[id]?.let {
                 onChildQuestions(it.record, it.nodeId)

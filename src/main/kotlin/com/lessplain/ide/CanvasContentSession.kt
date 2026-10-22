@@ -16,13 +16,14 @@ import java.awt.Point
 import java.awt.event.HierarchyEvent
 import java.awt.event.HierarchyListener
 
-/** 在单个画布生命周期内管理已打开注释和未保存草稿。 */
+/** 弹层属于当前组件；草稿由逻辑画布宿主保留，修订重建组件不会丢失。 */
 internal class CanvasContentSession(
     private val service: UnderstandingService,
     private val owner: Component,
     private val onDispose: () -> Unit,
     private val addNote: (UnderstandingRecord, String, Component, Point) -> Unit,
     private val editNote: (UnderstandingRecord, String, UnderstandingQuestion, Component, Point) -> Unit,
+    private val drafts: CanvasContentDrafts,
 ) : AutoCloseable {
     private var editor: CanvasEditorPopup? = null
     private var editorKey: String? = null
@@ -31,28 +32,25 @@ internal class CanvasContentSession(
     private var target: Pair<UnderstandingRecord, String>? = null
     private var point = Point()
     private var disposed = false
-    private val drafts = CanvasContentDrafts()
-    private val draftListeners = linkedSetOf<(Set<Pair<String, String>>) -> Unit>()
     private val content = NodeNoteContentState()
 
     private data class Snapshot(
         val notes: List<UnderstandingQuestion>,
         val pendingIds: Set<String>,
-        val existingRecords: Set<String>
+        val existingNodes: Set<Pair<String, String>>,
+        val checkedDrafts: Set<String>,
     )
 
     private var pendingIds = emptySet<String>()
-    private var existingRecords = emptySet<String>()
     private var openWhenLoaded = false
     private var preparation: AutoCloseable? = null
     private var preparationGeneration = 0L
     private val loader = LatestBackgroundRead<Snapshot>(service::readBackground) { result ->
         result.onSuccess { loaded ->
             pendingIds = loaded.pendingIds
-            existingRecords = loaded.existingRecords
             if (drafts.removeNoteDrafts {
-                    it.recordId !in existingRecords ||
-                            (it.questionId.isNotEmpty() && it.questionId !in pendingIds)
+                    it.key in loaded.checkedDrafts && ((it.recordId to it.nodeId) !in loaded.existingNodes ||
+                            (it.questionId.isNotEmpty() && it.questionId !in pendingIds))
                 }) notifyDraftNodesChanged()
             content.notes = loaded.notes
             target?.let { (record, nodeId) ->
@@ -156,9 +154,7 @@ internal class CanvasContentSession(
             listener(emptySet())
             return AutoCloseable { }
         }
-        draftListeners += listener
-        listener(drafts.nodeKeys())
-        return AutoCloseable { draftListeners -= listener }
+        return drafts.listen(listener)
     }
 
     /** 弹层的准备任务属于画布，切换或关闭画布不能在完成后再打开旧弹层。 */
@@ -190,10 +186,11 @@ internal class CanvasContentSession(
             }
             val ids = fixedDrafts.map { it.recordId } + listOfNotNull(fixedTarget?.first?.id) +
                     listOfNotNull(fixedEditorKey?.substringAfter(':')?.substringBefore(':'))
-            val existing = ids.distinct().filter { id ->
-                cancellationAwareResult { service.storage.loadRecord(id) }.isSuccess
+            val existingNodes = ids.distinct().flatMap { id ->
+                cancellationAwareResult { service.storage.loadRecord(id) }.getOrNull()?.graph?.nodes.orEmpty()
+                    .map { id to it.id }
             }.toSet()
-            Snapshot(notes, pending, existing)
+            Snapshot(notes, pending, existingNodes, fixedDrafts.mapTo(mutableSetOf()) { it.key })
         }
     }
 
@@ -221,8 +218,7 @@ internal class CanvasContentSession(
 
     private fun notifyDraftNodesChanged() {
         if (disposed) return
-        val snapshot = drafts.nodeKeys()
-        draftListeners.toList().forEach { it(snapshot) }
+        drafts.notifyListeners()
     }
 
     /** 平台关闭弹层前，先让画布气泡完成自己的切换操作。 */
@@ -252,10 +248,10 @@ internal class CanvasContentSession(
 
     override fun close() {
         if (disposed) return
-        disposed = true
         closePreview(); editor?.close(); editor = null
+        disposed = true
         owner.removeHierarchyListener(visibility)
-        changed.close(); drafts.clear(); draftListeners.clear(); target = null
+        changed.close(); target = null
         loader.close()
         preparationGeneration++
         preparation?.close()
@@ -276,6 +272,18 @@ internal data class CanvasNoteDraftEntry(
 /** 画布草稿与仓库存储状态、已保存待答注释计数分开。 */
 internal class CanvasContentDrafts {
     private val values = linkedMapOf<String, String>()
+    private val listeners = linkedSetOf<(Set<Pair<String, String>>) -> Unit>()
+
+    fun listen(listener: (Set<Pair<String, String>>) -> Unit): AutoCloseable {
+        listeners += listener
+        listener(nodeKeys())
+        return AutoCloseable { listeners -= listener }
+    }
+
+    fun notifyListeners() {
+        val nodes = nodeKeys()
+        listeners.toList().forEach { it(nodes) }
+    }
 
     fun text(key: String): String? = values[key]
 

@@ -105,7 +105,8 @@ internal fun bindDiagramSourceNavigation(
     return AutoCloseable {
         if (!closed) {
             try {
-                if (isCurrentSource(explorer.currentNodeId)) persist()
+                // 过期的是源码导航资格，视角仍属于这个稳定画布，必须在重建前保存。
+                persist(saveRepository = isCurrentSource(explorer.currentNodeId))
             } finally {
                 closed = true
                 sourceSelection.close()

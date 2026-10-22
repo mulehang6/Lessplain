@@ -6,6 +6,7 @@ import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.editor.markup.HighlighterLayer
 import com.intellij.openapi.editor.markup.HighlighterTargetArea
+import com.intellij.openapi.editor.markup.RangeHighlighter
 import com.intellij.openapi.editor.markup.TextAttributes
 import com.intellij.openapi.util.Disposer
 import com.intellij.util.ui.JBUI
@@ -29,7 +30,10 @@ internal class EditorSourceInsightMarker(
     private val navigation: SourceInlayNavigation,
     private val binding: SourceNodeBinding? = null,
 ) : Disposable {
-    private val renderer = InsightInlayRenderer(label, start, end, navigation.canPrevious, navigation.canNext)
+    private var highlighter: RangeHighlighter? = null
+    private val renderer = InsightInlayRenderer(label, {
+        highlighter?.takeIf { it.isValid }?.let { it.startOffset until it.endOffset }
+    }, navigation.canPrevious, navigation.canNext)
     private val originalText = editor.document.charsSequence.subSequence(start, end).toString()
     private val lineStart = editor.document.getLineStartOffset(editor.document.getLineNumber(start))
     private val inlay = editor.inlayModel.addBlockElement(lineStart, false, true, SOURCE_INLAY_PRIORITY, renderer)
@@ -55,13 +59,16 @@ internal class EditorSourceInsightMarker(
             }
         }
     }
-    private val highlighter = inlay?.let {
-        editor.markupModel.addRangeHighlighter(
-            start, end, HighlighterLayer.ADDITIONAL_SYNTAX,
-            TextAttributes(), HighlighterTargetArea.EXACT_RANGE,
-        ).apply {
-            customRenderer = SourceSweepRenderer { reveal }
+    init {
+        highlighter = inlay?.let {
+            editor.markupModel.addRangeHighlighter(
+                start, end, HighlighterLayer.ADDITIONAL_SYNTAX,
+                TextAttributes(), HighlighterTargetArea.EXACT_RANGE,
+            ).apply {
+                customRenderer = SourceSweepRenderer { reveal }
+            }
         }
+        inlay?.update()
     }
     internal val timer: Timer = Timer(16) { event ->
         if (disposed) {
@@ -145,7 +152,7 @@ internal class EditorSourceInsightMarker(
 
     /** 短间隙只延续已触发的高亮，不参与绘制或独立触发。 */
     private fun inRetentionArea(point: Point): Boolean {
-        val range = highlighter ?: return false
+        val range = highlighter?.takeIf { it.isValid } ?: return false
         val block = sourceBlockBounds(editor, range.startOffset, range.endOffset) ?: return false
         if (block.contains(point)) return true
         val hint = inlay?.takeIf { it.bounds != null }?.let { renderer.hintBounds(it) }
