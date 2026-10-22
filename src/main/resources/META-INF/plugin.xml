@@ -19,8 +19,6 @@
     <depends>com.intellij.modules.compose</depends>
     <depends>com.intellij.mcpServer</depends>
 
-    <resource-bundle>messages.MyMessageBundle</resource-bundle>
-
     <!-- 插件定义的扩展，更多说明：https://plugins.jetbrains.com/docs/intellij/plugin-extension-points.html -->
     <extensions defaultExtensionNs="com.intellij">
         <projectService serviceImplementation="com.lessplain.ide.UnderstandingService"/>

@@ -15,11 +15,3 @@ internal fun UnderstandingGraph.mapAnchors(transform: (String, SourceAnchor) -> 
         )
     },
 )
-
-/** 行号来自首次保存的校验快照，重放时不读取当前源码。 */
-internal fun UnderstandingGraph.resolvedAnchors(): List<Map<String, Any>> = buildList {
-    mapAnchors { reference, anchor ->
-        anchor.lineHint?.let { line -> add(mapOf("reference" to reference, "path" to anchor.path, "line" to line)) }
-        anchor
-    }
-}

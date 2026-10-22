@@ -5,7 +5,6 @@ import com.lessplain.model.GraphNode
 import com.lessplain.model.SourceAnchor
 import com.lessplain.model.UnderstandingGraph
 import com.lessplain.model.UnderstandingInputException
-import com.lessplain.model.resolvedAnchors
 import com.lessplain.storage.sha256
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
@@ -25,7 +24,6 @@ class GraphAnchorValidationTest {
         val saved = prepared.nodes.single().anchor!!
         assertEquals(sha256(content), saved.version)
         assertEquals(2, saved.lineHint)
-        assertEquals(2, prepared.resolvedAnchors().single()["line"])
         assertEquals("", parsed.nodes.single().anchor!!.version)
     }
 
@@ -73,7 +71,9 @@ class GraphAnchorValidationTest {
         var reads = 0
         val prepared = validateGraphAnchors(input) { reads++; snapshot() }
         assertEquals(1, reads)
-        assertEquals(2, prepared.resolvedAnchors().size)
+        assertEquals(2, prepared.evidence.single().anchor.lineHint)
+        assertEquals(2, prepared.evidence.single().dependencies.single().lineHint)
+        assertEquals(sha256(content), prepared.evidence.single().dependencies.single().version)
         assertTrue(prepared.evidence.all { it.anchor.version.isNotBlank() })
     }
 }

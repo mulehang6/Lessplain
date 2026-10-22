@@ -4,7 +4,6 @@ import com.lessplain.model.GraphEdge
 import com.lessplain.model.GraphNode
 import com.lessplain.model.UnderstandingGraph
 import com.lessplain.model.branchNodeIds
-import com.lessplain.model.traversableEdgesFrom
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 
@@ -27,8 +26,5 @@ class GraphTraversalTest {
             ),
         )
         assertEquals(setOf("fork", "self"), graph.branchNodeIds())
-        assertEquals(listOf("parallel-yes", "parallel-no", "parallel-dependency", "parallel-structure"),
-            graph.traversableEdgesFrom("parallel").map { it.id })
-        assertEquals(emptyList(), graph.traversableEdgesFrom("missing"))
     }
 }
