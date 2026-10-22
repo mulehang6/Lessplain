@@ -1,122 +1,103 @@
-# 协议细则
+# 结构化 MCP 协议
 
-字段和类型以工具自带的 schema 为准。本文件只记录 schema 无法说明的规则。
+共 15 个工具。以下为直接调用的参数对象。经 IDE 路由时按该路由的 schema 封送这些对象，目标工程填外层 projectPath。返回统一为 {ok:true,data:...} 或 {ok:false,error:{code,field,message,currentRevision?}}。
 
-## 版本与能力
+ID 为示意值，实际必须使用前次返回值。每个资源版本独立，正文版本见 data.tutorial.revision。
 
-- `schemaVersion` 是字符串，例如 `"1.4"`。按上下文返回的值原样提交，不转成数字。
-- `capabilities` 决定哪些字段可用。没有声明的能力，不提交对应字段。
+源码路径示例假设 IDE 打开的工程根目录为 mulehang-agent。若打开父工作区，路径需带 mulehang-agent/ 前缀；路由的 projectPath 同样指向实际打开的目标工程。
 
-| 能力                  | 为 true 时可用                          |
-|-----------------------|-----------------------------------------|
-| `nodeSemantics`       | 节点提交 `endOutcome`                   |
-| `pendingNoteBatch`    | 使用待答注释批处理                      |
-| `rootClusters`        | 根图提交 `clusters`                     |
-| `anchorValidation`    | 保存前校验锚点，锚点错误会列出全部问题  |
-| `edgeSummaries`       | 边提交自然语言短句 `summary`            |
-| `inferredEdges`       | 边提交 `inferred: true`                 |
-| `feedbackConsumption` | 用 `feedbackQuestionIds` 清理反馈类注释 |
+## 上下文、查询、定位
 
-缺少所需能力时，说明需要更新插件，不猜测未返回的数据。
+lessplain_context_capture
+~~~json
+{"question":"Flow 为什么需要 collect 才开始执行？"}
+~~~
 
-## get_understanding_context
+lessplain_context_read
+~~~json
+{"contextId":"ctx_flow"}
+~~~
 
-返回 `schemaVersion`、`context`（`token`、`recordId`、`nodeId`、`anchor`、`staticPath` 等）、来源 `record`、`questions`、`pendingBatch` 和 `capabilities`。
+lessplain_materials_list
+~~~json
+{"kind":"tutorial","query":"Flow","limit":20}
+~~~
 
-| 参数                   | 规则                                                                          |
-|------------------------|-------------------------------------------------------------------------------|
-| `contextToken`         | 固定来源。空值表示捕获当前来源                                                |
-| `pendingScopeRecordId` | 读取复制文本末尾的范围标识，或复查时传回 `pendingBatch.scopeRecordId`。不能与 `contextToken` 同时指定 |
-| `feedbackQuestionIds`  | JSON 字符串数组。只能包含本次读取范围内的注释 `questionId`，读取成功后删除    |
+lessplain_item_read
+~~~json
+{"id":"tut_flow"}
+~~~
+具体资源用 {"id":"tut_flow/simulations/cold_flow"}。
 
-`context.staticPath` 是提问时的阅读路径，可能从中间节点开始。它不能证明入口、实际执行或业务条件成立。补全路径时不猜入口。
+lessplain_source_resolve
+~~~json
+{"path":"shared/src/jvmMain/kotlin/com/agent/shared/agent/koog/KoogAgentGateway.kt","context":"override fun run(request: AgentRunRequest): Flow<AgentStreamEvent>","focus":"Flow<AgentStreamEvent>"}
+~~~
 
-## present_understanding
+lessplain_reveal
+~~~json
+{"id":"src_return"}
+~~~
+产物或批注也用其返回的 ID。
 
-| 参数                                 | 规则                                                                                                          |
-|--------------------------------------|---------------------------------------------------------------------------------------------------------------|
-| `schemaVersion`                      | 按上下文返回的值提交                                                                                          |
-| `requestId`                          | 每份新内容用一个新 ID。同一内容重试时，复用原 ID 和全部参数。内容或版本变了就换新 ID。不同内容不能占用已有 ID |
-| `question`                           | 原问题。带 `questionId` 时，必须与保存的原文一致                                                              |
-| `graph`                              | JSON 字符串，包含 `nodes`、`edges`、`evidence`，根图可选 `clusters`。至少一个实际节点                         |
-| `placement`                          | `root`、`child`、`sibling`、`explicit` 或 `revise`                                                            |
-| `displayTitle`                       | 可选，约 20 字。修订时留空                                                                                    |
-| `contextToken`、`questionId`         | 固定来源与待答问题，两者必须属于同一来源。修订时留空                                                          |
-| `parentId`                           | 仅用于 `explicit`                                                                                             |
-| `reviseRecordId`、`expectedRevision` | 仅用于 `revise`                                                                                               |
+## 理解图
 
-保存后，返回的 `recordId`、`revision` 和 `resolvedAnchors` 用来核对。`resolvedAnchors` 列出每个锚点解析到的路径和行号。根图的一次实际调用没有返回 `parentId`，因此归属要结合 `placement` 判断，不要求每次都有这个字段。
+lessplain_graph_create
+~~~json
+{"contextId":"ctx_gateway","title":"运行入口","graph":{"nodes":[{"id":"gateway","label":"返回执行事件流","sourceId":"src_return"}],"edges":[]}}
+~~~
+指定 parentId 可挂到父图下。省略为根图。
 
-### 归属
+lessplain_graph_revise
+~~~json
+{"id":"graph_gateway","expectedRevision":1,"graph":{"nodes":[{"id":"gateway","label":"准备执行事件流","sourceId":"src_return"}],"edges":[]}}
+~~~
+节点和边 ID、顺序、端点及关系类型保持不变。证据用 evidence:[{id,sourceId,note?,dependencySourceIds:[]}]。
 
-| 情况                   | placement                                                   |
-|------------------------|-------------------------------------------------------------|
-| 节点追问、待答注释     | `child`，归属固定来源记录。带 `questionId` 时只能用 `child` |
-| 追问来源记录的内容     | `child`                                                     |
-| 与来源记录同级的问题   | `sibling`                                                   |
-| 与当前图无关的独立问题 | `root`                                                      |
-| 挂到其他已知记录下     | `explicit`，并填 `parentId`                                 |
+## 教程和资源
 
-没有来源记录时，只能用 `root` 或 `explicit`。归属按理解关系选，不按提问先后选。
+lessplain_tutorial_create
+~~~json
+{"contextId":"ctx_flow","title":"Flow 何时开始生产值","markdown":"# Flow 何时开始生产值\n\nFlow 在收集时才开始提供值。\n\n[项目返回类型](lessplain://source/src_return)\n\n![事件传递](lessplain://diagram/delivery)\n\n![情境对比](lessplain://simulation/cold_flow)","diagrams":[{"id":"delivery","graph":{"nodes":[{"id":"producer","label":"生产者"},{"id":"collector","label":"收集者"}],"edges":[{"id":"delivery","from":"producer","to":"collector","label":"交付值"}]}}],"simulations":[{"id":"cold_flow","language":"kotlin","code":"suspend fun demo(collect: Boolean) {\n    val f = flow {\n        println(\"开始生产\")\n        emit(\"你好\")\n    }\n    if (collect) f.collect { println(it) }\n}","scenarios":[{"id":"off","label":"不收集","steps":[{"highlightLines":[2],"caption":"创建 Flow，没有执行生产逻辑。"},{"highlightLines":[6],"caption":"跳过收集，没有输出。"}]},{"id":"on","label":"开始收集","steps":[{"highlightLines":[6],"caption":"开始收集。"},{"highlightLines":[3],"caption":"执行生产逻辑。","stdout":"开始生产\n"},{"highlightLines":[4,6],"caption":"发出值并打印。","stdout":"你好\n"}]}]}]}
+~~~
 
-工具报告来源过期、问题已修改或已取消时，重新读取核对。不猜 ID，也不去掉来源来绕过校验。
+lessplain_tutorial_edit
+~~~json
+{"id":"tut_flow","expectedRevision":1,"edits":[{"find":"Flow 在收集时才开始提供值。","replace":"这里的冷 Flow 在开始收集后，才执行生产逻辑。"}]}
+~~~
 
-## graph 字段
+lessplain_diagram_save
+~~~json
+{"tutorialId":"tut_flow","id":"delivery","expectedRevision":1,"graph":{"nodes":[{"id":"producer","label":"生产者：提供值"},{"id":"collector","label":"收集者：处理值"}],"edges":[{"id":"delivery","from":"producer","to":"collector","label":"依次交付"}]}}
+~~~
 
-- 节点：`id`、`label`、`anchor`，可选 `flowRoles`、`endOutcome`、`evidenceIds`。`kind` 省略即可，默认是 `step`。`placeholder` 和 `question` 是插件保留值。
-- 边：`id`、`from`、`to`、`relation`，`relation` 取 `control_flow`、`call`、`data_flow`、`dependency`、`structure` 之一。可选 `summary`、`condition`、`inferred`、`coverage`、`evidenceIds`。
-  - `summary` 是一句自然语言关系说明，仅在 `edgeSummaries=true` 时提交。缺省、null 或空白时，悬浮显示中文关系类型和两端节点；不从 `coverage` 截取。悬浮宽度不超过 360 个逻辑像素，正文最多三行。
-  - `coverage` 保留完整依据，右键边的“查看依据”同时展示条件和关联证据；打开详情不改变阅读路径。
-  - `condition` 只用于 `control_flow`。调用和数据关系的适用条件写进 `coverage`。
-  - `inferred: true` 必须同时有非空的 `coverage`，写明依据。
-  - 多条 `dependency` 边不是互斥分支。
-  - 只分析了部分分支时，在 `coverage` 注明范围。
-- ID 在图内唯一且稳定。不提交坐标、`decision` 或其他布局字段。分支图标由插件按可浏览的后继计算。
-- `evidence` 可选。节点没有 `anchor` 时，插件取 `graph.evidence` 中第一条被该节点 `evidenceIds` 引用的证据来定位，按 `graph.evidence` 的排列顺序，不按 `evidenceIds` 的顺序。
-  - 不让不同位置的证据匹配同一个节点。
-  - 不把流程级证据复制给所有节点。
+lessplain_simulation_save
+~~~json
+{"tutorialId":"tut_flow","id":"conditional_output","expectedRevision":0,"language":"kotlin","code":"fun demo(enabled: Boolean) {\n    if (enabled) println(\"你好\")\n}","scenarios":[{"id":"off","label":"enabled=false","steps":[{"highlightLines":[2],"caption":"条件不成立，没有输出。"}]},{"id":"on","label":"enabled=true","steps":[{"highlightLines":[2],"caption":"打印问候。","stdout":"你好\n"}]}]}
+~~~
 
-### flowRoles 与 endOutcome
+## 批注、回答、反馈
 
-- `flowRoles` 取 `["start"]`、`["end"]` 或 `["start", "end"]`。按当前解释范围标注业务起点和终点，可以有多个。不根据入度、出度或 `kind` 推断角色。
-- `endOutcome` 只在 `nodeSemantics=true` 时提交，且节点必须带 `end`。
-  - 业务成功写 `success`。
-  - 校验拒绝、权限不足、未恢复的异常写 `failure`。
-  - 捕获后恢复并继续执行的异常不算失败。
-  - 同一节点既可能成功也可能失败，或证据不足时，省略该字段。
-- 正常跳过是否算完成职责，按解释范围判断，不只看 `return` 或方法名。
+lessplain_annotations_list
+~~~json
+{"materialId":"tut_flow","kind":"question","status":"pending","limit":20}
+~~~
+省略 materialId 查询项目。图注释没有语义分类；kind=feedback 返回 feedbackEligible 的候选，须由用户或 Agent 明确确认。
 
-### 根图分组（clusters）
+lessplain_question_answer
+~~~json
+{"questionId":"q_collect","markdown":"尚未开始收集，所以 flow 内的 println 还没有执行。"}
+~~~
+引用已创建产物可增加 "materialId":"graph_gateway"。创建产物不会隐式完成问题。
 
-是否采用多 cluster，遵循 [多 cluster](../SKILL.md#多-cluster) 中的分组条件。`rootClusters=true` 只表示工具支持分组，不代表当前图适合分组。
+lessplain_feedback_consume
+~~~json
+{"ids":["feedback_scroll","feedback_font"]}
+~~~
+只消费显式指定的节点待答注释。返回全文后清理；普通读取无副作用。相同参数重试返回原结果。
 
-`rootClusters=true` 且满足分组条件时，根图可提交单层 `clusters=[{id,title,nodeIds}]`。
+## 错误与重试
 
-- 每组对应同一问题下的一条独立流程或一项独立职责，标题说明组内内容。不同入口或处理阶段本身不是拆组依据。
-- 成员完整覆盖全部节点，且互不重叠。
-- 不嵌套，不带坐标。
-- 提交前按主文的分组条件检查全部边，有跨组关系就合并相关组，保留真实关系。
-- 追问子图不提交分组。
+REVISION_CONFLICT 附 currentRevision；重新读取后按新版本提交。TEXT_NOT_FOUND / AMBIGUOUS_TEXT 要求修正 find。AMBIGUOUS_SOURCE / AMBIGUOUS_FOCUS 要求提供唯一源码上下文，候选行在错误消息中。RESOURCE_NOT_FOUND、INVALID_LINE 分别定位资源引用和模拟行号错误。SOURCE_STALE 保留材料，不导航到同名词。
 
-## 待答注释批处理
-
-复制文本末尾的 `Lessplain 待答批次：<范围标识>` 使用真正的理解根记录 ID。首次调用 `get_understanding_context(pendingScopeRecordId=<范围标识>)` 读取根记录和全部追问图的最新待答注释，不按复制文本的编号列表筛选。复制后、首次读取前新增的注释也包含在内，已完成的注释不再返回。默认连接当前正确的 IDE 工程；范围不存在时报告无法读取，不尝试其他工程。
-
-1. 记下 `pendingBatch.scopeRecordId` 和 `items` 快照。每项包含 `questionId`、原文 `question` 和固定的 `context`。
-   - 来源节点是该项的 `context.nodeId`。
-   - token 是该项的 `context.token`。
-   - 编辑器选区提问的 `context.anchor` 包含点击“提问”时的代码快照（包括未保存内容），问题正文保持用户原话。优先回答选区，不把整个节点的源码当作选区。
-   - 所属记录在 `pendingBatch.records` 中按 `context.recordId` 匹配。
-   - 不把顶层的当前节点、其他项的 token 或当前界面选择套用到整批。
-2. 逐项核对源码后，以 `child` 提交回答图，带上各自的 `questionId`、原问题和 token。只有用户明确指定某一条时，才只处理那一条。
-3. 插件在保存回答的同一事务中删除对应注释。失败、取消或证据不足的项保持原样，不用删除或清空来冒充已回答。未保存的草稿不在队列中，不猜测其内容。
-4. 最后用 `get_understanding_context(pendingScopeRecordId=<最初的 scopeRecordId>)` 复查。不依赖回答过程中自动切换的画布。仍未完成的项逐条说明原因。首次读取后、处理期间新增的注释留到下一批，不自动扩大本次任务。
-
-## 修订（placement=revise）
-
-- `reviseRecordId` 用读到的 `record.id`。`expectedRevision` 用该记录当前的 `record.revision`，不用来源快照里的 `context.recordRevision`。
-- `question` 必须与原问题一致。
-- 节点 ID、边 ID 及两者的顺序保持不变。每条边的起点、终点和关系类型不变。可以更新 label、锚点、条件、角色和分组。
-- 记录身份、追问、标题和浏览状态沿用原值。新问题创建新图，不借修订覆盖旧图。
-- 版本冲突时，重新读取记录，重新核对源码。不只改版本号重试旧内容。
-- `clusters` 省略或为 `null` 时保留现有分组，为 `[]` 时清空，为非空数组时整组替换，且必须与提交的节点一致。保留、清空或替换的语义变了，就换新的 `requestId`。
+列表支持 limit=1..100、cursor。普通读取不会清理笔记、问题或反馈。

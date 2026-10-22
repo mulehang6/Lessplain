@@ -45,7 +45,7 @@
 | `idea`          | 日常开发使用的 IDEA 的内置 MCP，当前打开包含本插件工程的工作区                          | 面向插件源码工程的日常开发操作                               | `mcp__idea__execute_tool` 路由器 |
 | `idea_dev_2026` | 由 `Lessplain IDE` 启动的开发 IDE，加载本插件；其中打开的项目是验收对象，可能随测试改变 | 调用插件自身的 MCP 工具，检查开发 IDE 中的运行行为和测试项目 | `execute_tool` 路由器            |
 
-两条连接通过各自的 `execute_tool` 路由器调用。`idea` 面向日常开发 IDE 中的插件源码工程；`idea_dev_2026` 面向插件开发实例中当前打开的验收项目。调用插件的 `get_understanding_context` 或 `present_understanding` 时，将工具名及参数放入 `command`，把验收项目路径放在外层 `projectPath`，不要误传插件源码工程路径。本插件目前只有这两个 MCP 工具。`idea_dev_2026` 用于插件自身工具及验收对象，不能作为日常开发连接的替代。
+两条连接通过各自的 `execute_tool` 路由器调用。`idea` 面向日常开发 IDE 中的插件源码工程；`idea_dev_2026` 面向插件开发实例中当前打开的验收项目。调用插件的 lessplain_* 工具时，将工具名和结构化参数交给当前路由，把验收工程路径放在外层 projectPath，不传插件源码工程路径。当前为 15 个工具，接口见 skills/lessplain/references/protocol.md。idea_dev_2026 仅用于插件自身工具及验收对象，不能代替日常开发连接。
 
 开发默认打开父级 `Agent-dev` 工程。仓库内 `Lessplain IDE`、`Lessplain Tests` 和 `Lessplain Verifications` 三份运行配置的 Gradle 路径都是 `$PROJECT_DIR$/Lessplain`，这是父工程下的预期设置，不为单独打开插件目录而修改。启动插件时选唯一的 `Lessplain IDE`；不要选旧配置 `Run IDE with Plugin`，它属于 `walkthrough-plugin`，会把没有 Gradle 构建文件的工作区根目录传给 Gradle。单独打开 `Lessplain` 时，使用本目录的 Gradle 命令，或另建 Gradle 工程目录指向本插件 `settings.gradle.kts` 所在目录的配置。
 
