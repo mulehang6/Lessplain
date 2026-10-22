@@ -6,6 +6,7 @@ import com.lessplain.ide.validateGraphAnchors
 import com.lessplain.model.GraphNode
 import com.lessplain.model.SourceAnchor
 import com.lessplain.model.UnderstandingGraph
+import com.lessplain.model.UnderstandingRevisionConflict
 import com.lessplain.model.UnderstandingInputException
 import com.lessplain.storage.UnderstandingRepository
 import com.lessplain.storage.renameNodeLabel
@@ -52,7 +53,8 @@ class UnderstandingNodeLabelTest {
                     }
                 }
             }
-            assertFailsWith<UnderstandingInputException> { repository.renameNodeLabel(saved.id, "run", "并发覆盖", 1) }
+            val conflict = assertFailsWith<UnderstandingRevisionConflict> { repository.renameNodeLabel(saved.id, "run", "并发覆盖", 1) }
+            assertEquals(renamed.revision, conflict.currentRevision)
             assertFailsWith<UnderstandingInputException> { repository.renameNodeLabel(saved.id, "missing", "不存在", 2) }
             assertFailsWith<UnderstandingInputException> { repository.renameNodeLabel(saved.id, "run", " ", 2) }
             assertEquals(renamed, repository.getRecord(saved.id))

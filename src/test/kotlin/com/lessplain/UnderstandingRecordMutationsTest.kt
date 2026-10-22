@@ -99,4 +99,47 @@ class UnderstandingRecordMutationsTest {
             assertFalse(reopened.readOnly)
         }
     }
+    @Test
+    fun `explicit child cannot outlive parent deleted during graph preparation`() {
+        UnderstandingRepository(root).use { repository ->
+            val core = UnderstandingCore(repository)
+            val parent = core.present(4, "parent", "父图", graph, "root")
+            val context = core.captureContext(parent.id, "request")
+            val racing = UnderstandingCore(repository, prepareGraph = { value ->
+                repository.deleteRootRecord(parent.id)
+                value
+            })
+            assertFailsWith<UnderstandingInputException> {
+                racing.present(4, "explicit-child", "子图", graph, "explicit", context.token, parentId = parent.id)
+            }
+            assertTrue(repository.recentRecords().isEmpty())
+            repository.connect().use { db -> db.createStatement().use { statement ->
+                statement.executeQuery("SELECT COUNT(*) FROM requests WHERE request_id='explicit-child'").use { rows ->
+                    rows.next(); assertEquals(0, rows.getInt(1))
+                }
+            } }
+        }
+    }
+
+    @Test
+    fun `explicit parent may differ from source but source must still exist at commit`() {
+        UnderstandingRepository(root).use { repository ->
+            val core = UnderstandingCore(repository)
+            val parent = core.present(4, "parent", "归属图", graph, "root")
+            val source = core.present(4, "source", "来源图", graph, "root")
+            val context = core.captureContext(source.id, "request")
+            val child = core.present(4, "valid-child", "来源与归属不同", graph, "explicit", context.token, parentId = parent.id)
+            assertEquals(parent.id, child.parentId)
+            val removed = core.captureContext(source.id, "value")
+            val racing = UnderstandingCore(repository, prepareGraph = { value ->
+                repository.deleteRootRecord(source.id)
+                value
+            })
+            assertFailsWith<UnderstandingInputException> {
+                racing.present(4, "stale-source-child", "失效来源", graph, "explicit", removed.token, parentId = parent.id)
+            }
+            assertEquals(setOf(parent.id, child.id), repository.recentRecords().map { it.id }.toSet())
+        }
+    }
+
 }

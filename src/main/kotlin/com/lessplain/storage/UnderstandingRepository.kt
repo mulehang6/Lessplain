@@ -121,13 +121,14 @@ class UnderstandingRepository(
     internal fun <T> write(block: (Connection) -> T): T {
         if (readOnly) throw IllegalStateException("另一个 IDE 实例已打开此项目，当前实例只读")
         return connect().use { db ->
-            db.autoCommit = false
+            // 在读取前取得写入权；避免并发请求基于旧快照升级事务而失败或丢写。
+            db.createStatement().use { it.execute("BEGIN IMMEDIATE") }
             try {
                 val result = block(db)
-                db.commit()
+                db.createStatement().use { it.execute("COMMIT") }
                 result
             } catch (failure: Exception) {
-                db.rollback()
+                runCatching { db.createStatement().use { it.execute("ROLLBACK") } }.exceptionOrNull()?.let(failure::addSuppressed)
                 throw failure
             }
         }
@@ -252,6 +253,7 @@ class UnderstandingRepository(
     }
 
     fun insertRecord(db: Connection, record: UnderstandingRecord) {
+        validateRecordOrigin(db, record)
         record.questionId?.let { id ->
             db.prepareStatement("SELECT text, status FROM questions WHERE id=?").use { statement ->
                 statement.setString(1, id)
@@ -297,7 +299,7 @@ class UnderstandingRepository(
                 statement.setString(4, gson.toJson(answer))
                 statement.executeUpdate()
             }
-        db.prepareStatement("UPDATE questions SET status='answered' WHERE id=?").use { statement ->
+        db.prepareStatement("UPDATE questions SET status='answered', data=json_set(data, '$.status', 'answered') WHERE id=?").use { statement ->
             statement.setString(1, answer.questionId)
             statement.executeUpdate()
         }
@@ -404,19 +406,8 @@ class UnderstandingRepository(
             result
         }
 
-    fun answersForQuestion(questionId: String): List<UnderstandingAnswer> = connect().use { db ->
-        val result = mutableListOf<UnderstandingAnswer>()
-        db.prepareStatement(
-            "SELECT a.data FROM answers a WHERE a.question_id=? " +
-                    "AND NOT EXISTS (SELECT 1 FROM answers newer WHERE json_extract(newer.data, '$.supersedesId')=a.id) ORDER BY a.rowid"
-        ).use { statement ->
-            statement.setString(1, questionId)
-            statement.executeQuery().use { rows ->
-                while (rows.next()) result += gson.fromJson(rows.getString(1), UnderstandingAnswer::class.java)
-            }
-        }
-        result
-    }
+    fun answersForQuestion(questionId: String): List<UnderstandingAnswer> =
+        connect().use { readActiveAnswers(it, questionId) }
 
     fun questionsForRecord(recordId: String): List<UnderstandingQuestion> =
         connect().use { readRecordQuestions(it, recordId) }

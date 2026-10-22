@@ -8,6 +8,7 @@ import com.lessplain.model.GraphEdge
 import com.lessplain.model.GraphNode
 import com.lessplain.model.SourceAnchor
 import com.lessplain.model.UnderstandingGraph
+import com.lessplain.model.UnderstandingRevisionConflict
 import com.lessplain.model.UnderstandingInputException
 import com.lessplain.storage.UnderstandingRepository
 import com.lessplain.storage.sha256
@@ -48,9 +49,10 @@ class UnderstandingRevisionTest {
                 core.revise(4, "revise", titled.question, graph("if (ok) { login() }"), titled.id, titled.revision)
             }
 
-            assertFailsWith<UnderstandingInputException> {
+            val conflict = assertFailsWith<UnderstandingRevisionConflict> {
                 core.revise(4, "stale", titled.question, graph("if (ok) { login() }"), titled.id, titled.revision)
             }
+            assertEquals(revised.revision, conflict.currentRevision)
             assertFailsWith<UnderstandingInputException> {
                 core.revise(4, "changed-node", titled.question,
                     revisedGraph.copy(nodes = revisedGraph.nodes.dropLast(1) + GraphNode("other", "另一步"),

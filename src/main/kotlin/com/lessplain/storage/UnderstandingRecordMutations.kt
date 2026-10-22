@@ -1,5 +1,6 @@
 package com.lessplain.storage
 
+import com.lessplain.model.UnderstandingRevisionConflict
 import com.lessplain.model.UnderstandingInputException
 import com.lessplain.model.UnderstandingGraph
 import com.lessplain.model.UnderstandingQuestion
@@ -30,7 +31,7 @@ internal fun UnderstandingRepository.reviseRecordGraph(
             gson.readUnderstandingRecord(rows.getString(1))
         }
     }
-    requireInput(current.revision == expectedRevision, "理解记录版本已变化，请重新读取")
+    if (current.revision != expectedRevision) throw UnderstandingRevisionConflict(current.revision)
     requireInput(current.question == question, "修订不能更改原问题")
     val merged = graph.copy(clusters = when (clusterUpdate) {
         ClusterUpdate.Keep -> current.graph.clusters
