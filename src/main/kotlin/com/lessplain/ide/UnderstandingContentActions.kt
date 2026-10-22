@@ -79,6 +79,19 @@ internal class UnderstandingContentActions(private val service: UnderstandingSer
         }
     }
 
+    /** 只修改真实节点标签，复用图版本事务保留来源、身份与批注。 */
+    fun renameNode(record: UnderstandingRecord, nodeId: String, component: Component, point: Point) {
+        if (service.readOnly) return
+        val node = record.graph.nodes.firstOrNull { it.id == nodeId } ?: return
+        session(component).edit("node-label:${record.id}:$nodeId", "重命名节点", node.label, point, false,
+            afterSave = service::refreshOpenDiagrams) { label ->
+            service.core.revise(com.lessplain.model.UNDERSTANDING_SCHEMA_REVISION,
+                com.lessplain.storage.sha256("rename:${record.id}:${record.revision}:$nodeId:$label"), record.question,
+                record.graph.copy(nodes = record.graph.nodes.map { if (it.id == nodeId) it.copy(label = label) else it }), record.id, record.revision)
+            service.storage.loadRecord(record.id)
+        }
+    }
+
     fun notifyQuestionCopy(message: String, error: Boolean) {
         if (!project.isDisposed) NotificationGroupManager.getInstance()
             .getNotificationGroup("code.comprehension.results")

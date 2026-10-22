@@ -57,6 +57,8 @@ internal class UnderstandingDiagram(
     internal val clusterCallbacks = mutableSetOf<(String) -> Unit>()
     internal val copyCallbacks = mutableSetOf<(String) -> Unit>()
     internal val addNoteCallbacks = mutableSetOf<(String) -> Unit>()
+    internal val renameNodeCallbacks = mutableSetOf<(String) -> Unit>()
+    internal val edgeLabelCallbacks = mutableSetOf<(String) -> Unit>()
     internal val noteCallbacks = mutableSetOf<(String, java.awt.Component, java.awt.Point) -> Unit>()
     internal val titleCallbacks = mutableSetOf<(String) -> Unit>()
     internal var questionCounts = emptyMap<String, Int>()
@@ -405,6 +407,16 @@ internal class UnderstandingDiagram(
         return AutoCloseable { noteCallbacks -= callback }
     }
 
+    fun onRenameNode(callback: (String) -> Unit): AutoCloseable {
+        renameNodeCallbacks += callback
+        return AutoCloseable { renameNodeCallbacks -= callback }
+    }
+
+    fun onEdgeLabelEdit(callback: (String) -> Unit): AutoCloseable {
+        edgeLabelCallbacks += callback
+        return AutoCloseable { edgeLabelCallbacks -= callback }
+    }
+
     fun onClusterTitleEdit(callback: (String) -> Unit): AutoCloseable {
         titleCallbacks += callback
         return AutoCloseable { titleCallbacks -= callback }
@@ -429,7 +441,7 @@ internal class UnderstandingDiagram(
             pendingNoteCounts,
             startIds, endIds, highlightedEdgeIds, choiceTargets, choicePhase, copiedNodeId,
             animateFlow, flowPhase, controls.height, overlays.titles, branchIds, draftNoteNodes,
-            routeChoice.edgeIds, routeChoice.focusedEdgeId, routeChoice.focusedNodeId))
+            routeChoice.edgeIds, routeChoice.focusedEdgeId, routeChoice.focusedNodeId, actionAvailability()))
         if (!layoutReady || layoutFailure != null) {
             val message = layoutFailure?.let { "布局失败：$it（点击重试）" } ?: "正在排版…"
             graphics.font = DiagramTextMetrics.font()
@@ -465,6 +477,8 @@ internal class UnderstandingDiagram(
         clusterCallbacks.clear()
         copyCallbacks.clear()
         addNoteCallbacks.clear()
+        renameNodeCallbacks.clear()
+        edgeLabelCallbacks.clear()
         noteCallbacks.clear()
         draftNoteNodes = emptySet()
         titleCallbacks.clear()

@@ -587,6 +587,7 @@ class UnderstandingGraphLayoutTest {
         SwingUtilities.invokeAndWait {
             val record = UnderstandingRecord("hover", 1, null, null, "测试", "", null, branch, 0)
             val diagram = createUnderstandingDiagram(record)
+            diagram.onCopyNodeContext { }
             try {
                 diagram.setSize(900, 600)
                 diagram.dispatchEvent(ComponentEvent(diagram, ComponentEvent.COMPONENT_RESIZED))

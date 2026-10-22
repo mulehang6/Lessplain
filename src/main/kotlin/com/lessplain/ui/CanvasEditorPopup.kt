@@ -46,14 +46,21 @@ internal class CanvasEditorPopup(
         saveDispatch = saveDispatch,
     )
     private val popup: JBPopup = try {
-        JBPopupFactory.getInstance().createComponentPopupBuilder(editor, editor.input)
+        val content = javax.swing.JPanel(java.awt.BorderLayout()).apply {
+            add(javax.swing.JPanel(java.awt.FlowLayout(java.awt.FlowLayout.RIGHT, 4, 2)).apply {
+                add(javax.swing.JButton("关闭 ×").apply { addActionListener { close() } })
+            }, java.awt.BorderLayout.NORTH)
+            add(editor, java.awt.BorderLayout.CENTER)
+        }
+        JBPopupFactory.getInstance().createComponentPopupBuilder(content, editor.input)
         .setTitle(title)
         .setMovable(true)
         .setResizable(false)
         .setLocateWithinScreenBounds(true)
         .setFocusable(true)
         .setRequestFocus(true)
-        .setCancelOnClickOutside(true)
+        .setCancelOnClickOutside(false)
+        .setCancelOnOtherWindowOpen(false)
         .setCancelKeyEnabled(false)
         .setCancelOnWindowDeactivation(false)
         .setCancelCallback { !editor.composition.active }

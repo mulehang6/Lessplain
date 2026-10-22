@@ -42,6 +42,7 @@ internal object DiagramNodePainter {
         draftNoteNodes: Set<String> = emptySet(),
         focusedChoice: String? = null,
         hoveredAction: DiagramNodeAction? = null,
+        actions: DiagramActionAvailability = DiagramActionAvailability(),
     ) {
         g.font = DiagramTextMetrics.font()
         layout.nodes.values.forEach { placed ->
@@ -87,16 +88,16 @@ internal object DiagramNodePainter {
             g.color = textColor
             paintLabel(g, placed, id in branchIds)
             if (id == hovered || id == copiedNodeId) {
-                paintAction(g, copyBounds(bounds),
+                if (actions.copy) paintAction(g, copyBounds(bounds),
                     if (id == copiedNodeId) GraphControlIconKind.COPIED else GraphControlIconKind.COPY,
                     id == hovered && hoveredAction == DiagramNodeAction.COPY)
-                if (id == hovered && (questionCounts[id] ?: 0) > 0) {
+                if (actions.questions && id == hovered && (questionCounts[id] ?: 0) > 0) {
                     paintAction(g, questionBounds(bounds), GraphControlIconKind.QUESTIONS,
                         hoveredAction == DiagramNodeAction.QUESTIONS)
                 }
             }
             val hasNote = (pendingNoteCounts[id] ?: 0) > 0 || id in draftNoteNodes
-            if (hasNote || id == hovered) {
+            if (hasNote && actions.openNote || !hasNote && id == hovered && actions.addNote) {
                 paintAction(g, noteBounds(bounds),
                     if (hasNote) GraphControlIconKind.NOTE else GraphControlIconKind.ADD,
                     id == hovered && hoveredAction == DiagramNodeAction.NOTE)

@@ -60,5 +60,6 @@ internal fun UnderstandingDiagram.showNodeMenu(nodeId: String, point: Point) {
     showNativeMenu(this, listOf(
         NativeMenuItem("重新选择来路", routeNavigation != null) { routeNavigation?.complete(nodeId) },
         NativeMenuItem("添加注释", addNoteCallbacks.isNotEmpty()) { addNoteCallbacks.toList().forEach { it(nodeId) } },
-    ), point)
+        NativeMenuItem("重命名节点", renameNodeCallbacks.isNotEmpty()) { renameNodeCallbacks.toList().forEach { it(nodeId) } },
+    ).filter { it.enabled }, point)
 }

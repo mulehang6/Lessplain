@@ -40,7 +40,10 @@ class DiagramOverlayInteractionTest {
     @Test fun `note icon is hit without node hover and empty node adds a note`() = withDiagram { diagram ->
         val input = diagram.mouseListeners.filterIsInstance<DiagramMouseInteraction>().single()
         diagram.setPendingNoteCounts(mapOf("a" to 2))
+        var viewed = ""
+        val view = diagram.onNoteBadgeClicked { id, _, _ -> viewed = id }
         for (scale in listOf(0.65, 1.0, 1.8)) {
+            viewed = ""
             diagram.zoom = scale
             diagram.centerX += 12
             val bounds = DiagramNodePainter.noteBounds(diagram.layout.nodes.getValue("a").bounds)
@@ -49,15 +52,13 @@ class DiagramOverlayInteractionTest {
             assertEquals("a", diagram.noteActionAt(point))
             val popup = diagram.notePopupAnchor(point)
             assertTrue(popup.y > screen(diagram, bounds.x, bounds.maxY).y)
-            var viewed = ""
-            val view = diagram.onNoteBadgeClicked { id, _, _ -> viewed = id }
             input.mouseMoved(event(diagram, point, MouseEvent.MOUSE_MOVED))
             assertEquals("", viewed, "hover must not open notes")
             input.mousePressed(event(diagram, point, MouseEvent.MOUSE_PRESSED))
             input.mouseReleased(event(diagram, point, MouseEvent.MOUSE_RELEASED))
             assertEquals("a", viewed)
-            view.close()
         }
+        view.close()
         diagram.setPendingNoteCounts(emptyMap())
         diagram.hoveredNodeId = null
         val bounds = DiagramNodePainter.noteBounds(diagram.layout.nodes.getValue("a").bounds)
@@ -99,14 +100,14 @@ class DiagramOverlayInteractionTest {
     @Test fun `draft badge is persistent clickable and never increases saved note counts`() = withDiagram { diagram ->
         val input = diagram.mouseListeners.filterIsInstance<DiagramMouseInteraction>().single()
         diagram.setDraftNoteNodes(setOf("a", "missing"))
+        var viewed = ""
+        diagram.onNoteBadgeClicked { id, _, _ -> viewed = id }
         assertEquals(setOf("a"), diagram.draftNoteNodes)
         assertTrue(diagram.pendingNoteCounts.isEmpty())
         diagram.hoveredNodeId = null
         val bounds = DiagramNodePainter.noteBounds(diagram.layout.nodes.getValue("a").bounds)
         val point = screen(diagram, bounds.centerX, bounds.centerY)
         assertEquals("a", diagram.noteActionAt(point))
-        var viewed = ""
-        diagram.onNoteBadgeClicked { id, _, _ -> viewed = id }
         diagram.onAddNodeNote { error("draft must reopen instead of adding a separate note") }
         input.mousePressed(event(diagram, point, MouseEvent.MOUSE_PRESSED))
         input.mouseReleased(event(diagram, point, MouseEvent.MOUSE_RELEASED))

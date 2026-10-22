@@ -59,6 +59,7 @@ internal fun UnderstandingDiagram.hoverNodeAt(point: Point): String? {
 }
 
 internal fun UnderstandingDiagram.copyActionAt(point: Point): String? {
+    if (copyCallbacks.isEmpty()) return null
     val world = screenToWorld(point)
     val id = hoveredNodeId ?: return null
     return id.takeIf { layout.nodes[it]?.bounds?.let { bounds ->
@@ -67,6 +68,7 @@ internal fun UnderstandingDiagram.copyActionAt(point: Point): String? {
 }
 
 internal fun UnderstandingDiagram.questionActionAt(point: Point): String? {
+    if (questionCallbacks.isEmpty()) return null
     val world = screenToWorld(point)
     val id = hoveredNodeId?.takeIf { (questionCounts[it] ?: 0) > 0 } ?: return null
     return id.takeIf { layout.nodes[it]?.bounds?.let { bounds ->
@@ -77,10 +79,12 @@ internal fun UnderstandingDiagram.questionActionAt(point: Point): String? {
 internal fun UnderstandingDiagram.noteActionAt(point: Point): String? {
     val world = screenToWorld(point)
     return layout.nodes.values.firstOrNull { placed ->
-        (hasNodeNote(placed.node.id) || placed.node.id == hoveredNodeId) &&
+        (if (hasNodeNote(placed.node.id)) noteCallbacks.isNotEmpty() else placed.node.id == hoveredNodeId && addNoteCallbacks.isNotEmpty()) &&
             DiagramNodePainter.noteBounds(placed.bounds).contains(world)
     }?.node?.id
 }
+
+internal fun UnderstandingDiagram.actionAvailability() = DiagramActionAvailability(copyCallbacks.isNotEmpty(), questionCallbacks.isNotEmpty(), noteCallbacks.isNotEmpty(), addNoteCallbacks.isNotEmpty())
 
 /** 注释预览放在气泡下方，使气泡仍可点击固定预览。 */
 internal fun UnderstandingDiagram.notePopupAnchor(point: Point): Point {

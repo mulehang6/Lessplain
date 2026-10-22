@@ -9,6 +9,8 @@ import javax.swing.UIManager
 
 internal enum class DiagramNodeAction { COPY, QUESTIONS, NOTE }
 
+internal data class DiagramActionAvailability(val copy: Boolean = true, val questions: Boolean = true, val openNote: Boolean = true, val addNote: Boolean = true)
+
 internal data class DiagramPaintState(
     val layout: UnderstandingGraphLayout,
     val examplePanels: List<DiagramExamplePanel>,
@@ -38,6 +40,7 @@ internal data class DiagramPaintState(
     val choiceEdgeIds: Set<String> = emptySet(),
     val focusedChoiceEdgeId: String? = null,
     val focusedChoiceNodeId: String? = null,
+    val actions: DiagramActionAvailability = DiagramActionAvailability(),
 )
 
 /** 按快照绘制画布，输入和导航仍由图视图处理。 */
@@ -80,7 +83,7 @@ internal object DiagramCanvasPainter {
             DiagramNodePainter.paint(g, state.layout, state.currentNodeId, state.hoveredNodeId,
                 state.questionCounts, state.pendingNoteCounts, state.startIds, state.endIds, state.choiceTargets,
                 state.choicePhase, state.copiedNodeId, visible, state.branchIds, state.draftNoteNodes,
-                state.focusedChoiceNodeId, state.hoveredAction)
+                state.focusedChoiceNodeId, state.hoveredAction, state.actions)
             paintActionTooltip(graphics, state)
         } finally {
             g.dispose()

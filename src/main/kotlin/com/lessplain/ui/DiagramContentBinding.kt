@@ -26,6 +26,7 @@ internal fun UnderstandingDiagram.bindContentActions(
             { actions.editRecordTitle(record.id, this, header.popupAnchor) }
         }),
         onAddNodeNote { id -> source(id)?.let { actions.addNodeNote(it.record, it.nodeId, this, overlays.anchor) } },
+        onRenameNode { id -> source(id)?.let { actions.renameNode(it.record, it.nodeId, this, overlays.anchor) } },
         onNoteBadgeClicked { id, component, point -> source(id)?.let {
             actions.showNodeNotes(it.record, it.nodeId, component, point)
         } },
