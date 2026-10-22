@@ -364,8 +364,7 @@ class UnderstandingService(private val project: Project, coroutineScope: Corouti
             result.onFailure(::storageFailed).onSuccess { context ->
                 val payload = Gson().toJson(
                     mapOf(
-                        "protocolVersion" to UNDERSTANDING_SCHEMA_VERSION,
-                        "contextToken" to context.token,
+                        "contextId" to context.token,
                         "recordId" to record.id,
                         "nodeId" to nodeId,
                         "nodeLabel" to node.label,

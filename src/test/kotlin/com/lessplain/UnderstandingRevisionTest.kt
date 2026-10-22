@@ -25,7 +25,7 @@ class UnderstandingRevisionTest {
     fun `revision preserves identity questions and browse state`() {
         UnderstandingRepository(root).use { repository ->
             val core = UnderstandingCore(repository)
-            val original = core.present(3, "create", "如何登录？", graph("if (ok)"), "root")
+            val original = core.present(4, "create", "如何登录？", graph("if (ok)"), "root")
             val titled = repository.updateDisplayTitle(original.id, "登录全链路")
             val context = core.captureContext(titled.id, "decision")
             val question = core.prepareQuestion("为什么检查？", context.token).question
@@ -34,7 +34,7 @@ class UnderstandingRevisionTest {
             repository.saveBrowseState(browse)
 
             val revisedGraph = graph("if (ok) {\n    login()\n}")
-            val revised = core.revise(3, "revise", titled.question, revisedGraph, titled.id, titled.revision)
+            val revised = core.revise(4, "revise", titled.question, revisedGraph, titled.id, titled.revision)
 
             assertEquals(titled.id, revised.id)
             assertEquals(titled.revision + 1, revised.revision)
@@ -43,16 +43,16 @@ class UnderstandingRevisionTest {
             assertEquals(revisedGraph, repository.getRecord(titled.id).graph)
             assertEquals(question.id, repository.questionsForRecord(titled.id).single().id)
             assertEquals(browse, repository.getBrowseState(titled.id))
-            assertEquals(revised, core.revise(3, "revise", titled.question, revisedGraph, titled.id, titled.revision))
+            assertEquals(revised, core.revise(4, "revise", titled.question, revisedGraph, titled.id, titled.revision))
             assertFailsWith<UnderstandingInputException> {
-                core.revise(3, "revise", titled.question, graph("if (ok) { login() }"), titled.id, titled.revision)
+                core.revise(4, "revise", titled.question, graph("if (ok) { login() }"), titled.id, titled.revision)
             }
 
             assertFailsWith<UnderstandingInputException> {
-                core.revise(3, "stale", titled.question, graph("if (ok) { login() }"), titled.id, titled.revision)
+                core.revise(4, "stale", titled.question, graph("if (ok) { login() }"), titled.id, titled.revision)
             }
             assertFailsWith<UnderstandingInputException> {
-                core.revise(3, "changed-node", titled.question,
+                core.revise(4, "changed-node", titled.question,
                     revisedGraph.copy(nodes = revisedGraph.nodes.dropLast(1) + GraphNode("other", "另一步"),
                         edges = listOf(GraphEdge("pass", "decision", "other", "control_flow"))),
                     titled.id, revised.revision)

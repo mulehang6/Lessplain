@@ -26,7 +26,7 @@ class UnderstandingFeedbackReadTest {
     @Test fun `feedback read removes only requested notes without any history or child graph`() {
         UnderstandingRepository(root).use { repository ->
             val core = UnderstandingCore(repository)
-            val record = core.present(3, "root", "主图", graph, "root")
+            val record = core.present(4, "root", "主图", graph, "root")
             val feedback = core.prepareQuestion("文字被截断", core.captureContext(record.id, "n").token).question
             val question = core.prepareQuestion("为什么需要重试？", core.captureContext(record.id, "n").token).question
             val response = readUnderstandingContextResponse(repository, core.captureContext(record.id), setOf(feedback.id))
@@ -56,8 +56,8 @@ class UnderstandingFeedbackReadTest {
     @Test fun `serialization or wrong scope failure keeps feedback`() {
         UnderstandingRepository(root).use { repository ->
             val core = UnderstandingCore(repository)
-            val record = core.present(3, "root", "主图", graph, "root")
-            val other = core.present(3, "other", "另一张图", graph, "root")
+            val record = core.present(4, "root", "主图", graph, "root")
+            val other = core.present(4, "other", "另一张图", graph, "root")
             val feedback = core.prepareQuestion("路由错误", core.captureContext(record.id, "n").token).question
             assertFailsWith<IllegalStateException> {
                 readUnderstandingContextResponse(repository, core.captureContext(record.id), setOf(feedback.id)) { error("模拟序列化失败") }
@@ -72,7 +72,7 @@ class UnderstandingFeedbackReadTest {
     @Test fun `editing one feedback during reading rolls back the whole cleanup`() {
         UnderstandingRepository(root).use { repository ->
             val core = UnderstandingCore(repository)
-            val record = core.present(3, "root", "主图", graph, "root")
+            val record = core.present(4, "root", "主图", graph, "root")
             val first = core.prepareQuestion("第一条反馈", core.captureContext(record.id, "n").token).question
             val second = core.prepareQuestion("第二条反馈", core.captureContext(record.id, "n").token).question
             assertFailsWith<UnderstandingInputException> {

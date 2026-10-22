@@ -1,6 +1,5 @@
 package com.lessplain.ide
 
-import com.lessplain.mcp.parseGraphPayload
 import com.lessplain.model.Evidence
 import com.lessplain.model.GraphNode
 import com.lessplain.model.SourceAnchor
@@ -21,7 +20,7 @@ class GraphAnchorValidationTest {
 
     @Test
     fun `missing version is filled from current document with actual line instead of hint`() {
-        val parsed = parseGraphPayload("""{"nodes":[{"id":"submit","label":"保存","anchor":{"path":"src/Service.kt","symbol":"Service.submit","text":"fun submit() { save() }","lineHint":99}}],"edges":[]}""")
+        val parsed = graph(anchor.copy(lineHint = 99))
         val prepared = validateGraphAnchors(parsed) { snapshot() }
         val saved = prepared.nodes.single().anchor!!
         assertEquals(sha256(content), saved.version)

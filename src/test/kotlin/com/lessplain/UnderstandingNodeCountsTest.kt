@@ -23,15 +23,15 @@ class UnderstandingNodeCountsTest {
     @Test fun `grouped counts match existing pending and answered ownership after updates`() {
         UnderstandingRepository(directory).use { repository ->
             val core = UnderstandingCore(repository)
-            val root = core.present(3, "root", "根", graph, "root")
-            val other = core.present(3, "other", "其他理解", graph, "root")
+            val root = core.present(4, "root", "根", graph, "root")
+            val other = core.present(4, "other", "其他理解", graph, "root")
             val context = core.captureContext(root.id, "n")
             val first = core.prepareQuestion("普通问题", context.token).question
             core.prepareQuestion("图表反馈", context.token)
             val second = core.prepareQuestion("另一个节点", core.captureContext(root.id, "b").token).question
             core.prepareQuestion("没有节点", core.captureContext(root.id).token)
             core.prepareQuestion("其他理解", core.captureContext(other.id, "n").token)
-            val child = core.present(3, "child", first.text, graph, "child", questionId = first.id)
+            val child = core.present(4, "child", first.text, graph, "child", questionId = first.id)
             core.prepareQuestion("追问中的注释", core.captureContext(child.id, "n").token)
             val counts = repository.nodeQuestionCounts(listOf(root.id, child.id, other.id, root.id))
             assertEquals(1, counts.pending[NodeQuestionKey(root.id, "n")])
@@ -57,7 +57,7 @@ class UnderstandingNodeCountsTest {
     @Test fun `large input is chunked and missing source node remains countable`() {
         UnderstandingRepository(directory).use { repository ->
             val core = UnderstandingCore(repository)
-            val root = core.present(3, "root", "根", graph, "root")
+            val root = core.present(4, "root", "根", graph, "root")
             val context = core.captureContext(root.id, "n").copy(token = "lost-node", nodeId = "deleted")
             repository.putContext(context)
             core.prepareQuestion("来源已经失效", context.token)

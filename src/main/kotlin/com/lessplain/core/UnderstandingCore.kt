@@ -1,7 +1,6 @@
 package com.lessplain.core
 
 import com.google.gson.Gson
-import com.lessplain.core.StaticExplorer
 import com.lessplain.model.SourceAnchor
 import com.lessplain.model.ClusterUpdate
 import com.lessplain.model.UnderstandingContext
@@ -9,7 +8,6 @@ import com.lessplain.model.UnderstandingGraph
 import com.lessplain.model.UnderstandingInputException
 import com.lessplain.model.UnderstandingQuestion
 import com.lessplain.model.UnderstandingRecord
-import com.lessplain.model.UNDERSTANDING_SCHEMA_VERSION
 import com.lessplain.model.UNDERSTANDING_SCHEMA_REVISION
 import com.lessplain.model.requireInput
 import com.lessplain.model.validate
@@ -76,9 +74,8 @@ class UnderstandingCore(
             question = question,
             payload = gson.toJson(
                 mapOf(
-                    "protocolVersion" to UNDERSTANDING_SCHEMA_VERSION,
                     "questionId" to question.id,
-                    "contextToken" to contextToken,
+                    "contextId" to contextToken,
                     "question" to question.text,
                 ),
             ),
@@ -97,7 +94,6 @@ class UnderstandingCore(
         displayTitle: String? = null,
     ): UnderstandingRecord {
         validateVersion(schemaVersion)
-        requireInput(schemaVersion >= 4 || graph.clusters.isEmpty(), "版本 3 不支持语义分组 clusters")
         requireInput(question.isNotBlank(), "问题不能为空")
         requireInput(displayTitle == null || displayTitle.isNotBlank(), "标题不能为空")
         graph.validate(validateAnchors = false)
@@ -105,7 +101,7 @@ class UnderstandingCore(
         val token = contextToken ?: questionId?.let {
             repository.requestContextToken(requestId) ?: repository.getQuestion(it).contextToken
         }
-        val payload = gson.toJson(listOf(schemaVersion, question.trim(), graphPayload(graph, schemaVersion),
+        val payload = gson.toJson(listOf(schemaVersion, question.trim(), gson.toJsonTree(graph),
             placement, token, questionId, parentId, displayTitle?.trim()))
         val json = repository.requestPrepared(requestId, "present_understanding", payload, {
             val savedQuestion = questionId?.let(repository::getQuestion)
@@ -158,14 +154,11 @@ class UnderstandingCore(
         clusterUpdate: ClusterUpdate = if (graph.clusters.isEmpty()) ClusterUpdate.Keep else ClusterUpdate.Replace(graph.clusters),
     ): UnderstandingRecord {
         validateVersion(schemaVersion)
-        requireInput(schemaVersion >= 4 || graph.clusters.isEmpty(), "版本 3 不支持语义分组 clusters")
-        requireInput(schemaVersion >= 4 || clusterUpdate == ClusterUpdate.Keep, "版本 3 不支持更新 clusters")
         requireInput(question.isNotBlank(), "问题不能为空")
         requireInput(recordId.isNotBlank() && expectedRevision > 0, "修订需要记录 ID 和预期版本")
         graph.validate(validateAnchors = false)
         requireInput(graph.nodes.any { it.kind != "placeholder" }, "回答必须包含实际图节点")
-        val values = listOf(schemaVersion, question.trim(), graphPayload(graph, schemaVersion), "revise", recordId, expectedRevision)
-        val payload = gson.toJson(if (schemaVersion >= 4) values + clusterUpdate else values)
+        val payload = gson.toJson(listOf(schemaVersion, question.trim(), gson.toJsonTree(graph), "revise", recordId, expectedRevision, clusterUpdate))
         val json = repository.requestPrepared(requestId, "present_understanding", payload,
             { prepareGraph(graph).also { it.validate() } }) { db, preparedGraph ->
             gson.toJson(repository.reviseRecordGraph(db, recordId, expectedRevision, question.trim(), preparedGraph, clusterUpdate))
@@ -174,12 +167,7 @@ class UnderstandingCore(
     }
 
     private fun validateVersion(value: Int) {
-        requireInput(value in 3..UNDERSTANDING_SCHEMA_REVISION, "不支持的内部协议修订号：$value")
-    }
-
-    /** 协议 3 的重试必须保留新增图字段之前的请求哈希。 */
-    private fun graphPayload(graph: UnderstandingGraph, version: Int) = gson.toJsonTree(graph).asJsonObject.apply {
-        if (version == 3) remove("clusters")
+        requireInput(value == UNDERSTANDING_SCHEMA_REVISION, "不支持的内部协议修订号：$value")
     }
 
     private fun resolveParent(placement: String, parentId: String?, context: UnderstandingContext?): String? = when (placement) {

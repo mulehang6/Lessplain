@@ -5,24 +5,10 @@ import com.lessplain.model.GraphNode
 import com.lessplain.model.UnderstandingGraph
 import com.lessplain.model.branchNodeIds
 import com.lessplain.model.traversableEdgesFrom
-import com.lessplain.mcp.parseGraphPayload
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 
 class GraphTraversalTest {
-    @Test fun `previously marked merge and unmarked fork use the same current graph rule`() {
-        val graph = parseGraphPayload("""{"nodes":[
-            {"id":"a","label":"A"},{"id":"b","label":"B"},
-            {"id":"merge","label":"汇合","decision":true},
-            {"id":"fork","label":"分支","decision":false}],"edges":[
-            {"id":"am","from":"a","to":"merge","relation":"call"},
-            {"id":"bm","from":"b","to":"merge","relation":"call"},
-            {"id":"mf","from":"merge","to":"fork","relation":"call"},
-            {"id":"fa","from":"fork","to":"a","relation":"call"},
-            {"id":"fb","from":"fork","to":"b","relation":"call"}]}""")
-        assertEquals(setOf("fork"), graph.branchNodeIds())
-    }
-
     @Test fun `forks count distinct browsable successors and ignore incoming and structural links`() {
         val graph = UnderstandingGraph(
             listOf("a", "b", "merge", "fork", "parallel", "self").map { GraphNode(it, it) },

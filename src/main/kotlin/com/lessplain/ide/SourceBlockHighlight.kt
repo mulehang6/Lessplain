@@ -45,11 +45,19 @@ internal class SourceSweepRenderer(private val progress: () -> Float) : CustomHi
         val g = graphics.create() as Graphics2D
         try {
             val bounds = sourceBlockBounds(editor, highlighter.startOffset, highlighter.endOffset) ?: return
-            val revealed = (bounds.width * amount).toInt().coerceAtLeast(1)
-            g.clipRect(bounds.x, bounds.y, revealed, bounds.height)
-            g.paint = GradientPaint(bounds.x.toFloat(), bounds.y.toFloat(), Color(128, 86, 216, 105),
-                (bounds.x + bounds.width).toFloat(), bounds.y.toFloat(), Color(128, 86, 216, 28))
-            g.fillRoundRect(bounds.x, bounds.y, bounds.width, bounds.height, 8, 8)
+            paintSourceSweep(g, bounds, amount)
         } finally { g.dispose() }
     }
+}
+
+/** 教学步骤与源码证据共用颜色、渐变和圆角；模拟只显示当前预设步骤。 */
+internal fun paintSourceSweep(graphics: Graphics2D, bounds: Rectangle, amount: Float = 1f) {
+    val g = graphics.create() as Graphics2D
+    try {
+        val revealed = (bounds.width * amount).toInt().coerceAtLeast(1)
+        g.clipRect(bounds.x, bounds.y, revealed, bounds.height)
+        g.paint = GradientPaint(bounds.x.toFloat(), bounds.y.toFloat(), Color(128, 86, 216, 105),
+            (bounds.x + bounds.width).toFloat(), bounds.y.toFloat(), Color(128, 86, 216, 28))
+        g.fillRoundRect(bounds.x, bounds.y, bounds.width, bounds.height, 8, 8)
+    } finally { g.dispose() }
 }

@@ -16,7 +16,5 @@ internal fun understandingContextPayload(repository: UnderstandingRepository, co
         "pendingQuestionId" to questions.singleOrNull { it.status == "pending" && it.contextToken == context.token }?.id,
         "pendingBatch" to batch, "capabilities" to mapOf("nodeSemantics" to true, "pendingNoteBatch" to true,
             "rootClusters" to true, "completeRouteSelection" to true,
-            "anchorValidation" to true, "inferredEdges" to true, "edgeSummaries" to true, "feedbackConsumption" to true,
-            "lessons" to true, "lessonAnnotations" to true, "nativeScriptExamples" to true),
-        "lessonProtocol" to com.lessplain.lesson.lessonProtocol)
+            "anchorValidation" to true, "inferredEdges" to true, "edgeSummaries" to true, "feedbackConsumption" to true))
 }

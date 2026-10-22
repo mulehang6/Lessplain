@@ -33,12 +33,12 @@ class PendingQuestionHandoffTest {
     @Test fun `root child and nested entry resolve same scope while other understandings stay isolated`() {
         UnderstandingRepository(directory).use { repository ->
             val core = UnderstandingCore(repository)
-            val root = core.present(3, "root", "根理解", graph, "root")
-            val other = core.present(3, "other", "其他理解", graph, "root")
+            val root = core.present(4, "root", "根理解", graph, "root")
+            val other = core.present(4, "other", "其他理解", graph, "root")
             val context = core.captureContext(root.id, "n")
             val answered = core.prepareQuestion("创建追问", context.token).question
-            val child = core.present(3, "child", answered.text, graph, "child", questionId = answered.id)
-            val nested = core.present(3, "nested", "嵌套图", graph, "child", core.captureContext(child.id, "n").token)
+            val child = core.present(4, "child", answered.text, graph, "child", questionId = answered.id)
+            val nested = core.present(4, "nested", "嵌套图", graph, "child", core.captureContext(child.id, "n").token)
             val a = core.prepareQuestion("普通问题", context.token).question
             val b = core.prepareQuestion("图上的线很乱", core.captureContext(child.id, "n").token).question
             val c = core.prepareQuestion("更深的问题", core.captureContext(nested.id, "n").token).question
@@ -53,7 +53,7 @@ class PendingQuestionHandoffTest {
             assertEquals(2, repository.pendingNoteScope(child.id).count)
             repository.consumeReadFeedback(repository.pendingNoteBatch(root.id).items.filter { it.questionId == b.id })
             assertEquals(1, repository.pendingNoteScope(nested.id).count)
-            core.present(3, "answer", c.text, graph, "child", questionId = c.id)
+            core.present(4, "answer", c.text, graph, "child", questionId = c.id)
             assertEquals(0, repository.pendingNoteScope(root.id).count)
             assertFailsWith<UnderstandingInputException> { repository.pendingNoteScope("missing") }
         }
@@ -62,10 +62,10 @@ class PendingQuestionHandoffTest {
     @Test fun `copy keeps raw text order and graph labels without leaking source snapshots or context tokens`() {
         UnderstandingRepository(directory).use { repository ->
             val core = UnderstandingCore(repository)
-            val root = core.present(3, "root", "根标题", graph, "root")
+            val root = core.present(4, "root", "根标题", graph, "root")
             val context = core.captureContext(root.id, "n")
-            val child = core.present(3, "child", "追问标题", graph, "child", context.token)
-            val nested = core.present(3, "nested", "多层追问", graph, "child", core.captureContext(child.id, "n").token)
+            val child = core.present(4, "child", "追问标题", graph, "child", context.token)
+            val nested = core.present(4, "nested", "多层追问", graph, "child", core.captureContext(child.id, "n").token)
             val raw = "保留中文 & <特殊字符> \"引号\"\n  第二行的缩进\nEnglish?"
             val selected = context.copy(token = "frozen-selection", anchor = SourceAnchor("private/Source.kt",
                 "privateFunction", "private source body", "version"))
@@ -97,12 +97,12 @@ class PendingQuestionHandoffTest {
     @Test fun `agent batch after copy includes later additions and excludes completed notes`() {
         UnderstandingRepository(directory).use { repository ->
             val core = UnderstandingCore(repository)
-            val root = core.present(3, "root", "根标题", graph, "root")
+            val root = core.present(4, "root", "根标题", graph, "root")
             val context = core.captureContext(root.id, "n")
             val first = core.prepareQuestion("复制时的问题", context.token).question
             val copy = repository.preparePendingQuestionCopy(root.id)
             val later = core.prepareQuestion("复制之后新增", context.token).question
-            core.present(3, "answer", first.text, graph, "child", questionId = first.id)
+            core.present(4, "answer", first.text, graph, "child", questionId = first.id)
             val marker = copy.text.substringAfterLast("Lessplain 待答批次：")
             assertEquals(root.id, marker)
             assertEquals(listOf(later.id), repository.pendingNoteBatch(marker).items.map { it.questionId })
@@ -112,7 +112,7 @@ class PendingQuestionHandoffTest {
 
     @Test fun `broken parent and parent cycle report failure instead of falling back to another root`() {
         UnderstandingRepository(directory).use { repository ->
-            val root = UnderstandingCore(repository).present(3, "root", "根标题", graph, "root")
+            val root = UnderstandingCore(repository).present(4, "root", "根标题", graph, "root")
             fun changeParent(parent: String) = DriverManager.getConnection("jdbc:sqlite:${repository.databasePath}").use { db ->
                 db.prepareStatement("UPDATE records SET parent_id=? WHERE id=?").use { statement ->
                     statement.setString(1, parent)
@@ -155,7 +155,7 @@ class PendingQuestionHandoffTest {
     @Test fun `clipboard write failure restores original transferable and leaves notes pending`() {
         UnderstandingRepository(directory).use { repository ->
             val core = UnderstandingCore(repository)
-            val root = core.present(3, "root", "根标题", graph, "root")
+            val root = core.present(4, "root", "根标题", graph, "root")
             core.prepareQuestion("问题", core.captureContext(root.id, "n").token)
             val before = repository.pendingNoteBatch(root.id)
             val original = StringSelection("原来的剪贴板")

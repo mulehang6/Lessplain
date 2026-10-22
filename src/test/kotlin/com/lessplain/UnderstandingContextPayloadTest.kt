@@ -20,7 +20,7 @@ class UnderstandingContextPayloadTest {
         UnderstandingRepository(root).use { repository ->
             val core = UnderstandingCore(repository)
             val graph = UnderstandingGraph(listOf(GraphNode("a", "A"), GraphNode("b", "B")), emptyList())
-            val record = core.present(3, "root", "主图", graph, "root")
+            val record = core.present(4, "root", "主图", graph, "root")
             val a = core.prepareQuestion("问题A", core.captureContext(record.id, "a").token).question
             val b = core.prepareQuestion("问题B", core.captureContext(record.id, "b").token).question
             val gson = Gson()
@@ -33,7 +33,7 @@ class UnderstandingContextPayloadTest {
             assertEquals(listOf("a", "b"), batch["items"].asJsonArray.map { it.asJsonObject["context"].asJsonObject["nodeId"].asString })
             val fixed = gson.toJsonTree(understandingContextPayload(repository, core.context(a.contextToken))).asJsonObject
             assertEquals(a.id, fixed["pendingQuestionId"].asString)
-            core.present(3, "a", a.text, graph, "child", questionId = a.id)
+            core.present(4, "a", a.text, graph, "child", questionId = a.id)
             val check = gson.toJsonTree(understandingContextPayload(repository, core.captureContext(record.id))).asJsonObject
             assertEquals(listOf(b.id), check["pendingBatch"].asJsonObject["items"].asJsonArray.map { it.asJsonObject["questionId"].asString })
         }
@@ -42,7 +42,7 @@ class UnderstandingContextPayloadTest {
     @Test fun `source without diagram never falls back to another diagrams pending notes`() {
         UnderstandingRepository(root).use { repository ->
             val core = UnderstandingCore(repository)
-            val record = core.present(3, "root", "主图", UnderstandingGraph(listOf(GraphNode("a", "A")), emptyList()), "root")
+            val record = core.present(4, "root", "主图", UnderstandingGraph(listOf(GraphNode("a", "A")), emptyList()), "root")
             core.prepareQuestion("未答", core.captureContext(record.id, "a").token)
             val wire = Gson().toJsonTree(understandingContextPayload(repository, core.captureContext())).asJsonObject
             assertFalse(wire.has("pendingBatch"))

@@ -11,19 +11,15 @@ internal class WelcomeAction(private val service: UnderstandingService) :
     override fun actionPerformed(event: AnActionEvent) = service.showWelcome()
 }
 
-internal class RecentUnderstandingAction(private val service: UnderstandingService) :
-    AnAction("最近", null, TitleActionIcon(TitleActionKind.RECENT)) {
-    override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
-
-    override fun actionPerformed(event: AnActionEvent) {
-        val anchor = event.inputEvent?.component ?: return
-        showRecentRecordPopup(service, anchor)
-    }
-}
-
 internal class UnderstandingHistoryAction(private val service: UnderstandingService) :
     AnAction("历史", null, TitleActionIcon(TitleActionKind.HISTORY)) {
     override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
 
-    override fun actionPerformed(event: AnActionEvent) = service.showHistory()
+    override fun actionPerformed(event: AnActionEvent) {
+        val anchor = event.inputEvent?.component
+        showNativeMenu(anchor, listOf(
+            NativeMenuItem("最近记录") { if (anchor != null) showRecentRecordPopup(service, anchor) },
+            NativeMenuItem("完整历史") { service.showHistory() },
+        ), project = event.project)
+    }
 }

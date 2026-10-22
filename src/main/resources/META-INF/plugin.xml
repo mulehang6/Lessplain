@@ -24,35 +24,40 @@
     <!-- 插件定义的扩展，更多说明：https://plugins.jetbrains.com/docs/intellij/plugin-extension-points.html -->
     <extensions defaultExtensionNs="com.intellij">
         <projectService serviceImplementation="com.lessplain.ide.UnderstandingService"/>
-        <projectService serviceImplementation="com.lessplain.lesson.LessonService"/>
+        <projectService serviceImplementation="com.lessplain.tutorial.TutorialService"/>
         <fileEditorProvider implementation="com.lessplain.diagram.UnderstandingFileEditorProvider"/>
-        <fileEditorProvider implementation="com.lessplain.lesson.LessonFileEditorProvider"/>
+        <fileEditorProvider implementation="com.lessplain.tutorial.TutorialEditorProvider"/>
         <editorTabTitleProvider implementation="com.lessplain.diagram.UnderstandingTabTitleProvider"/>
-        <editorTabTitleProvider implementation="com.lessplain.lesson.LessonTabTitleProvider"/>
-        <postStartupActivity implementation="com.lessplain.lesson.LessonStartupActivity"/>
+        <editorTabTitleProvider implementation="com.lessplain.tutorial.TutorialTabTitleProvider"/>
         <toolWindow id="Understanding" factoryClass="com.lessplain.MyToolWindowFactory"
                     icon="AllIcons.Toolwindows.ToolWindowPalette"/>
         <notificationGroup id="code.comprehension.results" displayType="BALLOON"/>
     </extensions>
     <extensions defaultExtensionNs="com.intellij.mcpServer">
-        <mcpToolset implementation="com.lessplain.mcp.UnderstandingToolset"/>
+        <mcpToolset implementation="com.lessplain.mcp.LessplainQueryTools"/>
+        <mcpToolset implementation="com.lessplain.mcp.LessplainMaterialTools"/>
+        <mcpToolset implementation="com.lessplain.mcp.LessplainAnnotationTools"/>
     </extensions>
     <actions>
-        <action id="Lessplain.LearnSelectedCode" class="com.lessplain.lesson.LearnSelectedCodeAction"
+        <action id="Lessplain.LearnSelectedCode" class="com.lessplain.tutorial.LearnSelectedCodeAction"
                 text="学习选中内容" description="为所选实体或概念生成独立教材" icon="AllIcons.General.Information">
             <add-to-group group-id="Floating.CodeToolbar" anchor="last"/>
             <add-to-group group-id="EditorPopupMenu" anchor="last"/>
         </action>
-        <action id="Lessplain.AskLessonSelection" class="com.lessplain.lesson.AskLessonSelectionAction" text="追问此处">
-            <add-to-group group-id="Floating.CodeToolbar" anchor="last"/>
-            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
-        </action>
-        <action id="Lessplain.NoteLessonSelection" class="com.lessplain.lesson.NoteLessonSelectionAction" text="写下我的理解">
-            <add-to-group group-id="Floating.CodeToolbar" anchor="last"/>
-            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
-        </action>
-        <action id="Lessplain.OpenLessons" class="com.lessplain.lesson.OpenLessonsAction" text="Lessplain 学习材料">
+        <action id="Lessplain.OpenTutorials" class="com.lessplain.tutorial.OpenTutorialsAction" text="教程目录">
             <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+        <action id="Lessplain.Tutorial.Note" class="com.lessplain.tutorial.TutorialNoteAction" text="写笔记">
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+        </action>
+        <action id="Lessplain.Tutorial.Question" class="com.lessplain.tutorial.TutorialQuestionAction" text="追问此处">
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+        </action>
+        <action id="Lessplain.Tutorial.Index" class="com.lessplain.tutorial.TutorialIndexAction" text="批注索引">
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+        </action>
+        <action id="Lessplain.Tutorial.Sources" class="com.lessplain.tutorial.TutorialSourcesAction" text="关联源码">
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
         </action>
         <action id="Lessplain.AskSelectedCode" class="com.lessplain.ui.AskSelectedCodeAction"
                 text="提问" description="将所选代码的问题添加到当前源码节点" icon="AllIcons.General.QuestionDialog">

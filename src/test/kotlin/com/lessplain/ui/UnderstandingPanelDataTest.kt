@@ -19,10 +19,10 @@ class UnderstandingPanelDataTest {
         UnderstandingRepository(directory).use { repository ->
             val core = UnderstandingCore(repository)
             val graph = UnderstandingGraph(listOf(GraphNode("n", "节点")), emptyList())
-            val root = core.present(3, "root", "根理解", graph, "root")
-            core.present(3, "other", "无关理解", graph, "root")
+            val root = core.present(4, "root", "根理解", graph, "root")
+            core.present(4, "other", "无关理解", graph, "root")
             val question = core.prepareQuestion("追问", core.captureContext(root.id, "n").token).question
-            val child = core.present(3, "child", question.text, graph, "child", questionId = question.id)
+            val child = core.present(4, "child", question.text, graph, "child", questionId = question.id)
             val layer = FollowUpLayer(root.id, "n")
             val data = readUnderstandingPanelData(repository,
                 UnderstandingPanelRequest(PanelPage.CANVAS, child.id, root.id, listOf(layer), ""))
@@ -39,7 +39,7 @@ class UnderstandingPanelDataTest {
         UnderstandingRepository(directory).use { repository ->
             val core = UnderstandingCore(repository)
             val graph = UnderstandingGraph(listOf(GraphNode("n", "节点")), emptyList())
-            val root = core.present(3, "root", "标题", graph, "root")
+            val root = core.present(4, "root", "标题", graph, "root")
             val browse = BrowseState(root.id, nodeId = "n", staticPath = listOf("n"), zoom = 1.5)
             repository.saveBrowseState(browse)
             val canvas = readUnderstandingPanelData(repository,

@@ -11,7 +11,6 @@ import com.lessplain.model.UnderstandingContext
 import com.lessplain.model.UnderstandingGraph
 import com.lessplain.model.UnderstandingInputException
 import com.lessplain.model.validate
-import com.lessplain.mcp.parseGraphPayload
 import com.lessplain.ide.matchAnchorText
 import com.lessplain.ide.LocationStatus
 import com.lessplain.ide.EvidenceStatus
@@ -50,17 +49,17 @@ class UnderstandingCoreTest {
         assertTrue(prepared.payload.contains(prepared.question.id))
         assertTrue(prepared.payload.contains(source.token))
 
-        val rootRecord = core.present(3, "create-a", "主问题", graph, "root")
+        val rootRecord = core.present(4, "create-a", "主问题", graph, "root")
         val graphContext = core.captureContext(rootRecord.id, "start", source.anchor)
         val childQuestion = core.prepareQuestion("这条分支为什么存在？", graphContext.token)
-        val child = core.present(3, "create-child", childQuestion.question.text, graph, "child", questionId = childQuestion.question.id)
+        val child = core.present(4, "create-child", childQuestion.question.text, graph, "child", questionId = childQuestion.question.id)
         assertEquals(rootRecord.id, child.parentId)
         assertEquals(rootRecord.id, repository.getQuestion(childQuestion.question.id).ownerRecordId)
         assertEquals(childQuestion.question.id, repository.questionsForRecord(rootRecord.id).single().id)
         assertEquals(child.id, repository.recordForQuestion(childQuestion.question.id)?.id)
-        assertEquals(child.id, core.present(3, "create-child", childQuestion.question.text, graph, "child", questionId = childQuestion.question.id).id)
+        assertEquals(child.id, core.present(4, "create-child", childQuestion.question.text, graph, "child", questionId = childQuestion.question.id).id)
         assertFailsWith<UnderstandingInputException> {
-            core.present(3, "create-child", childQuestion.question.text, graph, "child",
+            core.present(4, "create-child", childQuestion.question.text, graph, "child",
                 questionId = childQuestion.question.id, displayTitle = "不同标题")
         }
 
@@ -95,7 +94,7 @@ class UnderstandingCoreTest {
                     GraphEdge("cd", "c", "d", "call"),
                 ),
             )
-            val record = core.present(3, "context-route", "路由上下文", routeGraph, "root")
+            val record = core.present(4, "context-route", "路由上下文", routeGraph, "root")
 
             val earlierNode = core.captureContext(record.id, "b", staticPath = listOf("ab", "bc"))
             assertEquals(listOf("ab"), earlierNode.staticPath)
@@ -113,7 +112,7 @@ class UnderstandingCoreTest {
         UnderstandingRepository(root).use { first ->
             val core = UnderstandingCore(first)
             assertFailsWith<UnderstandingInputException> {
-                core.present(3, "no-source", "问题", graph, "child")
+                core.present(4, "no-source", "问题", graph, "child")
             }
             assertFailsWith<UnderstandingInputException> { core.context("missing") }
             UnderstandingRepository(root).use { second ->
@@ -131,16 +130,16 @@ class UnderstandingCoreTest {
     fun `present from copied node context creates a visible child question`() {
         UnderstandingRepository(root).use { repository ->
             val core = UnderstandingCore(repository)
-            val parent = core.present(3, "parent", "主图", graph, "root")
+            val parent = core.present(4, "parent", "主图", graph, "root")
             val context = core.captureContext(parent.id, "start")
-            val child = core.present(3, "copied-node-answer", "这一行做什么？", graph,
+            val child = core.present(4, "copied-node-answer", "这一行做什么？", graph,
                 "child", contextToken = context.token)
             assertEquals(parent.id, child.parentId)
             val savedQuestion = repository.questionsForRecord(parent.id).single()
             assertEquals(child.questionId, savedQuestion.id)
             assertEquals("start", repository.getContext(savedQuestion.contextToken).nodeId)
             assertEquals(child.id, repository.recordForQuestion(savedQuestion.id)?.id)
-            assertEquals(child.id, core.present(3, "copied-node-answer", "这一行做什么？", graph,
+            assertEquals(child.id, core.present(4, "copied-node-answer", "这一行做什么？", graph,
                 "child", contextToken = context.token).id)
         }
     }
@@ -272,14 +271,14 @@ class UnderstandingCoreTest {
     fun `hierarchy includes descendants below the current question and sibling branches`() {
         UnderstandingRepository(root).use { repository ->
             val core = UnderstandingCore(repository)
-            val parent = core.present(3, "hierarchy-root", "主问题", graph, "root")
-            val child = core.present(3, "hierarchy-child", "第一层", graph, "child",
+            val parent = core.present(4, "hierarchy-root", "主问题", graph, "root")
+            val child = core.present(4, "hierarchy-child", "第一层", graph, "child",
                 contextToken = core.captureContext(parent.id, "start").token)
-            val grandchild = core.present(3, "hierarchy-grandchild", "第二层", graph, "child",
+            val grandchild = core.present(4, "hierarchy-grandchild", "第二层", graph, "child",
                 contextToken = core.captureContext(child.id, "yes").token)
-            core.present(3, "hierarchy-great-grandchild", "第三层", graph, "child",
+            core.present(4, "hierarchy-great-grandchild", "第三层", graph, "child",
                 contextToken = core.captureContext(grandchild.id, "no").token)
-            core.present(3, "hierarchy-sibling", "另一分支", graph, "child",
+            core.present(4, "hierarchy-sibling", "另一分支", graph, "child",
                 contextToken = core.captureContext(parent.id, "no").token)
 
             val entries = graphHierarchyEntries(repository, parent.id)
@@ -320,15 +319,7 @@ class UnderstandingCoreTest {
     }
 
     @Test
-    fun `graph payload accepts omitted optional fields but rejects coordinates and invalid branches`() {
-        val parsed = parseGraphPayload(
-            """{"nodes":[{"id":"a","label":"判断"},{"id":"b","label":"保存"}],"edges":[{"id":"go","from":"a","to":"b","relation":"control_flow"}]}""",
-        )
-        parsed.validate()
-        assertEquals(emptyList(), parsed.evidence)
-        assertFailsWith<UnderstandingInputException> {
-            parseGraphPayload("""{"nodes":[{"id":"a","label":"判断","x":10}],"edges":[]}""")
-        }
+    fun `branch choices require explicit conditions`() {
         assertFailsWith<UnderstandingInputException> {
             graph.copy(edges = graph.edges.map { it.copy(condition = null) }).validate()
         }

@@ -28,7 +28,7 @@ class SourceGraphNavigationTest {
                     GraphEdge("bc", "b", "c", "data_flow"),
                 ),
             )
-            val record = UnderstandingCore(repository).present(3, "source-route", "源码路径", graph, "root")
+            val record = UnderstandingCore(repository).present(4, "source-route", "源码路径", graph, "root")
             repository.saveBrowseState(BrowseState(record.id, nodeId = "c", staticPath = listOf("ab", "bc")))
             val values = mutableMapOf<String, String>()
             val graphStates = GraphViewStateStore(
@@ -62,7 +62,7 @@ class SourceGraphNavigationTest {
     @Test
     fun `source choices open the graph once and dispatch subsequent directions to its owner`() {
         UnderstandingRepository(root).use { repository ->
-            val record = UnderstandingCore(repository).present(3, "canvas", "画布", mergeGraph(), "root")
+            val record = UnderstandingCore(repository).present(4, "canvas", "画布", mergeGraph(), "root")
             val original = BrowseState(record.id, "d", navigationState = RouteNavigationState("d"))
             repository.saveBrowseState(original)
             val values = mutableMapOf<String, String>()
@@ -101,7 +101,7 @@ class SourceGraphNavigationTest {
     @Test
     fun `a graph opening completed after cancellation selection or disposal cannot apply a step`() {
         UnderstandingRepository(root).use { repository ->
-            val record = UnderstandingCore(repository).present(3, "deferred", "延迟打开", mergeGraph(), "root")
+            val record = UnderstandingCore(repository).present(4, "deferred", "延迟打开", mergeGraph(), "root")
             repository.saveBrowseState(BrowseState(record.id, "d"))
             val values = mutableMapOf<String, String>()
             val states = GraphViewStateStore(values::get) { key, value -> values[key] = value }
@@ -140,7 +140,7 @@ class SourceGraphNavigationTest {
     @Test
     fun `a changed route snapshot invalidates a deferred graph opening`() {
         UnderstandingRepository(root).use { repository ->
-            val record = UnderstandingCore(repository).present(3, "stale", "过期选择", mergeGraph(), "root")
+            val record = UnderstandingCore(repository).present(4, "stale", "过期选择", mergeGraph(), "root")
             repository.saveBrowseState(BrowseState(record.id, "d"))
             val values = mutableMapOf<String, String>()
             val states = GraphViewStateStore(values::get) { key, value -> values[key] = value }
@@ -166,7 +166,7 @@ class SourceGraphNavigationTest {
     @Test
     fun `tool window show completion waits for a later visible canvas before highlighting choices`() {
         UnderstandingRepository(root).use { repository ->
-            val record = UnderstandingCore(repository).present(3, "late-canvas", "延迟图表", mergeGraph(), "root")
+            val record = UnderstandingCore(repository).present(4, "late-canvas", "延迟图表", mergeGraph(), "root")
             val browse = BrowseState(record.id, "d")
             repository.saveBrowseState(browse)
             val values = mutableMapOf<String, String>()
@@ -196,7 +196,7 @@ class SourceGraphNavigationTest {
     @Test
     fun `cancel before the tool window canvas attaches prevents a delayed choice`() {
         UnderstandingRepository(root).use { repository ->
-            val record = UnderstandingCore(repository).present(3, "cancelled-canvas", "取消图表", mergeGraph(), "root")
+            val record = UnderstandingCore(repository).present(4, "cancelled-canvas", "取消图表", mergeGraph(), "root")
             repository.saveBrowseState(BrowseState(record.id, "d"))
             val values = mutableMapOf<String, String>()
             val states = GraphViewStateStore(values::get) { key, value -> values[key] = value }
@@ -217,7 +217,7 @@ class SourceGraphNavigationTest {
     fun `repeated source choices reuse an opening graph until its canvas is available`() {
         for (showCompleted in listOf(false, true)) {
             UnderstandingRepository(root.resolve("repeat-$showCompleted")).use { repository ->
-                val record = UnderstandingCore(repository).present(3, "repeat", "延迟图表", mergeGraph(), "root")
+                val record = UnderstandingCore(repository).present(4, "repeat", "延迟图表", mergeGraph(), "root")
                 repository.saveBrowseState(BrowseState(record.id, "d"))
                 val values = mutableMapOf<String, String>()
                 val states = GraphViewStateStore(values::get) { key, value -> values[key] = value }
@@ -245,7 +245,7 @@ class SourceGraphNavigationTest {
     @Test
     fun `opposite source direction invalidates an opening choice`() {
         UnderstandingRepository(root).use { repository ->
-            val record = UnderstandingCore(repository).present(3, "direction", "切换方向", mergeGraph(), "root")
+            val record = UnderstandingCore(repository).present(4, "direction", "切换方向", mergeGraph(), "root")
             repository.saveBrowseState(BrowseState(record.id, "d"))
             val values = mutableMapOf<String, String>()
             val states = GraphViewStateStore(values::get) { key, value -> values[key] = value }
@@ -271,7 +271,7 @@ class SourceGraphNavigationTest {
     @Test
     fun `a failed graph opening allows retrying the same source choice`() {
         UnderstandingRepository(root).use { repository ->
-            val record = UnderstandingCore(repository).present(3, "retry", "重试图表", mergeGraph(), "root")
+            val record = UnderstandingCore(repository).present(4, "retry", "重试图表", mergeGraph(), "root")
             repository.saveBrowseState(BrowseState(record.id, "d"))
             val values = mutableMapOf<String, String>()
             val states = GraphViewStateStore(values::get) { key, value -> values[key] = value }
@@ -309,7 +309,7 @@ class SourceGraphNavigationTest {
                 listOf(GraphEdge("rt", "registration", "tool", "structure"),
                     GraphEdge("ts", "tool", "store", "dependency")),
             )
-            val record = UnderstandingCore(repository).present(3, "all-relations", "源码阅读", graph, "root")
+            val record = UnderstandingCore(repository).present(4, "all-relations", "源码阅读", graph, "root")
             repository.saveBrowseState(BrowseState(record.id, nodeId = "tool"))
             val values = mutableMapOf<String, String>()
             val states = GraphViewStateStore(values::get) { key, value -> values[key] = value }
