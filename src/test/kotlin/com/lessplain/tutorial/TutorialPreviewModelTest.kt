@@ -5,6 +5,27 @@ import org.junit.jupiter.api.Test
 import kotlin.test.*
 
 class TutorialPreviewModelTest {
+    @Test fun `CRLF tables and fenced code preserve exact Chinese emoji and duplicate offsets`() {
+        val markdown = "| 名称 | 含义 |\r\n| --- | --- |\r\n| 中文😀 | `Flow` |\r\n| 重复 | Flow |\r\n\r\n```kotlin\r\nprintln(1)\r\n```"
+        val model = TutorialPreviewModel(markdown)
+        for (word in listOf("中文😀", "重复")) {
+            val start = model.text.indexOf(word)
+            val range = assertNotNull(model.selection(start, start + word.length))
+            assertEquals(word, markdown.substring(range))
+        }
+        val index = model.text.lastIndexOf("Flow")
+        assertEquals(markdown.lastIndexOf("Flow"), model.sourceAt(index))
+        assertEquals("println(1)", parseMarkdown(markdown).last().text.text)
+    }
+
+    @Test fun `nested and inline resources retain their exact ranges and code remains literal`() {
+        val markdown = "前 ![图](lessplain://diagram/d) 后\n\n- ![模拟](lessplain://simulation/s)\n\n`![不渲染](lessplain://diagram/d)`"
+        val resources = parseMarkdown(markdown).filter { it.kind in setOf("diagram", "simulation") }
+        assertEquals(listOf("d", "s"), resources.map { it.resourceId })
+        resources.forEach { assertTrue(markdown.substring(it.start, it.end).startsWith("![")) }
+        assertTrue(TutorialPreviewModel(markdown).text.contains("![不渲染]"))
+    }
+
     @Test fun `one continuous selection crosses formatted paragraphs code and table without losing offsets`() {
         val markdown = "# 标题\n\n前😀 **中文** 与 `Flow`\n\n再一段中文\n\n```kotlin\nval 中文 = 1\n```\n\n| 名称 | 作用 |\n| --- | --- |\n| **中文😀** | `Flow` |"
         val model = TutorialPreviewModel(markdown)

@@ -58,10 +58,10 @@ class TutorialPlatformTest {
                 assertTrue(doc.text.endsWith("修改后的结尾"))
                 assertTrue(current.preview.text.endsWith("修改后的结尾\n\n"))
                 assertEquals(updated, service.edit(record.id, 1, listOf(TutorialEdit("末尾", "修改后的结尾"))))
-                val note = service.newAnnotation(record.id, range.first, range.last + 1, "note")
-                service.store.updateAnnotation(note.id) { it.copy(text = "尚在输入的笔记") }
-                val question = service.newAnnotation(record.id, note.start, note.end, "question")
-                service.store.updateAnnotation(question.id) { it.copy(text = "这是什么？", status = "pending", contextId = "ctx_platform") }
+                val note = service.annotationDraft(record.id, range.first, range.last + 1, "note")
+                service.store.createAnnotation(note.copy(text = "尚在输入的笔记"))
+                val question = service.annotationDraft(record.id, note.start, note.end, "question")
+                service.store.createAnnotation(question.copy(text = "这是什么？", status = "pending", contextId = "ctx_platform"))
                 service.answer(question.id, "这是讲解。", null)
                 assertEquals("尚在输入的笔记", service.store.annotation(note.id).text)
                 val image = BufferedImage(800, 500, BufferedImage.TYPE_INT_ARGB)

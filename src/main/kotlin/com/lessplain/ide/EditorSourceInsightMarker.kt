@@ -16,7 +16,6 @@ import java.awt.event.ComponentEvent
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import javax.swing.SwingUtilities
-import javax.swing.Timer
 
 /** 上方块提示按优先级升序排列，最高优先级使说明紧贴对应代码。 */
 private const val SOURCE_INLAY_PRIORITY = Int.MAX_VALUE
@@ -38,8 +37,7 @@ internal class EditorSourceInsightMarker(
     private val lineStart = editor.document.getLineStartOffset(editor.document.getLineNumber(start))
     private val inlay = editor.inlayModel.addBlockElement(lineStart, false, true, SOURCE_INLAY_PRIORITY, renderer)
     val isInstalled: Boolean get() = inlay != null
-    private var reveal = 0f
-    private var hoverStart = 0L
+    internal val animation = SourceSweepAnimation { editor.contentComponent.repaint() }
     private var hovered = false
     private val hoverState = SourceHighlightHoverState()
     private var disposed = false
@@ -65,19 +63,10 @@ internal class EditorSourceInsightMarker(
                 start, end, HighlighterLayer.ADDITIONAL_SYNTAX,
                 TextAttributes(), HighlighterTargetArea.EXACT_RANGE,
             ).apply {
-                customRenderer = SourceSweepRenderer { reveal }
+                customRenderer = SourceSweepRenderer { animation.progress }
             }
         }
         inlay?.update()
-    }
-    internal val timer: Timer = Timer(16) { event ->
-        if (disposed) {
-            (event.source as Timer).stop()
-            return@Timer
-        }
-        reveal = ((System.nanoTime() - hoverStart) / 200_000_000f).coerceIn(0f, 1f)
-        editor.contentComponent.repaint()
-        if (reveal >= 1f) (event.source as Timer).stop()
     }
     private val mouse = object : MouseAdapter() {
         override fun mouseMoved(event: MouseEvent) {
@@ -165,13 +154,9 @@ internal class EditorSourceInsightMarker(
         renderer.hovered = value
         inlay?.update()
         if (value) {
-            reveal = 0f
-            hoverStart = System.nanoTime()
-            timer.start()
+            animation.start()
         } else {
-            timer.stop()
-            reveal = 0f
-            editor.contentComponent.repaint()
+            animation.reset()
         }
     }
 
@@ -184,7 +169,7 @@ internal class EditorSourceInsightMarker(
         Disposer.dispose(documentLifetime)
         navigation.cancelChoices()
         hoverState.dispose()
-        timer.stop()
+        animation.close()
         editor.contentComponent.removeMouseMotionListener(mouse)
         editor.contentComponent.removeMouseListener(mouse)
         editor.contentComponent.removeComponentListener(resize)

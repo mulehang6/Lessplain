@@ -2,7 +2,6 @@ package com.lessplain.tutorial
 
 import com.intellij.openapi.ui.Messages
 import com.intellij.util.ui.JBUI
-import com.intellij.ui.JBColor
 import com.lessplain.diagram.UnderstandingDiagram
 import com.lessplain.diagram.createUnderstandingDiagram
 import com.lessplain.diagram.LayoutDirection
@@ -12,41 +11,20 @@ import com.lessplain.model.SourceAnchor
 import com.lessplain.model.UnderstandingRecord
 import java.awt.BorderLayout
 import java.awt.Dimension
-import java.awt.Graphics
-import java.awt.Graphics2D
-import java.awt.RenderingHints
-import java.awt.geom.RoundRectangle2D
-import javax.swing.JPanel
+import com.lessplain.ui.RoundedPanel
 
 /** 教程只是画布的另一宿主，绘制、相机、命中和手势均由主图组件实现。 */
 internal class TutorialDiagramView(
     private val service: TutorialService,
     private val tutorialId: String,
     private var resource: TutorialDiagram,
-) : JPanel(BorderLayout()), AutoCloseable {
+) : RoundedPanel(), AutoCloseable {
     var canvas: UnderstandingDiagram = createCanvas()
         private set
     init {
         isOpaque = false
         border = JBUI.Borders.empty(1)
         add(canvas, BorderLayout.CENTER)
-    }
-
-    private fun outline() = RoundRectangle2D.Double(0.5, 0.5, (width - 1).coerceAtLeast(0).toDouble(),
-        (height - 1).coerceAtLeast(0).toDouble(), JBUI.scale(12).toDouble(), JBUI.scale(12).toDouble())
-
-    override fun contains(x: Int, y: Int) = outline().contains(x.toDouble(), y.toDouble())
-    override fun paintChildren(graphics: Graphics) {
-        val g = graphics.create() as Graphics2D
-        try { g.clip(outline()); super.paintChildren(g) } finally { g.dispose() }
-    }
-    override fun paintBorder(graphics: Graphics) {
-        val g = graphics.create() as Graphics2D
-        try {
-            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-            g.color = JBColor.namedColor("Component.borderColor", JBColor(0xC9CCD1, 0x55585E))
-            g.draw(outline())
-        } finally { g.dispose() }
     }
 
     private fun createCanvas(): UnderstandingDiagram {
@@ -57,7 +35,7 @@ internal class TutorialDiagramView(
             resource.id, "", record.contextId, graph, record.createdAt), state?.let { BrowseState(resource.id, zoom = it.zoom, panX = it.x, panY = it.y, hasPan = true) }).apply {
             preferredSize = Dimension(520, JBUI.scale(360))
             onNodePositionsChanged { positions ->
-                service.store.savePositions(tutorialId, resource.id, positions.mapValues { TutorialPosition(it.value.x.toInt(), it.value.y.toInt()) })
+                if (!service.store.readOnly) service.store.savePositions(tutorialId, resource.id, positions.mapValues { TutorialPosition(it.value.x.toInt(), it.value.y.toInt()) })
                 LayoutDirection.entries.filterNot { it == activeDirection }.forEach { setDirectionState(it, null, positions) }
             }
             val positions = service.store.resource(tutorialId).positions[resource.id].orEmpty().mapValues { GraphNodePosition(it.value.x.toDouble(), it.value.y.toDouble()) }
@@ -90,7 +68,7 @@ internal class TutorialDiagramView(
         service.changed(tutorialId)
     }
     fun saveViewport() {
-        if (!canvas.initializedViewport) return
+        if (!canvas.initializedViewport || service.store.readOnly) return
         val reading = service.store.reading(tutorialId)
         val viewport = BrowseState(resource.id, zoom = canvas.zoom, panX = canvas.centerX, panY = canvas.centerY, hasPan = true)
         LayoutDirection.entries.forEach { canvas.directionViewports[it] = viewport }

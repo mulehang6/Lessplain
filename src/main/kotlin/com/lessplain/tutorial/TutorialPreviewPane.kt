@@ -51,8 +51,8 @@ internal class TutorialPreviewPane(private val editor: Editor, private val servi
         val key = "${UIUtil.getLabelFont()}:${scheme.editorFontName}:${scheme.editorFontSize}:${scheme.defaultForeground.rgb}:${scheme.defaultBackground.rgb}"
         if (next != markdown || key != fontKey) rebuild(next, key)
         val resources = service.store.resource(tutorialId)
-        resources.diagrams.forEach { diagrams[it.id]?.refresh(it) }
-        resources.simulations.forEach { simulations[it.id]?.refresh(it) }
+        resources.diagrams.forEach { value -> diagrams.filterKeys { it.substringBefore('#') == "diagram/${value.id}" }.values.forEach { it.refresh(value) } }
+        resources.simulations.forEach { value -> simulations.filterKeys { it.substringBefore('#') == "simulation/${value.id}" }.values.forEach { it.refresh(value) } }
         highlighter.removeAllHighlights()
         val annotations = service.store.annotations(tutorialId).filterNot { it.orphaned }
         annotationInkRuns(annotations).forEach { run ->
@@ -66,10 +66,14 @@ internal class TutorialPreviewPane(private val editor: Editor, private val servi
         val selection = model.selection(selectionStart, selectionEnd)
         val oldCaret = model.sourceAt(caretPosition)
         model = TutorialPreviewModel(next); markdown = next; fontKey = key
-        val resourceKeys = model.parts.filter { it.block.kind in setOf("diagram", "simulation") }.map { "${it.block.kind}/${it.block.resourceId}" }.toSet()
-        slots.keys.filterNot { it in resourceKeys }.toList().forEach { slots.remove(it) }
-        diagrams.keys.filterNot { "diagram/$it" in resourceKeys }.toList().forEach { diagrams.remove(it)?.close() }
-        simulations.keys.filterNot { "simulation/$it" in resourceKeys }.toList().forEach { simulations.remove(it) }
+        val occurrences = mutableMapOf<String, Int>()
+        val resourceKeys = model.parts.filter { it.block.kind in setOf("diagram", "simulation") }.associateWith {
+            val id = "${it.block.kind}/${it.block.resourceId}"
+            "$id#${occurrences.merge(id, 1, Int::plus)}"
+        }
+        slots.keys.filterNot { it in resourceKeys.values }.toList().forEach { slots.remove(it) }
+        diagrams.keys.filterNot { it in resourceKeys.values }.toList().forEach { diagrams.remove(it)?.close() }
+        simulations.keys.filterNot { it in resourceKeys.values }.toList().forEach { simulations.remove(it)?.close() }
         text = model.text
         val ui = UIUtil.getLabelFont()
         val scale = editor.colorsScheme.editorFontSize.toFloat() / com.intellij.openapi.editor.colors.EditorColorsManager.getInstance().globalScheme.editorFontSize.coerceAtLeast(1)
@@ -97,8 +101,9 @@ internal class TutorialPreviewPane(private val editor: Editor, private val servi
                     StyleConstants.setFontSize(attrs, editor.colorsScheme.editorFontSize)
                 }
                 block.kind in setOf("diagram", "simulation") -> {
-                    val child = resource(block) ?: return@forEach
-                    val slot = slots.getOrPut("${block.kind}/${block.resourceId}") { ResourceSlot(child) }
+                    val occurrence = resourceKeys.getValue(part)
+                    val child = resource(block, occurrence) ?: return@forEach
+                    val slot = slots.getOrPut(occurrence) { ResourceSlot(child) }
                     StyleConstants.setComponent(attrs, slot)
                 }
             }
@@ -119,15 +124,24 @@ internal class TutorialPreviewPane(private val editor: Editor, private val servi
         if (selection != null) select(model.visibleAt(selection.first), model.visibleAt(selection.last + 1))
     }
 
-    private fun resource(block: MarkdownContent): JComponent? {
+    private fun resource(block: MarkdownContent, occurrence: String): JComponent? {
         val state = service.store.resource(tutorialId)
         return when (block.kind) {
-            "diagram" -> state.diagrams.find { it.id == block.resourceId }?.let { value -> diagrams.getOrPut(value.id) { TutorialDiagramView(service, tutorialId, value) } }
-            "simulation" -> state.simulations.find { it.id == block.resourceId }?.let { value -> simulations.getOrPut(value.id) { TutorialSimulationView(editor, SimulationPlayback(value)) } }
+            "diagram" -> state.diagrams.find { it.id == block.resourceId }?.let { value -> diagrams.getOrPut(occurrence) { TutorialDiagramView(service, tutorialId, value) } }
+            "simulation" -> state.simulations.find { it.id == block.resourceId }?.let { value -> simulations.getOrPut(occurrence) { TutorialSimulationView(editor, SimulationPlayback(value)) } }
             else -> null
         }
     }
     fun sourceAt(point: Point) = model.sourceAt(viewToModel2D(point))
+    /** viewToModel 会把行末空白夹到最近字符；悬停入口只接受真正的文字矩形。 */
+    fun hoverSourceAt(point: Point): Int? {
+        val offset = viewToModel2D(point)
+        if (offset !in 0 until document.length) return null
+        val from = modelToView2D(offset)?.bounds ?: return null
+        val to = modelToView2D(offset + 1)?.bounds ?: return null
+        val width = if (to.y == from.y) to.x - from.x else getFontMetrics(font).charWidth(document.getText(offset, 1)[0])
+        return sourceAt(point).takeIf { java.awt.Rectangle(from.x, from.y, width, from.height).contains(point) }
+    }
     fun selectedSource() = model.selection(selectionStart, selectionEnd)
     fun followSource(source: Int) {
         val viewport = parent as? javax.swing.JViewport ?: return
@@ -143,7 +157,7 @@ internal class TutorialPreviewPane(private val editor: Editor, private val servi
         if (href.startsWith("lessplain://source/")) service.attempt { service.sources.reveal(href.substringAfterLast('/')) }
         else com.intellij.ide.BrowserUtil.browse(href)
     }
-    override fun close() { diagrams.values.forEach { it.close() }; diagrams.clear(); simulations.clear(); slots.clear() }
+    override fun close() { diagrams.values.forEach { it.close() }; diagrams.clear(); simulations.values.forEach { it.close() }; simulations.clear(); slots.clear() }
 
     private inner class ResourceSlot(private val child: JComponent) : JPanel(java.awt.BorderLayout()) {
         init {

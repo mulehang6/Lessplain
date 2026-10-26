@@ -59,8 +59,9 @@ private fun tableText(block: MarkdownContent): MappedText {
     val text = StringBuilder()
     val offsets = mutableListOf<Int>()
     val styles = mutableListOf<TextStyle>()
-    var source = block.start
-    block.text.text.lines().forEach { line ->
+    Regex("[^\r\n]*(?:\r\n|[\r\n]|$)").findAll(block.text.text).forEach { row ->
+        val line = row.value.trimEnd('\r', '\n')
+        val source = block.start + row.range.first
         if (line.isNotBlank() && !line.trim().matches(Regex("\\|?[ :|-]+\\|?"))) {
             var from = if (line.startsWith('|')) 1 else 0
             var column = 0
@@ -76,7 +77,6 @@ private fun tableText(block: MarkdownContent): MappedText {
             }
             text.append('\n'); offsets += source + line.length
         }
-        source += line.length + 1
     }
     offsets += block.end
     return MappedText(text.toString(), offsets, styles)

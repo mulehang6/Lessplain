@@ -1,5 +1,7 @@
 package com.lessplain.tutorial
 
+import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.testFramework.fixtures.IdeaTestFixtureFactory
@@ -13,7 +15,7 @@ import java.awt.image.BufferedImage
 import kotlin.test.*
 
 class TutorialComponentTest {
-    @Test fun `real simulation buttons are bounded evenly distributed and retain prefix playback`() {
+    @Test fun `simulation toolbar is compact and layout changes retain prefix playback`() {
         val fixture = IdeaTestFixtureFactory.getFixtureFactory().createFixtureBuilder("LessplainSimulationComponents", true).fixture
         fixture.setUp()
         try {
@@ -28,22 +30,39 @@ class TutorialComponentTest {
                     val view = TutorialSimulationView(editor, player)
                     view.setSize(1000, view.preferredSize.height)
                     layout(view)
-                    val bounds = view.buttons.map { javax.swing.SwingUtilities.convertRectangle(it.parent, it.bounds, view) }
-                    assertEquals(1, bounds.map { it.y }.distinct().size)
-                    assertTrue(bounds.all { it.width < view.width / 4 })
-                    val gaps = bounds.zipWithNext { a, b -> b.centerX - a.centerX }
-                    assertTrue(gaps.max() - gaps.min() < 3)
-                    assertFalse(view.buttons[0].isEnabled)
-                    view.buttons[1].doClick(); assertEquals("1\n", player.output)
-                    view.buttons[1].doClick(); assertEquals("1\n2\n", player.output)
-                    assertFalse(view.buttons[1].isEnabled)
-                    view.buttons[0].doClick(); assertEquals("1\n", player.output)
-                    view.buttons[2].doClick(); assertEquals("", player.output)
+                    fun invoke(index: Int) {
+                        val action = view.actions[index]
+                        action.actionPerformed(AnActionEvent.createFromAnAction(action, null, "LessplainTest", DataContext.EMPTY_CONTEXT))
+                    }
+                    fun enabled(index: Int): Boolean {
+                        val action = view.actions[index]
+                        val event = AnActionEvent.createFromAnAction(action, null, "LessplainTest", DataContext.EMPTY_CONTEXT)
+                        action.update(event)
+                        return event.presentation.isEnabled
+                    }
+                    assertEquals(5, view.actions.size)
+                    assertTrue(view.actions.all { it.templatePresentation.icon != null })
+                    assertTrue(view.toolbar.component.preferredSize.width < view.width / 3, "操作集中在模拟标题旁，不分散铺满整页")
+                    assertFalse(enabled(0))
+                    assertFalse(enabled(2))
+                    invoke(1); assertEquals("1\n", player.output)
+                    invoke(1); assertEquals("1\n2\n", player.output)
+                    assertFalse(enabled(1))
+                    invoke(0); assertEquals("1\n", player.output)
+                    val beforeLayout = view.preferredSize.height
+                    invoke(4)
+                    assertTrue(view.stacked)
+                    assertEquals("1\n", player.output)
+                    assertEquals(0, player.stepIndex)
+                    assertTrue(view.preferredSize.height > beforeLayout)
+                    invoke(4); assertFalse(view.stacked)
+                    invoke(2); assertEquals("", player.output)
                     view.split.proportion = 0.35f
                     assertEquals(0.35f, view.split.proportion)
                     assertTrue(view.preferredSize.height > editor.lineHeight * 100)
                     view.refresh(simulation.copy(scenarios = listOf(simulation.scenarios[1]), revision = 2))
                     assertNull(view.split.secondComponent)
+                    assertFalse(enabled(4), "纯流程情境不提供无效的终端布局切换")
                     view.refresh(simulation.copy(code = "println(\"" + "中文".repeat(180) + "\")", scenarios = listOf(simulation.scenarios[0].copy(steps = listOf(simulation.scenarios[0].steps[0]))), revision = 3))
                     view.split.proportion = 0.7f
                     val wideHeight = view.preferredSize.height

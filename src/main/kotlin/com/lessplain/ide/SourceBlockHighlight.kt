@@ -52,6 +52,7 @@ internal class SourceSweepRenderer(private val progress: () -> Float) : CustomHi
 
 /** 教学步骤与源码证据共用颜色、渐变和圆角；模拟只显示当前预设步骤。 */
 internal fun paintSourceSweep(graphics: Graphics2D, bounds: Rectangle, amount: Float = 1f) {
+    if (amount <= 0f) return
     val g = graphics.create() as Graphics2D
     try {
         val revealed = (bounds.width * amount).toInt().coerceAtLeast(1)

@@ -66,6 +66,7 @@ internal class TutorialEditorView(private val project: Project, val id: String) 
             override fun selectionChanged(event: SelectionEvent) = sourceSelection()
         }, lifetime)
         editor.addEditorMouseListener(object : EditorMouseListener {
+            override fun mouseExited(event: EditorMouseEvent) { actions.leave(editor.contentComponent) }
             override fun mousePressed(event: EditorMouseEvent) {
                 if (SwingUtilities.isRightMouseButton(event.mouseEvent)) { sourceSelection(); actions.suspendForMenu() } else actions.beginSelection()
             }
@@ -74,13 +75,23 @@ internal class TutorialEditorView(private val project: Project, val id: String) 
             }
         }, lifetime)
         editor.addEditorMouseMotionListener(object : EditorMouseMotionListener {
-            override fun mouseMoved(event: EditorMouseEvent) { actions.hover(editor.contentComponent, event.offset, event.mouseEvent.point.apply { translate(8, editor.lineHeight) }) }
+            override fun mouseMoved(event: EditorMouseEvent) {
+                val offset = event.offset
+                val point = event.mouseEvent.point
+                val start = editor.offsetToXY(offset)
+                val end = editor.offsetToXY((offset + 1).coerceAtMost(editor.document.textLength))
+                val width = if (end.y == start.y) end.x - start.x else editor.colorsScheme.editorFontSize
+                if (java.awt.Rectangle(start.x, start.y, width, editor.lineHeight).contains(point))
+                    actions.hover(editor.contentComponent, offset, Point(point.x + 8, point.y + editor.lineHeight))
+                else actions.leave(editor.contentComponent)
+            }
         }, lifetime)
         preview.addCaretListener {
             val p = preview.modelToView2D(preview.caretPosition)?.bounds?.let { Point(it.x, it.y + it.height + 4) } ?: Point()
             actions.changed(preview, preview.selectedSource(), p)
         }
         preview.addMouseListener(object : MouseAdapter() {
+            override fun mouseExited(event: MouseEvent) { actions.leave(preview) }
             override fun mousePressed(event: MouseEvent) {
                 if (SwingUtilities.isRightMouseButton(event)) { actions.changed(preview, preview.selectedSource(), event.point); actions.suspendForMenu() }
                 else actions.beginSelection()
@@ -90,7 +101,10 @@ internal class TutorialEditorView(private val project: Project, val id: String) 
             }
         })
         preview.addMouseMotionListener(object : MouseMotionAdapter() {
-            override fun mouseMoved(event: MouseEvent) { actions.hover(preview, preview.sourceAt(event.point), Point(event.x + 8, event.y + 20)) }
+            override fun mouseMoved(event: MouseEvent) {
+                val source = preview.hoverSourceAt(event.point)
+                if (source == null) actions.leave(preview) else actions.hover(preview, source, Point(event.x + 8, event.y + 20))
+            }
         })
         editor.contentComponent.addFocusListener(object : java.awt.event.FocusAdapter() {
             override fun focusGained(event: java.awt.event.FocusEvent) = sourceSelection()
@@ -108,7 +122,10 @@ internal class TutorialEditorView(private val project: Project, val id: String) 
                 NativeMenuItem("追问此处", preview.selectedSource() != null) { actions.create("question") }) + navigationItems(preview)
         }
         val popupKey = object : KeyAdapter() {
-            override fun keyPressed(event: KeyEvent) { if (event.keyCode == KeyEvent.VK_CONTEXT_MENU || event.keyCode == KeyEvent.VK_F10 && event.isShiftDown) actions.suspendForMenu() }
+            override fun keyPressed(event: KeyEvent) {
+                if (event.keyCode == KeyEvent.VK_ESCAPE) actions.dismiss()
+                else if (event.keyCode == KeyEvent.VK_CONTEXT_MENU || event.keyCode == KeyEvent.VK_F10 && event.isShiftDown) actions.suspendForMenu()
+            }
         }
         preview.addKeyListener(popupKey); editor.contentComponent.addKeyListener(popupKey)
         editor.scrollingModel.addVisibleAreaListener(object : VisibleAreaListener {
@@ -197,6 +214,7 @@ internal class TutorialEditorView(private val project: Project, val id: String) 
         toolTipText = service.store.writeFailure?.let { "保存失败：${it.message}" }
     }
     private fun saveReading() {
+        if (service.store.readOnly) return
         val reading = service.store.reading(id)
         service.store.saveReading(id, reading.copy(caret = editor.caretModel.offset, scroll = editor.scrollingModel.verticalScrollOffset,
             mode = mode, previewSource = preview.topSource(), divider = if (mode == TutorialDisplayMode.SPLIT) split.proportion.toDouble() else reading.divider))
