@@ -348,7 +348,7 @@ class UnderstandingRepository(
     }
 
     /** History groups descendants and their questions under the oldest visible parent. */
-    fun recentRootRecords(query: String = "", limit: Int = 100): List<UnderstandingRecord> = connect().use { db ->
+    fun recentRootRecords(query: String = "", limit: Int = 100, offset: Int = 0): List<UnderstandingRecord> = connect().use { db ->
         val result = mutableListOf<UnderstandingRecord>()
         db.prepareStatement(
             "WITH RECURSIVE descendants(root_id, id) AS (" +
@@ -361,13 +361,14 @@ class UnderstandingRepository(
                     "JOIN record_versions child ON child.record_id=r.id AND child.revision=r.current_revision " +
                     "WHERE d.root_id=root.id AND (child.question_text LIKE ? OR child.display_title LIKE ? " +
                     "OR EXISTS (SELECT 1 FROM questions q WHERE q.owner_record_id=r.id AND q.text LIKE ?)))) " +
-                    "ORDER BY root.created_at DESC LIMIT ?",
+                    "ORDER BY root.created_at DESC, root.id DESC LIMIT ? OFFSET ?",
         ).use { statement ->
             val normalized = query.trim()
             val pattern = "%$normalized%"
             statement.setString(1, normalized)
             (2..4).forEach { statement.setString(it, pattern) }
             statement.setInt(5, limit.coerceIn(1, 500))
+            statement.setInt(6, offset.coerceAtLeast(0))
             statement.executeQuery().use { rows ->
                 while (rows.next()) result += gson.readUnderstandingRecord(rows.getString(1))
             }

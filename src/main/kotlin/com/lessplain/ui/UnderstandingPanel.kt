@@ -2,6 +2,7 @@ package com.lessplain.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -64,8 +65,10 @@ fun UnderstandingPanel(service: UnderstandingService) {
             subscription.close()
         }
     }
+    val historyQuery = if (history) search.text.toString() else ""
+    var historyPage by remember(historyQuery) { mutableStateOf(0) }
     val request = UnderstandingPanelRequest(service.panelPage, service.activeRecordId, rootRecordId,
-        layers.toList(), if (history) search.text.toString() else "")
+        layers.toList(), historyQuery, historyPage)
     val loaded = rememberBackgroundRead(service, request, revision) {
         readUnderstandingPanelData(service.repository, request).also { data ->
             (data.recent + data.history + listOfNotNull(data.selected, data.displayed)).forEach(service.storage::remember)
@@ -87,6 +90,10 @@ fun UnderstandingPanel(service: UnderstandingService) {
     val selected = data.selected
     val currentLayer = layers.lastOrNull()
     val displayedRecord = data.displayed
+    DisposableEffect(service, displayedRecord?.id, currentLayer) {
+        displayedRecord?.let { service.panelQuestionOrigins.follow(GraphLayerKey(it.id, currentLayer?.nodeId)) }
+        onDispose { }
+    }
     val selectRoot: (UnderstandingRecord) -> Unit = { record -> service.showRoot(record) }
     val hierarchyRootId = data.hierarchyRootId
     val hierarchyEntries = data.hierarchy
@@ -125,6 +132,11 @@ fun UnderstandingPanel(service: UnderstandingService) {
                         onClick = { selectRoot(record) },
                         onDelete = { service.deleteRoot(record.id) })
                 }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(UnderstandingUiMetrics.SMALL_GAP.dp)) {
+                OutlinedButton(onClick = { historyPage-- }, enabled = historyPage > 0) { Text("上一页") }
+                Text("第 ${historyPage + 1} 页")
+                OutlinedButton(onClick = { historyPage++ }, enabled = data.historyHasNext) { Text("下一页") }
             }
         } else {
             Box(Modifier.weight(1f)) {
@@ -185,7 +197,9 @@ private fun RecordView(
         } }
     }
     DisposableEffect(diagram, hierarchy, onNavigateIndex) {
-        diagram.getOrNull()?.setHierarchy(hierarchy, onNavigateIndex)
+        diagram.getOrNull()?.let { builder ->
+            builder.setHierarchy(hierarchy, showQuestions = { service.panelQuestionOrigins.show(builder, graphKey) }, onNavigate = onNavigateIndex)
+        }
         onDispose { }
     }
     DisposableEffect(diagram) {

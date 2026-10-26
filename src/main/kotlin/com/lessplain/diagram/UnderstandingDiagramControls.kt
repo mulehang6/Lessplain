@@ -24,6 +24,18 @@ internal class UnderstandingDiagramControls(private val diagram: UnderstandingDi
     private val fit = button(GraphControlIcon(GraphControlIconKind.FIT), "显示全图") { diagram.fitContent() }
     private val arrangeNodes = button(GraphControlIcon(GraphControlIconKind.ARRANGE), "一键整理节点") { diagram.arrangeNodes() }
     val pendingQuestions = PendingQuestionControl()
+    private var retryCounts: (() -> Unit)? = null
+    internal val countsRetry = button(com.intellij.icons.AllIcons.Actions.Refresh, "重新读取批注") { retryCounts?.invoke() }.apply {
+        isVisible = false
+    }
+
+    fun showCountsFailure(failure: Throwable?, retry: (() -> Unit)? = null) {
+        retryCounts = retry
+        countsRetry.isVisible = failure != null
+        countsRetry.setToolTipText(HtmlChunk.text("批注读取失败：${failure?.message.orEmpty()}；点击重试"))
+        arrangeSide(diagram.width, diagram.height)
+        diagram.repaint()
+    }
     private val clusterNav = button(GraphControlIcon(GraphControlIconKind.CLUSTERS), "跳转到分组") { showClusterMenu() }
     private val hierarchy: JButton = button(GraphControlIcon(GraphControlIconKind.HIERARCHY), "查看层级") { hierarchyPopup.toggle() }
     private val behavior = button(GraphControlIcon(GraphControlIconKind.MORE), "画布行为") { showBehaviorMenu() }
@@ -31,7 +43,8 @@ internal class UnderstandingDiagramControls(private val diagram: UnderstandingDi
     val sideControls = JPanel(null).apply { isOpaque = false }
     private var hierarchyItems = emptyList<DiagramHierarchyItem>()
     private var onNavigateHierarchy: ((Int) -> Unit)? = null
-    private val hierarchyPopup = DiagramHierarchyPopup(hierarchy, { hierarchyItems }) { onNavigateHierarchy?.invoke(it) }
+    private var onShowQuestions: (() -> Unit)? = null
+    private val hierarchyPopup = DiagramHierarchyPopup(hierarchy, { hierarchyItems }, { onShowQuestions }) { onNavigateHierarchy?.invoke(it) }
     val previousButton = button(GraphControlIcon(GraphControlIconKind.PREVIOUS), "上一步") { diagram.previousStep() }
     val nextButton = button(GraphControlIcon(GraphControlIconKind.NEXT), "下一步") { diagram.nextStep() }
     private var routeAction: (() -> Unit)? = null
@@ -44,6 +57,7 @@ internal class UnderstandingDiagramControls(private val diagram: UnderstandingDi
         isOpaque = false
         buttons.forEach(::add)
         sideControls.add(pendingQuestions.button)
+        sideControls.add(countsRetry)
         sideControls.add(clusterNav)
         sideControls.add(hierarchy)
         sideControls.add(behavior)
@@ -81,11 +95,12 @@ internal class UnderstandingDiagramControls(private val diagram: UnderstandingDi
         diagram.repaint()
     }
 
-    fun setHierarchy(items: List<DiagramHierarchyItem>, navigate: (Int) -> Unit) {
+    fun setHierarchy(items: List<DiagramHierarchyItem>, navigate: (Int) -> Unit, showQuestions: (() -> Unit)? = null) {
         if (hierarchyItems != items) hierarchyPopup.close()
         hierarchyItems = items
         onNavigateHierarchy = navigate
-        hierarchy.isVisible = items.size > 1
+        onShowQuestions = showQuestions
+        hierarchy.isVisible = items.size > 1 || showQuestions != null
         arrangeSide(diagram.width, diagram.height)
     }
 
@@ -101,7 +116,7 @@ internal class UnderstandingDiagramControls(private val diagram: UnderstandingDi
     }
 
     fun arrangeSide(availableWidth: Int, availableHeight: Int) {
-        val visible = listOf(pendingQuestions.button, clusterNav, hierarchy, behavior).filter { it.isVisible }
+        val visible = listOf(countsRetry, pendingQuestions.button, clusterNav, hierarchy, behavior).filter { it.isVisible }
         val panelHeight = visible.size * BUTTON_SIZE + (visible.size - 1) * GAP
         val minTop = y + height + GAP
         val maxTop = (availableHeight - INSET - BUTTON_SIZE - GAP - panelHeight).coerceAtLeast(0)
@@ -145,7 +160,7 @@ internal class UnderstandingDiagramControls(private val diagram: UnderstandingDi
 
     fun refreshBehavior() = behaviorPopup.refresh()
 
-    fun dispose() { routeAction = null; pendingQuestions.update(0, null); hierarchyPopup.dispose(); behaviorPopup.dispose() }
+    fun dispose() { retryCounts = null; routeAction = null; pendingQuestions.update(0, null); hierarchyPopup.dispose(); behaviorPopup.dispose() }
 
     private fun button(icon: Icon, label: String, action: () -> Unit): JButton = DiagramIconButton(icon).apply {
         setToolTipText(HtmlChunk.text(label))

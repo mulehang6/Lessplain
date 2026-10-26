@@ -19,6 +19,7 @@ import com.lessplain.model.UnderstandingContext
 import com.lessplain.model.UnderstandingRecord
 import com.lessplain.storage.UnderstandingRepository
 import com.lessplain.storage.deleteRootRecord
+import com.lessplain.ui.QuestionOriginWindow
 import com.lessplain.ui.FollowUpLayer
 import kotlinx.coroutines.CoroutineScope
 import java.awt.Component
@@ -84,6 +85,10 @@ class UnderstandingService(private val project: Project, coroutineScope: Corouti
     private var previousLocation: PanelLocation? = null
     private var navigationGeneration = 0L
     internal val contentActions = UnderstandingContentActions(this, project)
+    private val panelOrigins = lazy { QuestionOriginWindow(this, project) }
+    private val editorOrigins = lazy { QuestionOriginWindow(this, project) }
+    internal val panelQuestionOrigins: QuestionOriginWindow get() = panelOrigins.value
+    internal val editorQuestionOrigins: QuestionOriginWindow get() = editorOrigins.value
     private val deletionConfirmation = RootDeletionConfirmation(project, ::deleteConfirmedRoot)
     private val resultTimer = Timer(180) { handlePendingResults() }.apply { isRepeats = false }
     private val focusListener = PropertyChangeListener {
@@ -158,10 +163,12 @@ class UnderstandingService(private val project: Project, coroutineScope: Corouti
         answerId: String? = null,
         revision: Int? = null,
     ) {
+        if (disposed || project.isDisposed) return
         val key = answerId?.let { "answer:$it" } ?: recordId?.let {
             if (revision != null && revision > 1) "record:$it:revision:$revision" else "record:$it"
         } ?: return
-        recordId?.let(storage::loadRecord)
+        // 结果已经提交，预热快照失败也必须保留待查看入口。
+        recordId?.let { id -> com.lessplain.core.cancellationAwareResult { storage.loadRecord(id) }.onFailure(::storageFailed) }
         if (recordId != null && revision != null && revision > 1) {
             SwingUtilities.invokeLater { if (!disposed) refreshOpenDiagrams(recordId) }
         }
@@ -176,7 +183,7 @@ class UnderstandingService(private val project: Project, coroutineScope: Corouti
         ) return
         pendingAutoOpenKey = key
         notifyChanged()
-        SwingUtilities.invokeLater { if (!project.isDisposed) resultTimer.restart() }
+        SwingUtilities.invokeLater { if (!disposed && !project.isDisposed) resultTimer.restart() }
     }
 
     private fun handlePendingResults() {
@@ -254,9 +261,10 @@ class UnderstandingService(private val project: Project, coroutineScope: Corouti
         navigateSource: Boolean = true,
         staticPath: List<String>? = null,
         navigationState: com.lessplain.model.RouteNavigationState? = null,
+        activateSource: Boolean = false,
     ) {
         navigationGeneration++
-        selection.select(record, nodeId, navigateSource, staticPath, navigationState)
+        selection.select(record, nodeId, navigateSource, staticPath, navigationState, activateSource)
     }
 
     internal fun selectionChanged(recordId: String, nodeId: String?) {
@@ -388,6 +396,8 @@ class UnderstandingService(private val project: Project, coroutineScope: Corouti
     override fun dispose() {
         disposed = true
         selection.close()
+        if (panelOrigins.isInitialized()) panelOrigins.value.close()
+        if (editorOrigins.isInitialized()) editorOrigins.value.close()
         tasks.close()
         deletionConfirmation.close()
         contentActions.close()

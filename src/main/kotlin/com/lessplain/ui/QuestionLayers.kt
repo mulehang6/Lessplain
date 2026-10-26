@@ -91,7 +91,7 @@ internal fun QuestionIndexView(
         onDispose { }
     }
     DisposableEffect(diagram, hierarchy, onNavigateIndex) {
-        diagram.setHierarchy(hierarchy, onNavigateIndex)
+        diagram.setHierarchy(hierarchy, showQuestions = { service.panelQuestionOrigins.show(diagram, graphKey) }, onNavigate = onNavigateIndex)
         onDispose { }
     }
     DisposableEffect(diagram, canvas) {

@@ -58,6 +58,7 @@ internal class UnderstandingSelection(
         navigateSource: Boolean = true,
         staticPath: List<String>? = null,
         navigationState: com.lessplain.model.RouteNavigationState? = null,
+        activateSource: Boolean = false,
     ) {
         if (disposed || project.isDisposed) return
         val request = ++selectionGeneration
@@ -66,7 +67,7 @@ internal class UnderstandingSelection(
         storage.remember(record)
         val current = storage.record(record.id) ?: return
         if (current.revision != record.revision) {
-            select(current, nodeId, navigateSource, staticPath, navigationState)
+            select(current, nodeId, navigateSource, staticPath, navigationState, activateSource)
             return
         }
         if (storage.browse(record.id) == null) {
@@ -76,10 +77,10 @@ internal class UnderstandingSelection(
             selectionRead = service.readBackground({ storage.loadBrowse(record.id) }) { result ->
                 if (request == selectionGeneration) result.onSuccess { browse ->
                     storage.rememberBrowse(record.id, browse)
-                    applySelection(record, nodeId, navigateSource, staticPath, navigationState)
+                    applySelection(record, nodeId, navigateSource, staticPath, navigationState, activateSource)
                 }.onFailure(service::storageFailed)
             }
-        } else applySelection(record, nodeId, navigateSource, staticPath, navigationState)
+        } else applySelection(record, nodeId, navigateSource, staticPath, navigationState, activateSource)
     }
 
     private fun applySelection(
@@ -88,6 +89,7 @@ internal class UnderstandingSelection(
         navigateSource: Boolean,
         staticPath: List<String>?,
         navigationState: com.lessplain.model.RouteNavigationState?,
+        activateSource: Boolean,
     ) {
         val recordChanged = activeRecordId != record.id
         val previousNodeId = activeNodeId
@@ -159,7 +161,7 @@ internal class UnderstandingSelection(
             sourceNavigation.cancelChoices()
             service.selectionChanged(record.id, validNode)
         }
-        if (selectionUnchanged && sourceLocationMessage == null) return
+        if (selectionUnchanged && sourceLocationMessage == null && !(activateSource && navigateSource)) return
         if (validNode != null) {
             val node = record.graph.nodes.first { it.id == validNode }
             val anchor = node.anchor ?: record.graph.evidence.firstOrNull { it.id in node.evidenceIds }?.anchor

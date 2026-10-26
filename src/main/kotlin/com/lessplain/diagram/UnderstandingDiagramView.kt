@@ -168,8 +168,8 @@ internal class UnderstandingDiagram(
         controls.updateStepAvailability(hasPrevious, hasNext)
     }
 
-    fun setHierarchy(items: List<DiagramHierarchyItem>, onNavigate: (Int) -> Unit) {
-        controls.setHierarchy(items, onNavigate)
+    fun setHierarchy(items: List<DiagramHierarchyItem>, showQuestions: (() -> Unit)? = null, onNavigate: (Int) -> Unit) {
+        controls.setHierarchy(items, onNavigate, showQuestions)
         revalidate()
         repaint()
     }
@@ -453,6 +453,7 @@ internal class UnderstandingDiagram(
 
     override fun dispose() {
         disposed = true
+        ToolTipManager.sharedInstance().unregisterComponent(this)
         routeNavigation?.close()
         overlays.close()
         header.close()

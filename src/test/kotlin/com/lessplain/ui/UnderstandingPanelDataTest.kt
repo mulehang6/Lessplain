@@ -13,6 +13,19 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class UnderstandingPanelDataTest {
+    @Test fun `history pagination includes roots beyond five hundred without duplicate boundaries`() {
+        UnderstandingRepository(directory).use { repository ->
+            val core = UnderstandingCore(repository)
+            val graph = UnderstandingGraph(listOf(GraphNode("n", "节点")), emptyList())
+            repeat(501) { core.present(4, "root-$it", "问题 $it", graph, "root") }
+            val pages = (0..5).map { page -> readUnderstandingPanelData(repository,
+                UnderstandingPanelRequest(PanelPage.HISTORY, null, null, emptyList(), "", page)) }
+            assertEquals(List(5) { 100 } + 1, pages.map { it.history.size })
+            assertEquals(501, pages.flatMap { it.history }.map { it.id }.toSet().size)
+            assertEquals(List(5) { true } + false, pages.map { it.historyHasNext })
+        }
+    }
+
     @TempDir lateinit var directory: Path
 
     @Test fun `graph snapshot excludes history and contains correct root hierarchy and follow up owner`() {

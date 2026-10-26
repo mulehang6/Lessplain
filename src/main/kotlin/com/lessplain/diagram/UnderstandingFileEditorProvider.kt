@@ -127,6 +127,8 @@ internal class LoadingUnderstandingFileEditor(private val project: Project, priv
         disableNavigation = true; delegate?.disableAutomaticSourceNavigation()
     }
 
+    override fun selectNotify() { service.editorQuestionOrigins.follow(GraphLayerKey(file.recordId, file.questionNodeId)) }
+
     override fun getComponent(): JComponent = panel
     override fun getPreferredFocusedComponent(): JComponent = delegate?.preferredFocusedComponent ?: panel
     override fun getName(): String = file.name
@@ -226,7 +228,7 @@ private class UnderstandingFileEditor(
             loaded.onSuccess { hierarchyEntries ->
                 builder.setHierarchy(hierarchyEntries.mapIndexed { index, entry ->
                     DiagramHierarchyItem(entry.title, entry.depth, index, entry.layers == currentLayers)
-                }) { index ->
+                }, showQuestions = { service.editorQuestionOrigins.show(builder, graphKey) }) { index ->
                     hierarchyEntries.getOrNull(index)?.takeIf { it.layers != currentLayers }?.let { destination ->
                         val root = service.storage.record(rootRecordId) ?: return@let
                         var destinationFile = service.editorFile(root).apply { parentFile = null }

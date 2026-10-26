@@ -81,6 +81,7 @@ internal fun bindDiagramSourceNavigation(
             service.select(
                 source.record, source.nodeId, navigateSource = !diagram.navigationPinned,
                 staticPath = path.orEmpty(), navigationState = snapshot ?: RouteNavigationState(source.nodeId),
+                activateSource = true,
             )
         }
     }, isCurrent = ::isCurrentSource)
