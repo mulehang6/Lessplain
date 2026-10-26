@@ -53,7 +53,7 @@ class LessplainQueryTools : LessplainToolsSupport() {
         when {
             id.contains("/diagrams/") -> tutorials.store.resource(id.substringBefore('/')).diagrams.find { it.id == id.substringAfterLast('/') } ?: throw TutorialProblem("NOT_FOUND", "id", "插图不存在")
             id.contains("/simulations/") -> tutorials.store.resource(id.substringBefore('/')).simulations.find { it.id == id.substringAfterLast('/') } ?: throw TutorialProblem("NOT_FOUND", "id", "模拟不存在")
-            id.startsWith("tut_") -> mapOf("tutorial" to tutorials.store.record(id), "annotations" to tutorials.store.annotations(id).map { mapOf("id" to it.id, "kind" to it.kind, "status" to it.status, "orphaned" to it.orphaned) },
+            id.startsWith("tut_") -> mapOf("tutorial" to tutorials.store.record(id), "annotations" to tutorials.store.annotations(id).filterNot { it.isEmptyDraft }.map { mapOf("id" to it.id, "kind" to it.kind, "status" to it.status, "orphaned" to it.orphaned) },
                 "resources" to mapOf("diagrams" to tutorials.store.resource(id).diagrams.map { mapOf("id" to "${id}/diagrams/${it.id}", "revision" to it.revision) },
                     "simulations" to tutorials.store.resource(id).simulations.map { mapOf("id" to "${id}/simulations/${it.id}", "revision" to it.revision) }))
             id.startsWith("note_") || id.startsWith("q_") -> tutorials.store.annotation(id)

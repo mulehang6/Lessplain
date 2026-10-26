@@ -1,10 +1,12 @@
 package com.lessplain.ide
 
+import com.intellij.openapi.project.Project
 import com.lessplain.core.LatestBackgroundRead
 import com.lessplain.core.cancellationAwareResult
 import com.lessplain.diagram.UnderstandingDiagram
 import com.lessplain.diagram.noteActionAt
 import com.lessplain.diagram.notePopupAnchor
+import com.lessplain.model.SourceAnchor
 import com.lessplain.model.UnderstandingQuestion
 import com.lessplain.model.UnderstandingRecord
 import com.lessplain.storage.cancelPendingQuestion
@@ -19,6 +21,7 @@ import java.awt.event.HierarchyListener
 /** 弹层属于当前组件；草稿由逻辑画布宿主保留，修订重建组件不会丢失。 */
 internal class CanvasContentSession(
     private val service: UnderstandingService,
+    private val project: Project,
     private val owner: Component,
     private val onDispose: () -> Unit,
     private val addNote: (UnderstandingRecord, String, Component, Point) -> Unit,
@@ -27,15 +30,16 @@ internal class CanvasContentSession(
 ) : AutoCloseable {
     private var editor: CanvasEditorPopup? = null
     private var editorKey: String? = null
-    private var preview: ThemedCanvasPopup? = null
+    private var preview: NodeNotePopup? = null
     private val selection = ClickedNotePopup()
     private var target: Pair<UnderstandingRecord, String>? = null
     private var point = Point()
     private var disposed = false
-    private val content = NodeNoteContentState()
+    private var content = NodeNoteState()
 
     private data class Snapshot(
         val notes: List<UnderstandingQuestion>,
+        val anchors: Map<String, SourceAnchor>,
         val pendingIds: Set<String>,
         val existingNodes: Set<Pair<String, String>>,
         val checkedDrafts: Set<String>,
@@ -52,15 +56,17 @@ internal class CanvasContentSession(
                     it.key in loaded.checkedDrafts && ((it.recordId to it.nodeId) !in loaded.existingNodes ||
                             (it.questionId.isNotEmpty() && it.questionId !in pendingIds))
                 }) notifyDraftNodesChanged()
-            content.notes = loaded.notes
-            target?.let { (record, nodeId) ->
-                content.drafts = drafts.forNode(record.id, nodeId).map { NodeNoteDraft(it.questionId, it.text) }
-            }
+            content = NodeNoteState(
+                notes = loaded.notes,
+                anchors = loaded.anchors,
+                drafts = target?.let { (record, nodeId) -> drafts.forNode(record.id, nodeId).map { NodeNoteDraft(it.questionId, it.text) } }.orEmpty(),
+            )
             editorKey?.takeUnless(::mayRetain)?.let { editor?.close() }
             if (openWhenLoaded) {
                 openWhenLoaded = false; openLoadedPreview()
             } else if (content.notes.isEmpty() && content.drafts.isEmpty()) closePreview()
-        }.onFailure { content.error = it.message }
+            else preview?.refresh(content)
+        }.onFailure { showError(it.message) }
     }
     private val changed = service.onChanged { refresh() }
     private val visibility = HierarchyListener { event ->
@@ -92,26 +98,6 @@ internal class CanvasContentSession(
 
     private fun openLoadedPreview() {
         if (disposed || !owner.isShowing) return
-        val (record, nodeId) = target ?: return
-        val notes = content.notes
-        val nodeDrafts = drafts.forNode(record.id, nodeId)
-        if (notes.isEmpty() && nodeDrafts.isNotEmpty()) {
-            selection.close()
-            closePreview()
-            target = record to nodeId
-            val draft = nodeDrafts.first()
-            if (draft.questionId.isEmpty()) {
-                addNote(record, nodeId, owner, point)
-            } else {
-                val question = notes.firstOrNull { it.id == draft.questionId }
-                if (question?.status == "pending") {
-                    editNote(record, nodeId, question, owner, point)
-                } else if (drafts.remove(draft.key)) {
-                    notifyDraftNodesChanged()
-                }
-            }
-            return
-        }
         if (preview == null) openPreview()
         preview?.requestFocus()
     }
@@ -121,32 +107,31 @@ internal class CanvasContentSession(
         val (record, nodeId) = target ?: return
         if (content.notes.isEmpty() && content.drafts.isEmpty()) return
         val generation = selection.generation
-        preview = ThemedCanvasPopup(
-            owner, point, Dimension(430, 300), requestFocus = true,
-            onClosed = { if (selection.close(generation)) preview = null }, mayCancel = { mayDismissNotes() }) {
-            NodeNoteContent(
-                content, service.readOnly,
-                add = { closePreview(); addNote(record, nodeId, owner, point) },
-                edit = { note -> closePreview(); editNote(record, nodeId, note, owner, point) },
-                continueDraft = { questionId ->
-                    closePreview()
-                    if (questionId.isEmpty()) {
-                        addNote(record, nodeId, owner, point)
-                    } else {
-                        content.notes.firstOrNull { it.id == questionId }?.let { note ->
-                            editNote(record, nodeId, note, owner, point)
-                        }
-                    }
-                },
-                delete = { note ->
-                    service.readBackground({ service.repository.cancelPendingQuestion(note.id) }) { result ->
-                        result.onSuccess {
-                            if (drafts.remove(noteKey(record.id, nodeId, note.id))) notifyDraftNodesChanged()
-                            service.notifyChanged()
-                        }.onFailure { content.error = it.message }
-                    }
-                })
-        }
+        val panel = NodeNotePanel(
+            project, service.readOnly,
+            add = { closePreview(); addNote(record, nodeId, owner, point) },
+            edit = { note -> closePreview(); editNote(record, nodeId, note, owner, point) },
+            continueDraft = { questionId ->
+                closePreview()
+                if (questionId.isEmpty()) addNote(record, nodeId, owner, point)
+                else content.notes.firstOrNull { it.id == questionId }?.let { editNote(record, nodeId, it, owner, point) }
+            },
+            delete = { note ->
+                service.readBackground({ service.repository.cancelPendingQuestion(note.id) }) { result ->
+                    result.onSuccess {
+                        if (drafts.remove(noteKey(record.id, nodeId, note.id))) notifyDraftNodesChanged()
+                        service.notifyChanged()
+                    }.onFailure { showError(it.message) }
+                }
+            },
+        ).apply { refresh(content) }
+        preview = NodeNotePopup(project, owner, point, panel,
+            onClosed = { if (selection.close(generation)) preview = null }, canClose = ::mayDismissNotes)
+    }
+
+    private fun showError(message: String?) {
+        content = content.copy(error = message)
+        preview?.refresh(content)
     }
 
     fun onDraftNotesChanged(listener: (Set<Pair<String, String>>) -> Unit): AutoCloseable {
@@ -190,7 +175,10 @@ internal class CanvasContentSession(
                 cancellationAwareResult { service.storage.loadRecord(id) }.getOrNull()?.graph?.nodes.orEmpty()
                     .map { id to it.id }
             }.toSet()
-            Snapshot(notes, pending, existingNodes, fixedDrafts.mapTo(mutableSetOf()) { it.key })
+            val anchors = fixedTarget?.let { (record, nodeId) ->
+                notes.mapNotNull { note -> nodeQuestionPresentation(service.repository, record.id, nodeId, note).anchor?.let { note.id to it } }.toMap()
+            }.orEmpty()
+            Snapshot(notes, anchors, pending, existingNodes, fixedDrafts.mapTo(mutableSetOf()) { it.key })
         }
     }
 
@@ -200,18 +188,23 @@ internal class CanvasContentSession(
     ) {
         if (disposed) return
         editor?.close()
-        val draft = CanvasTextDraft(drafts.text(key) ?: initial)
+        val draft = drafts.open(key, initial)
         if (key.startsWith("note:")) key.substringAfterLast(':').takeIf { it.isNotEmpty() }?.let { pendingIds += it }
         editorKey = key
         editor = CanvasEditorPopup(
             owner, at, Dimension(400, if (multiline) 290 else 150), title, draft, multiline,
-            save = save, saveDispatch = service::readBackground, onSaved = afterSave,
+            save = save, saveDispatch = service::readBackground, onSaved = {
+                drafts.removeIfSame(key, draft)
+                if (!disposed) notifyDraftNodesChanged()
+                afterSave()
+                service.notifyChanged()
+            },
             selectionPreview = selectionPreview, onClosed = {
                 val retained = !disposed && draft.retain && mayRetain(key)
-                val changed = if (retained) drafts.retain(key, draft.text) else drafts.remove(key)
+                if (retained) drafts.retain(key, draft.text) else drafts.remove(key)
                 editor = null
                 editorKey = null
-                if (key.startsWith("note:") && changed && !disposed) notifyDraftNodesChanged()
+                if (key.startsWith("note:") && !disposed) notifyDraftNodesChanged()
                 if (!draft.retain) service.notifyChanged()
             })
     }
@@ -271,7 +264,7 @@ internal data class CanvasNoteDraftEntry(
 
 /** 画布草稿与仓库存储状态、已保存待答注释计数分开。 */
 internal class CanvasContentDrafts {
-    private val values = linkedMapOf<String, String>()
+    private val values = linkedMapOf<String, CanvasTextDraft>()
     private val listeners = linkedSetOf<(Set<Pair<String, String>>) -> Unit>()
 
     fun listen(listener: (Set<Pair<String, String>>) -> Unit): AutoCloseable {
@@ -285,12 +278,17 @@ internal class CanvasContentDrafts {
         listeners.toList().forEach { it(nodes) }
     }
 
-    fun text(key: String): String? = values[key]
+    fun text(key: String): String? = values[key]?.text
+    fun open(key: String, initial: String): CanvasTextDraft = values.getOrPut(key) { CanvasTextDraft(initial) }
+    fun removeIfSame(key: String, draft: CanvasTextDraft) {
+        if (values[key] === draft) values.remove(key)
+    }
 
     fun retain(key: String, text: String): Boolean {
-        val previous = values[key]
-        if (key.startsWith("note:") && text.isBlank()) values.remove(key) else values[key] = text
-        return previous != values[key]
+        val previous = values[key]?.text
+        if (key.startsWith("note:") && text.isBlank()) values.remove(key)
+        else values.getOrPut(key) { CanvasTextDraft(text) }.text = text
+        return previous != values[key]?.text
     }
 
     fun remove(key: String): Boolean = values.remove(key) != null
@@ -309,8 +307,9 @@ internal class CanvasContentDrafts {
 
     fun clear() = values.clear()
 
-    fun noteDrafts(): List<CanvasNoteDraftEntry> = values.entries.mapNotNull { (key, text) ->
-        if (text.isBlank() || !key.startsWith("note:")) return@mapNotNull null
+    fun noteDrafts(): List<CanvasNoteDraftEntry> = values.entries.mapNotNull { (key, draft) ->
+        val text = draft.text
+        if (!draft.retain || text.isBlank() || !key.startsWith("note:")) return@mapNotNull null
         val firstSeparator = key.indexOf(':', "note:".length)
         val lastSeparator = key.lastIndexOf(':')
         if (firstSeparator <= "note:".lastIndex || lastSeparator <= firstSeparator) return@mapNotNull null

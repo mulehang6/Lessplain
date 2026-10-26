@@ -3,7 +3,6 @@ package com.lessplain.ide
 import com.intellij.openapi.editor.Editor
 import com.lessplain.model.SourceAnchor
 import com.lessplain.ui.CanvasEditorPopup
-import com.lessplain.ui.SelectedCodePreview
 import com.lessplain.ui.questionEditorTitle
 import java.awt.Dimension
 import java.awt.Point
@@ -18,7 +17,7 @@ internal class SourceSelectionQuestionSession(private val service: Understanding
 
     fun show(editor: Editor, binding: SourceNodeBinding, anchor: SourceAnchor) {
         if (service.readOnly || closed) return
-        val project = editor.project ?: return
+        if (editor.project == null) return
         popup?.close()
         val request = ++generation
         loading?.close()
@@ -49,7 +48,6 @@ internal class SourceSelectionQuestionSession(private val service: Understanding
                         drafts.closed(question)
                         popup = null
                     },
-                    selectionPreview = SelectedCodePreview(project, question.anchor),
                     saveDispatch = service::readBackground,
                 )
             }

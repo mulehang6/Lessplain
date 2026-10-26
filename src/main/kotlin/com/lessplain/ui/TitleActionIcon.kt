@@ -9,7 +9,7 @@ import java.awt.RenderingHints
 import java.awt.geom.Path2D
 import javax.swing.Icon
 
-internal enum class TitleActionKind { HOME, HISTORY }
+internal enum class TitleActionKind { HOME, BOOK, HISTORY }
 
 /** 工具窗口标题动作使用的小型主题图标。 */
 internal class TitleActionIcon(private val kind: TitleActionKind) : Icon {
@@ -32,6 +32,15 @@ internal class TitleActionIcon(private val kind: TitleActionKind) : Icon {
                     g.drawLine(4, 7, 4, 14)
                     g.drawLine(12, 7, 12, 14)
                     g.drawLine(4, 14, 12, 14)
+                }
+                TitleActionKind.BOOK -> {
+                    g.draw(Path2D.Double().apply {
+                        moveTo(8.0, 4.0); curveTo(5.0, 2.0, 3.0, 2.0, 1.5, 3.0)
+                        lineTo(1.5, 13.0); curveTo(4.0, 12.0, 6.0, 12.5, 8.0, 14.0)
+                        curveTo(10.0, 12.5, 12.0, 12.0, 14.5, 13.0)
+                        lineTo(14.5, 3.0); curveTo(13.0, 2.0, 11.0, 2.0, 8.0, 4.0)
+                    })
+                    g.drawLine(8, 4, 8, 14)
                 }
                 TitleActionKind.HISTORY -> {
                     g.drawOval(2, 2, 12, 12)

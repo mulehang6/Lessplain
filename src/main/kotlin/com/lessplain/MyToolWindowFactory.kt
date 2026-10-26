@@ -14,9 +14,8 @@ import org.jetbrains.jewel.bridge.JewelComposePanel
 class MyToolWindowFactory : ToolWindowFactory {
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
         val service = project.getService(UnderstandingService::class.java)
-        toolWindow.setTitleActions(listOf(WelcomeAction(service),
+        toolWindow.setTitleActions(listOf(WelcomeAction(service), com.lessplain.tutorial.OpenTutorialsAction(),
             UnderstandingHistoryAction(service), OpenUnderstandingInEditorAction(project, service)))
-        toolWindow.setAdditionalGearActions(com.intellij.openapi.actionSystem.DefaultActionGroup(com.lessplain.tutorial.OpenTutorialsAction()))
         val panel = JewelComposePanel { UnderstandingPanel(service) }
         toolWindow.contentManager.addContent(ContentFactory.getInstance().createContent(panel, null, false))
     }

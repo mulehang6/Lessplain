@@ -1,5 +1,12 @@
 package com.lessplain.tutorial
 
+import com.intellij.icons.AllIcons
+import com.intellij.openapi.ui.popup.JBPopupListener
+import com.intellij.openapi.ui.popup.LightweightWindowEvent
+import com.lessplain.ui.QuestionBubbleIcon
+import com.lessplain.ui.PopupUi
+import com.lessplain.ui.popupIconButton
+import com.intellij.util.ui.JBUI
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
@@ -11,7 +18,6 @@ import com.intellij.openapi.util.Key
 import com.intellij.ui.awt.RelativePoint
 import java.awt.FlowLayout
 import java.awt.Point
-import javax.swing.JButton
 import javax.swing.JComponent
 import javax.swing.JPanel
 import javax.swing.Timer
@@ -19,16 +25,24 @@ import javax.swing.Timer
 internal val tutorialActionsKey = Key.create<TutorialSelectionActions>("lessplain.tutorial.annotations")
 
 /** 两个表面的选区共用入口；右键只使用所属表面的原生菜单。 */
-internal class TutorialSelectionActions(private val service: TutorialService, private val id: String, private val windows: TutorialAnnotationWindows) : AutoCloseable {
+internal class TutorialSelectionActions(private val service: TutorialService, private val id: String, private val windows: TutorialAnnotationWindows,
+    private val present: (JBPopup, JComponent, Point) -> Unit = { popup, component, point -> popup.show(RelativePoint(component, point)) },
+) : AutoCloseable {
     var selection: IntRange? = null
         private set
     private var popup: JBPopup? = null
     private var pending: (() -> Unit)? = null
     private var dragging = false
     private var active = true
-    private val timer = Timer(140) { if (!dragging) pending?.invoke() }.apply { isRepeats = false }
+    private var menuSuspended = false
+    private var owner: JComponent? = null
+    private var target: FloatTarget? = null
+    private val lifetime = TutorialFloatLifetime(::dismiss)
+    private data class FloatTarget(val range: IntRange, val existing: Boolean, val revision: Int, val ids: List<String>)
+    private val timer = Timer(140) { selectionSettled() }.apply { isRepeats = false }
 
-    fun beginSelection() { dragging = true; dismiss() }
+    internal fun selectionSettled() { if (!dragging && !menuActive()) pending?.invoke() }
+    fun beginSelection() { dragging = true; menuSuspended = false; dismiss() }
     fun endSelection() { dragging = false; timer.restart() }
     fun changed(component: JComponent, range: IntRange?, point: Point) {
         selection = range?.takeUnless { it.isEmpty() }
@@ -36,11 +50,16 @@ internal class TutorialSelectionActions(private val service: TutorialService, pr
         pending = { display(component, range!!, point, false) }
         timer.restart()
     }
-    fun suspendForMenu() { pending = null; dismiss() }
+    fun suspendForMenu() { dismiss(); menuSuspended = true }
+    private fun menuActive(): Boolean {
+        if (menuSuspended && !JBPopupFactory.getInstance().isPopupActive) menuSuspended = false
+        return menuSuspended
+    }
+    fun leave(component: JComponent) { if (owner === component) lifetime.text(false) }
     fun hover(component: JComponent, source: Int, point: Point) {
-        if (selection != null || dragging || popup?.isVisible == true) return
+        if (selection != null || dragging || menuActive()) return
         val groups = annotationsAt(service.store.annotations(id), source)
-        val item = groups.values.flatten().minByOrNull { it.end - it.start } ?: return
+        val item = groups.values.flatten().minByOrNull { it.end - it.start } ?: run { leave(component); return }
         display(component, item.start until item.end, point, true, groups)
     }
     fun create(kind: String) {
@@ -55,30 +74,46 @@ internal class TutorialSelectionActions(private val service: TutorialService, pr
 
     private fun display(component: JComponent, range: IntRange, point: Point, existing: Boolean, groups: Map<String, List<TutorialAnnotation>>? = null) {
         if (!active || !component.isShowing) return
-        popup?.cancel()
-        val record = service.store.record(id)
-        val revision = record.revision
-        val items = service.store.annotations(id).filter { !it.orphaned && it.start == range.first && it.end == range.last + 1 }
-        val panel = JPanel(FlowLayout(FlowLayout.LEFT, 4, 3))
+        val revision = service.store.record(id).revision
+        val items = service.store.annotations(id).filter { !it.isEmptyDraft && !it.orphaned && it.start == range.first && it.end == range.last + 1 }
+        val next = FloatTarget(range, existing, revision, (groups?.values?.flatten() ?: items).map { it.id })
+        if (popup != null && target == next && owner === component) { lifetime.text(true); return }
+        dismiss()
+        target = next; owner = component
+        lifetime.shown(if (existing) AnnotationFloatOrigin.HOVER else AnnotationFloatOrigin.SELECTION)
+        val panel = JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(PopupUi.ICON_GAP), JBUI.scale(PopupUi.ICON_GAP)))
+        val mouse = object : java.awt.event.MouseAdapter() {
+            override fun mouseEntered(event: java.awt.event.MouseEvent) = lifetime.bar(true)
+            override fun mouseExited(event: java.awt.event.MouseEvent) = lifetime.bar(false)
+        }
+        panel.addMouseListener(mouse)
         listOf("question", "note").forEach { kind ->
             val matching = groups?.get(kind).orEmpty().ifEmpty { items.filter { it.kind == kind } }
             val label = if (kind == "note") "笔记" else "追问"
-            panel.add(JButton(if (existing) "$label ${matching.size}" else label).apply {
-                toolTipText = if (existing && matching.isNotEmpty()) "打开${matching.size}条$label" else "为选区添加$label"
-                addActionListener {
-                    dismiss()
-                    service.attempt {
-                        tutorialRequire(service.store.record(id).revision == revision, "SELECTION_STALE", "selection", "正文已更新，请重新选择")
-                        if (existing && matching.isNotEmpty()) windows.open(matching.first()) else windows.create(range.first, range.last + 1, kind)
-                    }
+            val description = if (matching.isNotEmpty()) "打开${matching.size}条$label" else "为选区添加$label"
+            panel.add(popupIconButton(if (kind == "note") AllIcons.Actions.Edit else QuestionBubbleIcon, description, matching.size) {
+                dismiss()
+                service.attempt {
+                    tutorialRequire(service.store.record(id).revision == revision, "SELECTION_STALE", "selection", "正文已更新，请重新选择")
+                    if (matching.isNotEmpty()) windows.open(matching.first()) else windows.create(range.first, range.last + 1, kind)
                 }
-            })
+            }.apply { addMouseListener(mouse) })
         }
-        popup = JBPopupFactory.getInstance().createComponentPopupBuilder(panel, null).setFocusable(false).setRequestFocus(false)
-            .setCancelOnClickOutside(true).setCancelOnOtherWindowOpen(true).createPopup().also { it.show(RelativePoint(component, point)) }
+        val shown = JBPopupFactory.getInstance().createComponentPopupBuilder(panel, null).setFocusable(false).setRequestFocus(false)
+            .setCancelOnClickOutside(false).setCancelOnOtherWindowOpen(true).createPopup()
+        popup = shown
+        shown.addListener(object : JBPopupListener {
+            override fun onClosed(event: LightweightWindowEvent) { if (popup === shown) { popup = null; lifetime.clear(); target = null; owner = null } }
+        })
+        present(shown, component, point)
     }
     fun active(value: Boolean) { active = value; if (!value) dismiss() }
-    fun dismiss() { timer.stop(); popup?.cancel(); popup = null }
+    fun dismiss() {
+        pending = null; timer.stop(); lifetime.clear()
+        val previous = popup
+        popup = null; target = null; owner = null
+        previous?.cancel()
+    }
     override fun close() { pending = null; dismiss() }
 }
 

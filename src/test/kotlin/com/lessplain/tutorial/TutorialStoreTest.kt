@@ -130,6 +130,27 @@ class TutorialStoreTest {
         }
     }
 
+    @Test fun `old empty drafts are filtered but retained on disk and late saves never recreate deletion`() {
+        lateinit var material: String
+        TutorialStore(path).use { store ->
+            store.context()
+            material = store.create("ctx_test", "空草稿", "正文", TutorialResourceState()).id
+            val old = TutorialAnnotation("note_empty", material, "note", 0, 2, "正文", "  ")
+            store.createAnnotation(old)
+            assertTrue(old.isEmptyDraft)
+            assertTrue(annotationInkRuns(store.annotations(material)).isEmpty())
+            assertTrue(annotationsAt(store.annotations(material), 0).isEmpty())
+            val saved = assertNotNull(store.saveAnnotationDraft(old.copy(id = "note_new"), "新笔记", true))
+            assertFalse(saved.isEmptyDraft)
+            store.deleteAnnotation(saved.id)
+            assertEquals("NOT_FOUND", assertFailsWith<TutorialProblem> { store.saveAnnotationDraft(saved, "迟到保存", false) }.code)
+        }
+        TutorialStore(path).use { store ->
+            assertEquals("note_empty", store.annotations(material).single().id)
+            assertTrue(store.annotations(material).filterNot { it.isEmptyDraft }.isEmpty())
+        }
+    }
+
     @Test fun `deleting a question keeps contexts used by independent tutorials`() {
         TutorialStore(path).use { store ->
             store.context()

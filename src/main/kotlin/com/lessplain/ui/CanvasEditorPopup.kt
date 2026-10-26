@@ -1,7 +1,6 @@
 package com.lessplain.ui
 
 import com.intellij.openapi.ui.popup.JBPopup
-import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.ui.popup.JBPopupListener
 import com.intellij.openapi.ui.popup.LightweightWindowEvent
 import com.intellij.ui.awt.RelativePoint
@@ -46,24 +45,9 @@ internal class CanvasEditorPopup(
         saveDispatch = saveDispatch,
     )
     private val popup: JBPopup = try {
-        val content = javax.swing.JPanel(java.awt.BorderLayout()).apply {
-            add(javax.swing.JPanel(java.awt.FlowLayout(java.awt.FlowLayout.RIGHT, 4, 2)).apply {
-                add(javax.swing.JButton("关闭 ×").apply { addActionListener { close() } })
-            }, java.awt.BorderLayout.NORTH)
-            add(editor, java.awt.BorderLayout.CENTER)
-        }
-        JBPopupFactory.getInstance().createComponentPopupBuilder(content, editor.input)
-        .setTitle(title)
-        .setMovable(true)
+        nativePopupBuilder(editor, editor.input, title, cancelOnOutside = false) { !editor.composition.active }
         .setResizable(false)
         .setLocateWithinScreenBounds(true)
-        .setFocusable(true)
-        .setRequestFocus(true)
-        .setCancelOnClickOutside(false)
-        .setCancelOnOtherWindowOpen(false)
-        .setCancelKeyEnabled(false)
-        .setCancelOnWindowDeactivation(false)
-        .setCancelCallback { !editor.composition.active }
         .createPopup()
     } catch (failure: Throwable) {
         editor.close()

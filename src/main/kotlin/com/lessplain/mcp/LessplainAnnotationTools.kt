@@ -18,7 +18,7 @@ class LessplainAnnotationTools : LessplainToolsSupport() {
         val tutorials = tutorial(); val graphs = graph()
         tutorialRequire(kind in setOf("note", "question", "feedback"), "INVALID_KIND", "kind", "kind 为 note/question/feedback")
         val start = pageStart(limit, cursor)
-        val annotations = tutorials.store.annotations(materialId).filter { it.kind == kind && (status.isBlank() || it.status == status) }
+        val annotations = tutorials.store.annotations(materialId).filter { !it.isEmptyDraft && it.kind == kind && (status.isBlank() || it.status == status) }
         val items = annotations.drop(start).take(limit).map { annotation ->
             mapOf("id" to annotation.id, "questionId" to annotation.id.takeIf { annotation.kind == "question" },
                 "materialId" to annotation.materialId, "kind" to annotation.kind, "status" to annotation.status,

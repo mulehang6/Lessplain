@@ -14,6 +14,38 @@ import kotlin.test.assertTrue
 
 /** 测试原生文档和快捷键层，不打开 IDE 或弹层窗口。 */
 class CanvasTextEditorTest {
+    @Test fun `closing and reopening a submitting draft cannot duplicate the committed write`() {
+        val draft = CanvasTextDraft("问题")
+        var completion: ((Result<Unit>) -> Unit)? = null
+        var writes = 0
+        var saved = 0
+        var dismissed = 0
+        val dispatch: com.lessplain.core.BackgroundReadDispatch<Unit> = { read, done ->
+            writes++; read(); completion = done
+            AutoCloseable { error("关窗不能取消已经提交的保存") }
+        }
+        lateinit var first: CanvasTextEditor
+        lateinit var second: CanvasTextEditor
+        SwingUtilities.invokeAndWait {
+            first = CanvasTextEditor("追问", draft, true, {}, { saved++ }, {}, {}, saveDispatch = dispatch)
+            first.requestSave()
+        }
+        SwingUtilities.invokeAndWait {
+            assertTrue(draft.saving)
+            first.close()
+            second = CanvasTextEditor("追问", draft, true, {}, { error("不得重复保存") }, { dismissed++ }, {}, saveDispatch = dispatch)
+            assertFalse(second.saveButton.isEnabled)
+            assertFalse(second.input.isEditable)
+            second.requestSave()
+            completion!!(Result.success(Unit))
+            assertFalse(draft.retain)
+            assertEquals(1, saved)
+            assertEquals(1, dismissed)
+            second.close()
+        }
+        SwingUtilities.invokeAndWait { assertEquals(1, writes) }
+    }
+
     @Test fun `single line title editor grows with native font and visible error instead of using a fixed height`() {
         val original = UIManager.getFont("Label.font")
         try {
@@ -108,6 +140,24 @@ class CanvasTextEditorTest {
             assertEquals(before - 1, doc.documentListeners.size)
             assertEquals(methods - 1, editor.input.inputMethodListeners.size)
             assertEquals(0, editor.actionMap.size())
+        }
+    }
+
+    @Test fun `save uses the native root default button while multiline enter still inserts a line break`() {
+        SwingUtilities.invokeAndWait {
+            val editor = CanvasTextEditor("源码提问", CanvasTextDraft("第一行"), true, { error("普通 Enter 不能保存") }, {}, {}, {})
+            val root = javax.swing.JRootPane()
+            root.contentPane.add(editor)
+            try {
+                editor.addNotify()
+                assertTrue(editor.saveButton.isDefaultButton)
+                assertEquals(editor.saveButton, root.defaultButton)
+                assertEquals(com.intellij.util.ui.JBUI.scale(PopupUi.PADDING), editor.insets.left)
+                editor.input.caretPosition = editor.input.document.length
+                val key = editor.input.inputMap.get(javax.swing.KeyStroke.getKeyStroke("ENTER"))
+                editor.input.actionMap[key].actionPerformed(ActionEvent(editor.input, 0, "enter"))
+                assertEquals("第一行\n", editor.input.text)
+            } finally { editor.removeNotify(); editor.close() }
         }
     }
 

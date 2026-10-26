@@ -4,7 +4,7 @@ import org.junit.jupiter.api.Test
 import kotlin.test.*
 
 class TutorialAnnotationInkTest {
-    private fun item(id: String, kind: String, start: Int, end: Int) = TutorialAnnotation(id, "t", kind, start, end, "$start:$end")
+    private fun item(id: String, kind: String, start: Int, end: Int) = TutorialAnnotation(id, "t", kind, start, end, "$start:$end", text = "已保存")
 
     @Test fun `only the true intersection is purple and repeated notes never darken it`() {
         val note = item("n", "note", 0, 10)

@@ -37,11 +37,6 @@
         <mcpToolset implementation="com.lessplain.mcp.LessplainAnnotationTools"/>
     </extensions>
     <actions>
-        <action id="Lessplain.LearnSelectedCode" class="com.lessplain.tutorial.LearnSelectedCodeAction"
-                text="学习选中内容" description="为所选实体或概念生成独立教材" icon="AllIcons.General.Information">
-            <add-to-group group-id="Floating.CodeToolbar" anchor="last"/>
-            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
-        </action>
         <action id="Lessplain.OpenTutorials" class="com.lessplain.tutorial.OpenTutorialsAction" text="教程目录">
             <add-to-group group-id="ToolsMenu" anchor="last"/>
         </action>

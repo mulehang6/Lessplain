@@ -39,23 +39,4 @@ class CanvasTextEditorAsyncTest {
         }
     }
 
-    @Test fun `closing editor cancels its save and ignores late completion`() {
-        val draft = CanvasTextDraft("草稿")
-        lateinit var editor: CanvasTextEditor
-        lateinit var complete: (Result<Unit>) -> Unit
-        var cancelled = 0
-        var saved = 0
-        SwingUtilities.invokeAndWait {
-            editor = CanvasTextEditor("注释", draft, true, {}, { saved++ }, {}, {},
-                saveDispatch = { _, done -> complete = done; AutoCloseable { cancelled++ } })
-            editor.requestSave()
-        }
-        SwingUtilities.invokeAndWait {
-            editor.close()
-            complete(Result.success(Unit))
-            assertEquals(1, cancelled)
-            assertEquals(0, saved)
-            assertTrue(draft.retain)
-        }
-    }
 }

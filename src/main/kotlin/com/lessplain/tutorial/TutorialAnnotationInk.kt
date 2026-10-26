@@ -1,5 +1,9 @@
 package com.lessplain.tutorial
 
+/** 旧文件中的空草稿保留在磁盘，但不进入批注入口、计数、索引或工具查询。 */
+internal val TutorialAnnotation.isEmptyDraft: Boolean
+    get() = text.isBlank() && (kind == "note" || status == "draft" && answer.isBlank() && answerMaterialId == null)
+
 /** both 是显示状态，不增加第三种批注或改变持久化格式。 */
 internal data class AnnotationInkRun(val start: Int, val end: Int, val kind: String) {
     val seed get() = start * 31 + end
@@ -8,7 +12,7 @@ internal data class AnnotationInkRun(val start: Int, val end: Int, val kind: Str
 /** 先合并同类覆盖，再按真正的交集着色，避免重复笔记叠深或污染未重叠文字。 */
 internal fun annotationInkRuns(items: List<TutorialAnnotation>): List<AnnotationInkRun> {
     val events = sortedMapOf<Int, IntArray>()
-    items.filter { !it.orphaned && it.end > it.start }.forEach { item ->
+    items.filter { !it.isEmptyDraft && !it.orphaned && it.end > it.start }.forEach { item ->
         val kind = if (item.kind == "note") 0 else 1
         events.getOrPut(item.start) { IntArray(2) }[kind]++
         events.getOrPut(item.end) { IntArray(2) }[kind]--
@@ -31,7 +35,7 @@ internal fun annotationInkRuns(items: List<TutorialAnnotation>): List<Annotation
 
 /** 每类独立选择鼠标所在处最具体的原范围，混合笔迹不伪造一个新的批注范围。 */
 internal fun annotationsAt(items: List<TutorialAnnotation>, source: Int): Map<String, List<TutorialAnnotation>> =
-    items.filter { !it.orphaned && source in it.start until it.end }.groupBy { it.kind }.mapValues { (_, values) ->
+    items.filter { !it.isEmptyDraft && !it.orphaned && source in it.start until it.end }.groupBy { it.kind }.mapValues { (_, values) ->
         val smallest = values.minBy { it.end - it.start }
         values.filter { sameAnnotationGroup(it, smallest) }
     }

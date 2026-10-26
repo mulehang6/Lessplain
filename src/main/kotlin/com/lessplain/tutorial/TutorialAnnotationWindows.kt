@@ -1,13 +1,11 @@
 package com.lessplain.tutorial
 
-import com.intellij.icons.AllIcons
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.ui.popup.IconButton
 import com.intellij.openapi.ui.popup.JBPopup
-import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.ui.popup.JBPopupListener
 import com.intellij.openapi.ui.popup.LightweightWindowEvent
 import com.intellij.util.ui.JBUI
+import com.lessplain.ui.nativePopupBuilder
 import com.lessplain.ui.NativeMenuItem
 import com.lessplain.ui.showNativeMenu
 import java.awt.Component
@@ -29,13 +27,13 @@ internal class TutorialAnnotationWindows(
     }
     init { owner.addHierarchyListener(showing) }
 
-    fun create(start: Int, end: Int, kind: String) = open(service.newAnnotation(tutorialId, start, end, kind))
+    fun create(start: Int, end: Int, kind: String) = open(service.annotationDraft(tutorialId, start, end, kind))
     fun open(annotation: TutorialAnnotation) {
-        windows.firstOrNull { it.panel.matches(annotation) }?.let { it.focus(annotation.id); return }
+        windows.firstOrNull { it.panel.matches(annotation) }?.let { it.focus(annotation); return }
         AnnotationWindow(annotation).also { windows += it; it.visibility() }
     }
     fun index(anchor: Component) {
-        showNativeMenu(anchor, service.store.annotations(tutorialId).map { annotation ->
+        showNativeMenu(anchor, service.store.annotations(tutorialId).filterNot { it.isEmptyDraft }.map { annotation ->
             NativeMenuItem("${if (annotation.kind == "note") "笔记" else "追问"} · ${if (annotation.orphaned) "原文已删除 · " else ""}${annotation.text.ifBlank { annotation.quote }.take(55)}") { open(annotation) }
         }.ifEmpty { listOf(NativeMenuItem("暂无批注", false) {}) }, project = project)
     }
@@ -46,23 +44,21 @@ internal class TutorialAnnotationWindows(
         private var closed = false
         private var shown = false
         val panel = TutorialAnnotationPanel(service, initial, ::open, { close() })
-        val popup: JBPopup = JBPopupFactory.getInstance().createComponentPopupBuilder(panel, panel.input)
-            .setTitle(if (initial.kind == "note") "笔记" else "追问")
-            .setCancelButton(IconButton("关闭", AllIcons.Actions.Close))
-            .setMovable(true).setResizable(true).setFocusable(true).setRequestFocus(true)
-            .setCancelOnClickOutside(false).setCancelOnOtherWindowOpen(false).setCancelOnWindowDeactivation(false)
+        val popup: JBPopup = nativePopupBuilder(panel, panel.input, if (initial.kind == "note") "笔记" else "追问", cancelOnOutside = false) { !panel.composition.active }
+            .setResizable(true)
             .setBelongsToGlobalPopupStack(false).setMayBeParent(true)
             .setMinSize(JBUI.size(380, 260)).setDimensionServiceKey(project, "Lessplain.Annotation.${initial.kind}", false)
             .createPopup()
         private val subscription = service.onChanged { id -> if (id == tutorialId && !closed) panel.refresh(false) }
 
         init {
+            panel.registerKeyboardAction({ popup.cancel() }, javax.swing.KeyStroke.getKeyStroke("ESCAPE"), javax.swing.JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
             popup.addListener(object : JBPopupListener {
                 override fun onClosed(event: LightweightWindowEvent) = close()
             })
         }
-        fun focus(id: String) {
-            panel.focus(id)
+        fun focus(item: TutorialAnnotation) {
+            panel.focus(item)
             visibility()
             SwingUtilities.getWindowAncestor(popup.content)?.toFront()
             panel.input.requestFocusInWindow()
@@ -76,7 +72,10 @@ internal class TutorialAnnotationWindows(
         override fun close() {
             if (closed) return
             closed = true
-            subscription.close(); panel.close(); popup.cancel(); windows.remove(this)
+            subscription.close(); panel.close()
+            popup.cancel()
+            if (!popup.isDisposed) com.intellij.openapi.util.Disposer.dispose(popup)
+            windows.remove(this)
         }
     }
 }

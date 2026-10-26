@@ -86,7 +86,7 @@ class TutorialMcpTest {
             val graphId = createdGraph["id"]!!.jsonPrimitive.content
             call("lessplain_graph_revise", """{"id":"$graphId","expectedRevision":1,"graph":{"nodes":[{"id":"flow","label":"准备事件流","sourceId":"$sourceId"}],"edges":[]}}""")
             lateinit var annotation: TutorialAnnotation
-            onEdt { annotation = tutorials.newAnnotation(tutorialId, 0, 6, "question"); tutorials.store.updateAnnotation(annotation.id) { it.copy(text = "为什么？") }; tutorials.submitQuestion(annotation.id) }
+            onEdt { annotation = tutorials.annotationDraft(tutorialId, 0, 6, "question"); tutorials.store.createAnnotation(annotation.copy(text = "为什么？")); tutorials.submitQuestion(annotation.id) }
             val pending = call("lessplain_annotations_list", """{"materialId":"$tutorialId","kind":"question","status":"pending"}""")
             val questionId = pending["items"]!!.jsonArray.single().jsonObject["questionId"]!!.jsonPrimitive.content
             assertTrue(pending["sources"]!!.jsonArray.isNotEmpty())

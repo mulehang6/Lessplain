@@ -62,12 +62,12 @@ internal class SourceSelectionDrafts {
 
     fun restoreOrCapture(binding: SourceNodeBinding, anchor: SourceAnchor,
         capture: () -> SourceSelectionQuestion): SourceSelectionQuestion =
-        values.firstOrNull { it.binding == binding && it.anchor.path == anchor.path &&
+        values.firstOrNull { it.draft.retain && it.binding == binding && it.anchor.path == anchor.path &&
             it.anchor.version == anchor.version && it.anchor.text == anchor.text &&
             it.anchor.lineHint == anchor.lineHint } ?: capture().also { values += it }
 
     fun closed(question: SourceSelectionQuestion) {
-        if (!question.draft.retain) values.remove(question)
+        if (!question.draft.retain || question.draft.text.isBlank()) values.remove(question)
     }
 
     fun clear() = values.clear()

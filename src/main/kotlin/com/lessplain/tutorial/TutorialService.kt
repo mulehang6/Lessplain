@@ -14,7 +14,6 @@ import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.project.Project
 import com.lessplain.ide.UnderstandingService
-import com.lessplain.model.SourceAnchor
 import com.lessplain.storage.sha256
 import java.awt.datatransfer.StringSelection
 import java.util.concurrent.CopyOnWriteArrayList
@@ -49,6 +48,7 @@ class TutorialService(internal val project: Project) : Disposable {
 
     fun document(id: String): Document = documents.getOrPut(id) {
         EditorFactory.getInstance().createDocument(store.record(id).markdown).also { doc ->
+            doc.setReadOnly(store.readOnly)
             doc.addDocumentListener(object : DocumentListener {
                 override fun documentChanged(event: DocumentEvent) {
                     val record = store.record(id)
@@ -108,14 +108,6 @@ class TutorialService(internal val project: Project) : Disposable {
         return store.saveContext(TutorialContext(newId("ctx"), question, sourceIds, context.token))
     }
 
-    fun startLearning(anchor: SourceAnchor, focusStart: Int = 0, focusEnd: Int = anchor.text.length) {
-        attempt {
-            val source = sources.capture(anchor.path, anchor.text, focusStart, focusEnd)
-            val context = store.saveContext(TutorialContext(newId("ctx"), "请把我当成零基础读者，先用大白话说明这段代码在做什么、按什么顺序发生，再解释必要的名称。术语第一次出现时就解释，不要堆术语；按需要配图或教学模拟。", listOf(source.id)))
-            copyContext(context)
-        }
-    }
-
     fun copyContext(context: TutorialContext) {
         CopyPasteManager.getInstance().setContents(StringSelection("${context.question}\n\n请调用 lessplain_context_read({\"contextId\":\"${context.id}\"}) 读取冻结来源，使用新的结构化 Lessplain 工具保存结果。"))
     }
@@ -125,23 +117,23 @@ class TutorialService(internal val project: Project) : Disposable {
         FileEditorManager.getInstance(project).openFile(files.getOrPut(id) { TutorialVirtualFile(id, record.title) }, true)
     }
 
-    fun newAnnotation(id: String, start: Int, end: Int, kind: String, parentId: String? = null): TutorialAnnotation {
+    fun annotationDraft(id: String, start: Int, end: Int, kind: String, parentId: String? = null): TutorialAnnotation {
         val record = store.record(id)
         require(start in 0..end && end <= record.markdown.length)
-        return store.createAnnotation(TutorialAnnotation(newId(if (kind == "note") "note" else "q"), id, kind, start, end, record.markdown.substring(start, end), parentId = parentId))
-            .also { changed(id) }
+        return TutorialAnnotation(newId(if (kind == "note") "note" else "q"), id, kind, start, end, record.markdown.substring(start, end), parentId = parentId)
     }
 
-    fun submitQuestion(id: String): TutorialAnnotation {
+    fun submitQuestion(id: String): TutorialAnnotation = synchronized(store) {
         val annotation = store.annotation(id)
+        tutorialRequire(annotation.kind == "question", "INVALID_KIND", "id", "只有追问可以提交")
         tutorialRequire(annotation.text.isNotBlank(), "EMPTY_QUESTION", "text", "请输入问题")
-        if (annotation.status == "pending") return annotation
+        if (annotation.status != "draft") return@synchronized annotation
         val record = store.record(annotation.materialId)
         val context = store.saveContext(TutorialContext(newId("ctx"), annotation.text, record.sourceIds, materialId = record.id, selectedText = annotation.quote))
         val saved = store.updateAnnotation(id) { it.copy(status = "pending", contextId = context.id) }
         copyContext(context)
         changed(record.id)
-        return saved
+        saved
     }
 
     fun answer(id: String, markdown: String, materialId: String?): TutorialAnnotation {

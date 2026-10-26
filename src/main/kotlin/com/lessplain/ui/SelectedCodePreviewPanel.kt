@@ -29,15 +29,16 @@ internal fun questionEditorTitle(nodeLabel: String): String =
 /** 用平台只读编辑器展示完整快照，展开只改变视口，不改变内容或草稿。 */
 internal class SelectedCodePreviewPanel(
     preview: SelectedCodePreview,
+    expandable: Boolean = true,
     private val changed: () -> Unit,
 ) : JPanel(BorderLayout()), AutoCloseable {
     private val factory = EditorFactory.getInstance()
     private val lifetime: Disposable = Disposer.newDisposable("Lessplain code preview")
     private val document = factory.createDocument(preview.anchor.text.replace("\r\n", "\n").replace('\r', '\n'))
-    internal var expanded = false
+    internal var expanded = !expandable
         private set
     internal val toggle = CodePreviewToggle { expanded }.apply {
-        isVisible = document.lineCount > COLLAPSED_ROWS
+        isVisible = expandable && document.lineCount > COLLAPSED_ROWS
         addActionListener {
             expanded = !expanded
             text = if (expanded) "收起" else "展开"

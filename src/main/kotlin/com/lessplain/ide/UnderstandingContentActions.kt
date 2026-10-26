@@ -28,7 +28,7 @@ internal class UnderstandingContentActions(private val service: UnderstandingSer
 
     private fun session(owner: Component, host: CanvasDraftHost? = null): CanvasContentSession = sessions.getOrPut(owner) {
         val drafts = host?.let(::draftsFor) ?: CanvasContentDrafts()
-        CanvasContentSession(service, owner, { sessions.remove(owner) }, ::addNodeNote, ::editNodeNote, drafts)
+        CanvasContentSession(service, project, owner, { sessions.remove(owner) }, ::addNodeNote, ::editNodeNote, drafts)
     }
 
     fun addNodeNote(

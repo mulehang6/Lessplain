@@ -1,7 +1,5 @@
 package com.lessplain.ui
 
-import com.intellij.ide.ui.UISettings
-import com.intellij.ide.ui.UISettingsListener
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextArea
 import com.intellij.ui.components.JBTextField
@@ -31,6 +29,30 @@ internal class CanvasTextDraft(initial: String) {
     var text = initial
     var error: String? = null
     var retain = true
+    var saving = false
+        private set
+    var committed = false
+        private set
+    private val listeners = linkedSetOf<() -> Unit>()
+
+    fun listen(listener: () -> Unit): AutoCloseable {
+        listeners += listener
+        return AutoCloseable { listeners -= listener }
+    }
+
+    fun beginSave(): Boolean {
+        if (saving || committed) return false
+        saving = true; error = null
+        listeners.toList().forEach { it() }
+        return true
+    }
+
+    fun complete(result: Result<Unit>) {
+        saving = false
+        result.onSuccess { retain = false; committed = true }
+            .onFailure { error = it.message ?: "保存失败，请刷新后重试" }
+        listeners.toList().forEach { it() }
+    }
 
     fun submit(save: (String) -> Unit): Boolean {
         val normalized = text.trim()
@@ -73,7 +95,7 @@ internal class CanvasTextEditor(
     private val onMetricsChanged: () -> Unit = {},
     selectionPreview: SelectedCodePreview? = null,
     private val saveDispatch: BackgroundReadDispatch<Unit>? = null,
-) : JPanel(BorderLayout(0, JBUI.scale(UnderstandingUiMetrics.SECTION_GAP))), AutoCloseable, UISettingsListener {
+) : JPanel(BorderLayout(0, JBUI.scale(PopupUi.GAP))), AutoCloseable {
     internal val input: JTextComponent = if (multiline) {
         JBTextArea(draft.text).apply {
             lineWrap = true
@@ -106,11 +128,12 @@ internal class CanvasTextEditor(
     } else {
         null
     }
-    private val preview = selectionPreview?.let { SelectedCodePreviewPanel(it, ::scheduleMetricsChanged) }
+    private val preview = selectionPreview?.let { SelectedCodePreviewPanel(it, changed = ::scheduleMetricsChanged) }
     private val bottom = JPanel(BorderLayout()).apply {
         add(error, BorderLayout.NORTH)
-        add(JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(UnderstandingUiMetrics.GAP), 0)).apply {
+        add(JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
             add(saveButton)
+            add(javax.swing.Box.createHorizontalStrut(JBUI.scale(PopupUi.GAP)))
             add(cancelButton)
         }, BorderLayout.SOUTH)
     }
@@ -121,8 +144,7 @@ internal class CanvasTextEditor(
     private var saveQueued = false
     private var metricsQueued = false
     private var disposed = false
-    private var saveTask: AutoCloseable? = null
-    private var saving = false
+    private val draftState = draft.listen(::refreshDraftState)
     private val documentListener = object : javax.swing.event.DocumentListener {
         override fun insertUpdate(e: javax.swing.event.DocumentEvent) = updateDraftAndMetrics()
         override fun removeUpdate(e: javax.swing.event.DocumentEvent) = updateDraftAndMetrics()
@@ -138,7 +160,7 @@ internal class CanvasTextEditor(
     }
 
     init {
-        border = JBUI.Borders.empty(UnderstandingUiMetrics.DETAIL_PADDING)
+        border = JBUI.Borders.empty(PopupUi.PADDING)
         input.enableInputMethods(true)
         input.accessibleContext.accessibleName = title
         input.document.addDocumentListener(documentListener)
@@ -149,10 +171,12 @@ internal class CanvasTextEditor(
         bind("control ENTER", "save") { if (!composition.active) requestSave() }
         bind("ESCAPE", "dismiss") { if (!composition.active) dismissSafely() }
         if (!multiline) (input as JBTextField).addActionListener { if (!composition.active) requestSave() }
+        refreshDraftState()
     }
 
-    override fun uiSettingsChanged(uiSettings: UISettings) {
-        fonts.refresh()
+    override fun addNotify() {
+        super.addNotify()
+        rootPane?.defaultButton = saveButton
     }
 
     /** 测量 Swing 折行行数，使输入区显示一至八行。 */
@@ -162,7 +186,7 @@ internal class CanvasTextEditor(
         val panelInsets = insets
         updateErrorHeight(editorWidth, panelInsets)
         val contentWidth = (editorWidth - panelInsets.left - panelInsets.right).coerceAtLeast(1)
-        val gap = JBUI.scale(UnderstandingUiMetrics.SECTION_GAP)
+        val gap = JBUI.scale(PopupUi.GAP)
         if (!multiline) {
             visibleRowCount = 1
             scrollRequired = false
@@ -228,7 +252,7 @@ internal class CanvasTextEditor(
     }
 
     internal fun requestSave() {
-        if (disposed || saveQueued || saving) return
+        if (disposed || saveQueued || draft.saving || draft.committed) return
         saveQueued = true
         input.inputContext?.endComposition()
         SwingUtilities.invokeLater {
@@ -246,17 +270,11 @@ internal class CanvasTextEditor(
                     showErrorMessage("内容不能为空")
                     return@invokeLater
                 }
-                saving = true
-                saveButton.isEnabled = false
-                input.isEditable = false
-                saveTask = dispatch({ save(value) }) { result ->
-                    if (!disposed) {
-                        saving = false
-                        saveButton.isEnabled = true
-                        input.isEditable = true
-                        result.onSuccess { draft.retain = false; saved() }
-                            .onFailure { draft.error = it.message ?: "保存失败，请刷新后重试"; showErrorMessage(draft.error.orEmpty()) }
-                    }
+                if (!draft.beginSave()) return@invokeLater
+                // 保存由项目任务拥有；关窗只释放界面，不能丢掉已提交事务的成功通知。
+                dispatch({ save(value) }) { result ->
+                    draft.complete(result)
+                    result.onSuccess { saved() }
                 }
             } else if (draft.submit(save)) {
                 saved()
@@ -277,12 +295,21 @@ internal class CanvasTextEditor(
         input.inputContext?.endComposition()
         draft.text = input.text
         disposed = true
-        saveTask?.close()
+        draftState.close()
         fonts.close()
         preview?.close()
         input.document.removeDocumentListener(documentListener)
         input.removeInputMethodListener(inputListener)
         actionMap.clear()
+    }
+
+    private fun refreshDraftState() {
+        if (disposed) return
+        saveButton.isEnabled = !draft.saving && !draft.committed
+        cancelButton.isEnabled = !draft.saving
+        input.isEditable = !draft.saving && !draft.committed
+        if (draft.committed) dismiss()
+        else draft.error?.let(::showErrorMessage)
     }
 
     private fun updateDraftAndMetrics() {

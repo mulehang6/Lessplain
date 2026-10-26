@@ -67,6 +67,22 @@ class SourceSelectionQuestionTest {
         }
     }
 
+    @Test fun `closing an empty source question discards its draft but keeps the frozen context`() {
+        UnderstandingRepository(root).use { repository ->
+            val core = UnderstandingCore(repository)
+            val record = core.present(4, "empty-create", "流程", graph, "root")
+            val binding = SourceNodeBinding(record.id, 1, "b", "目标", listOf("ab"))
+            val drafts = SourceSelectionDrafts()
+            val empty = drafts.restoreOrCapture(binding, anchor) { captureSourceQuestion(repository, core, binding, anchor) }
+            empty.draft.text = " \n "
+            drafts.closed(empty)
+            assertEquals(empty.context, core.context(empty.context.token))
+            val fresh = drafts.restoreOrCapture(binding, anchor) { captureSourceQuestion(repository, core, binding, anchor) }
+            assertNotSame(empty, fresh)
+            assertEquals("", fresh.draft.text)
+        }
+    }
+
     @Test fun `revision conflict and deletion retain the original draft and selection`() {
         UnderstandingRepository(root).use { repository ->
             val core = UnderstandingCore(repository)
