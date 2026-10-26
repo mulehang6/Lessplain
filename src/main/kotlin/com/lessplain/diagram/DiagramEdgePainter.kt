@@ -27,7 +27,7 @@ internal object DiagramEdgePainter {
             Rectangle2D.Double(it.x - pixelMargin, it.y - pixelMargin,
                 it.width + pixelMargin * 2, it.height + pixelMargin * 2)
         }
-        edges.sortedBy { when (it.edge.id) { focusedChoice -> 3; in choiceIds -> 2; in routeIds -> 1; else -> 0 } }.forEach { placed ->
+        edges.sortedBy { priority(it.edge.id, routeIds, choiceIds, focusedChoice) }.forEach { placed ->
             if (clipping != null && !clipping.intersects(placed.paintBounds)) return@forEach
             val candidate = placed.edge.id in choiceIds
             val focused = placed.edge.id == focusedChoice
@@ -64,7 +64,8 @@ internal object DiagramEdgePainter {
         for (crossing in crossings) {
             val point = crossing.point
             if (visible != null && !visible.intersects(point.x - 8, point.y - 8, 16.0, 16.0)) continue
-            val top = if (crossing.firstEdgeId in highlighted && crossing.secondEdgeId !in highlighted)
+            val top = if (priority(crossing.firstEdgeId, highlighted, choiceIds, focusedChoice) >
+                priority(crossing.secondEdgeId, highlighted, choiceIds, focusedChoice))
                 byId.getValue(crossing.firstEdgeId) else byId.getValue(crossing.secondEdgeId)
             val horizontal = top.segments.any { abs(it.y1 - it.y2) < 0.01 && abs(it.y1 - point.y) < 0.01 &&
                 point.x > minOf(it.x1, it.x2) && point.x < maxOf(it.x1, it.x2) }
@@ -85,6 +86,9 @@ internal object DiagramEdgePainter {
             g.draw(bridge)
         }
     }
+
+    private fun priority(id: String, route: Set<String>, choices: Set<String>, focused: String?): Int =
+        when (id) { focused -> 3; in choices -> 2; in route -> 1; else -> 0 }
 
     /** 推断样式独立于关系类型和活动路径，动画仍使用原有叠加层。 */
     internal fun edgeStroke(inferred: Boolean, width: Float): BasicStroke =

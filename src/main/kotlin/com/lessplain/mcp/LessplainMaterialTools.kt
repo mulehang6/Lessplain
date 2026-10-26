@@ -12,7 +12,7 @@ import com.intellij.mcpserver.McpToolCallResult
 class LessplainMaterialTools : LessplainToolsSupport() {
     @McpTool(name = "lessplain_graph_create")
     @McpDescription("创建理解图，省略 parentId 为根图。保留现有关系语义和证据要求；sourceId 从冻结上下文或 source_resolve 获取；不传坐标。")
-    suspend fun graphCreate(contextId: String, title: String, graph: TutorialGraph, parentId: String? = null): McpToolCallResult = writeResult("graph_create", listOf(contextId, title, graph, parentId)) {
+    suspend fun graphCreate(contextId: String, title: String, graph: TutorialGraph, parentId: String? = null): McpToolCallResult = writeResult("graph_create", listOf(contextId, title, graph, parentId), useTutorialReceipt = false) {
         val tutorials = tutorial(); val graphs = graph()
         val context = try { tutorials.store.context(contextId) } catch (_: TutorialProblem) { importContext(tutorials, graphs.core.context(contextId)) }
         val request = sha256(gson.toJson(listOf("graph_create", contextId, title, graph, parentId)))
@@ -24,7 +24,7 @@ class LessplainMaterialTools : LessplainToolsSupport() {
 
     @McpTool(name = "lessplain_graph_revise")
     @McpDescription("修订理解图。保留节点与连线 ID、顺序、端点和关系类型；不改变原问题、归属或批注。")
-    suspend fun graphRevise(id: String, expectedRevision: Int, graph: TutorialGraph): McpToolCallResult = writeResult("graph_revise", listOf(id, expectedRevision, graph)) {
+    suspend fun graphRevise(id: String, expectedRevision: Int, graph: TutorialGraph): McpToolCallResult = writeResult("graph_revise", listOf(id, expectedRevision, graph), useTutorialReceipt = false) {
         val tutorials = tutorial(); val graphs = graph(); val old = graphs.repository.getRecord(id)
         val value = graph.toUnderstanding(tutorials.sources::anchor)
         val record = try {

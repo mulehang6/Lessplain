@@ -80,6 +80,7 @@ private data class EdgeReservation(
     val bounds: Rectangle2D,
     val segment: RoutingSegment? = null,
     val label: Boolean = false,
+    val arrow: Boolean = false,
 )
 
 /** 预留允许必要交叉，但拒绝遮住标签、箭头及长距离共线。 */
@@ -105,7 +106,7 @@ internal class EdgeRoutingObstacles(
         val values = buildList {
             edge.segments.forEach { add(EdgeReservation(edge.edge.id, it.bounds, it)) }
             edge.resolvedLabelBounds?.let { add(EdgeReservation(edge.edge.id, it, label = true)) }
-            add(EdgeReservation(edge.edge.id, edge.arrowPath.bounds2D))
+            add(EdgeReservation(edge.edge.id, edge.arrowPath.bounds2D, arrow = true))
         }
         reservations[edge.edge.id] = values
         values.forEach { edgeIndex.add(it.bounds, it) }
@@ -132,7 +133,7 @@ internal class EdgeRoutingObstacles(
         edge.segments.forEach { segment ->
             edgeIndex.query(queryBounds(segment)).filter { it.edgeId != edge.edge.id }.forEach { obstacle ->
                 if (obstacle.segment?.let { segment.sharedRun(it, laneGap) > minimumSharedRun } == true ||
-                    obstacle.label && segment.crosses(obstacle.bounds)) add(obstacle.edgeId)
+                    (obstacle.label || obstacle.arrow) && segment.crosses(obstacle.bounds)) add(obstacle.edgeId)
             }
         }
         edge.resolvedLabelBounds?.let { label ->
@@ -141,8 +142,8 @@ internal class EdgeRoutingObstacles(
             }
         }
         val arrow = edge.arrowPath.bounds2D
-        edgeIndex.query(arrow).filter { it.edgeId != edge.edge.id && it.segment == null }.forEach {
-            if (arrow.intersects(it.bounds)) add(it.edgeId)
+        edgeIndex.query(arrow).filter { it.edgeId != edge.edge.id }.forEach {
+            if (it.segment?.crosses(arrow) ?: arrow.intersects(it.bounds)) add(it.edgeId)
         }
     }
 

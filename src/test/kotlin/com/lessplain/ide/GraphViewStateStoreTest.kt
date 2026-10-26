@@ -9,6 +9,23 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class GraphViewStateStoreTest {
+    @Test fun `closing the last subscription releases its layer and allows subscribing again`() {
+        val store = GraphViewStateStore({ null }) { _, _ -> }
+        val key = GraphLayerKey("temporary")
+        var updates = 0
+        val first = store.listen(key) { updates++ }
+        val second = store.listen(key) { updates++ }
+        first.close()
+        store.update(key) { it }
+        assertEquals(1, updates)
+        second.close()
+        val field = GraphViewStateStore::class.java.getDeclaredField("listeners").apply { isAccessible = true }
+        assertTrue((field.get(store) as Map<*, *>).isEmpty())
+        store.listen(key) { updates++ }.use { store.update(key) { it } }
+        assertEquals(2, updates)
+        assertTrue((field.get(store) as Map<*, *>).isEmpty())
+    }
+
     @Test
     fun `navigation prefix round trips while missing or corrupt optional fields retain the selected node`() {
         val values = mutableMapOf<String, String>()

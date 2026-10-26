@@ -137,6 +137,7 @@ class UnderstandingRepository(
     fun putContext(context: UnderstandingContext) {
         if (context.projectId != projectId) throw UnderstandingInputException("上下文属于其他项目")
         write { db ->
+            validateContextOrigin(db, context)
             db.prepareStatement("INSERT INTO contexts(token, project_id, data) VALUES(?, ?, ?)").use { statement ->
                 statement.setString(1, context.token)
                 statement.setString(2, projectId)
@@ -146,7 +147,9 @@ class UnderstandingRepository(
         }
     }
 
-    fun getContext(token: String): UnderstandingContext = connect().use { db ->
+    fun getContext(token: String): UnderstandingContext = connect().use { db -> readContext(db, token) }
+
+    internal fun readContext(db: Connection, token: String): UnderstandingContext =
         db.prepareStatement("SELECT project_id, data FROM contexts WHERE token=?").use { statement ->
             statement.setString(1, token)
             statement.executeQuery().use { rows ->
@@ -155,14 +158,15 @@ class UnderstandingRepository(
                 gson.fromJson(rows.getString(2), UnderstandingContext::class.java)
             }
         }
-    }
 
     fun saveQuestion(question: UnderstandingQuestion) {
-        getContext(question.contextToken)
         write { db -> insertQuestion(db, question) }
     }
 
     fun insertQuestion(db: Connection, question: UnderstandingQuestion) {
+        val context = readContext(db, question.contextToken)
+        com.lessplain.model.requireInput(question.ownerRecordId == context.recordId, "问题与冻结上下文的归属不一致")
+        validateContextOrigin(db, context)
         db.prepareStatement("INSERT INTO questions(id, context_token, owner_record_id, text, status, data) VALUES(?, ?, ?, ?, ?, ?)")
             .use { statement ->
                 statement.setString(1, question.id)
@@ -204,7 +208,10 @@ class UnderstandingRepository(
         if (requestId.isBlank()) throw UnderstandingInputException("requestId 不能为空")
         val hash = sha256(payload)
         lookupRequest(requestId, operation, hash)?.let { return it }
-        val prepared = prepare()
+        val prepared = com.lessplain.core.cancellationAwareResult(prepare).getOrElse { failure ->
+            lookupRequest(requestId, operation, hash)?.let { return it }
+            throw failure
+        }
         return write { db ->
             db.prepareStatement("SELECT operation, payload_hash, response FROM requests WHERE request_id=?")
                 .use { statement ->

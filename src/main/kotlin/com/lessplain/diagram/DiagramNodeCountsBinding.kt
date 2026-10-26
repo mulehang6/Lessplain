@@ -15,24 +15,27 @@ internal fun UnderstandingDiagram.bindNodeQuestionCounts(
 ): AutoCloseable {
     val sources = nodeIds.mapNotNull { localId -> source(localId)?.let { localId to it } }.toMap()
     val records = sources.values.map { it.record }.distinctBy { it.id }
+    lateinit var refresh: () -> Unit
     val loader = LatestBackgroundRead<NodeQuestionCounts>(service::readBackground) { result ->
         if (!disposed) result.onSuccess { counts ->
+            controls.showCountsFailure(null)
             if (records.any { counts.revisions[it.id] != it.revision }) onStaleSource()
             fun local(values: Map<NodeQuestionKey, Int>): Map<String, Int> = sources.mapNotNull { (localId, origin) ->
                 values[NodeQuestionKey(origin.record.id, origin.nodeId)]?.let { localId to it }
             }.toMap()
             setQuestionCounts(local(counts.answered))
             setPendingNoteCounts(local(counts.pending))
-        }
+        }.onFailure { controls.showCountsFailure(it, refresh) }
     }
-    fun refresh() = loader.request {
+    refresh = { loader.request {
         service.repository.nodeQuestionCounts(records.map { it.id }).also { counts ->
             records.filter { counts.revisions[it.id] != it.revision }.forEach { record ->
                 com.lessplain.core.cancellationAwareResult { service.storage.loadRecord(record.id) }
             }
         }
     }
-    val subscription = service.onChanged(::refresh)
+    }
+    val subscription = service.onChanged(refresh)
     refresh()
-    return AutoCloseable { subscription.close(); loader.close() }
+    return AutoCloseable { subscription.close(); loader.close(); controls.showCountsFailure(null) }
 }

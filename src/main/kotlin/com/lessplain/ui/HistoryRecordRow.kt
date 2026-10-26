@@ -58,7 +58,7 @@ internal fun RecordCandidateRow(
         Text(record.displayTitle ?: record.question, color = if (selected) selectedForeground else colors.text.normal,
             modifier = Modifier.weight(1f),
             maxLines = 1, overflow = TextOverflow.Ellipsis)
-        if (onDelete != null && hovered) {
+        if (onDelete != null && (hovered || focused)) {
             Text("删除", color = if (selected) selectedForeground else colors.text.info,
                 modifier = Modifier.clickable(role = Role.Button, onClick = onDelete))
         }

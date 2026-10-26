@@ -11,6 +11,21 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class BackgroundResourceTest {
+    @Test fun `failed initialization can recover without recreating the resource owner`() {
+        var attempts = 0
+        var closed = 0
+        val resource = BackgroundResource {
+            check(++attempts > 1) { "temporary failure" }
+            AutoCloseable { closed++ }
+        }
+        assertFailsWith<IllegalStateException> { resource.get() }
+        resource.get()
+        resource.get()
+        assertEquals(2, attempts)
+        resource.close()
+        assertEquals(1, closed)
+    }
+
     @Test fun `close while initialization is blocked returns and the late resource is disposed once`() {
         val started = CountDownLatch(1)
         val finish = CountDownLatch(1)

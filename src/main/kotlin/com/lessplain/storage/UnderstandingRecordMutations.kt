@@ -200,7 +200,11 @@ private fun tombstoneRequests(db: Connection, records: Set<String>, questions: S
                 val data = runCatching { com.google.gson.JsonParser.parseString(response).asJsonObject }.getOrNull() ?: continue
                 val id = data.get("id")?.takeUnless { it.isJsonNull }?.asString
                 val questionId = data.get("questionId")?.takeUnless { it.isJsonNull }?.asString
-                if (id in records || id in answers || questionId in questions) ids += rows.getString(1)
+                val feedbackRecords = data.getAsJsonArray("feedback")?.mapNotNull { item ->
+                    item.asJsonObject.getAsJsonObject("context")?.get("recordId")?.takeUnless { it.isJsonNull }?.asString
+                }.orEmpty()
+                val consumed = data.getAsJsonArray("consumedIds")?.mapNotNull { it.takeUnless { value -> value.isJsonNull }?.asString }.orEmpty()
+                if (id in records || id in answers || questionId in questions || feedbackRecords.any { it in records } || consumed.any { it in questions }) ids += rows.getString(1)
             }
         }
     }

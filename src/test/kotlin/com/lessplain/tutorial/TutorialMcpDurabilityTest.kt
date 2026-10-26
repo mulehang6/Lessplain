@@ -72,7 +72,7 @@ class TutorialMcpDurabilityTest {
         }
     }
 
-    @Test fun `graph revision replays core commit before outer receipt and reports genuine conflicts`() {
+    @Test fun `graph revision replays SQLite commit and reports genuine conflicts`() {
         TutorialMcpFixture("LessplainGraphRetry").use { test ->
             val sourceId = test.source()["sourceId"]!!.jsonPrimitive.content
             val contextId = test.call("lessplain_context_capture", buildJsonObject { put("question", "Flow") })["contextId"]!!.jsonPrimitive.content
@@ -81,16 +81,14 @@ class TutorialMcpDurabilityTest {
             val created = test.call("lessplain_graph_create", Json.parseToJsonElement(gson.toJson(mapOf("contextId" to contextId, "title" to "Flow", "graph" to graph))).jsonObject)
             val id = created["id"]!!.jsonPrimitive.content
             val revised = graph.copy(nodes = listOf(graph.nodes.single().copy(label = "新标签")))
-            val arguments = listOf(id, 1, revised)
-            val key = sha256(gson.toJson(listOf("graph_revise", arguments)))
-            assertNull(test.tutorials.store.toolReceipt(key))
             val prepared = revised.toUnderstanding(test.tutorials.sources::anchor)
             val record = test.graphs.repository.getRecord(id)
             test.graphs.core.revise(4, sha256(gson.toJson(listOf("graph_revise", id, 1, revised))), record.question, prepared, id, 1, ClusterUpdate.Replace(prepared.clusters))
             val response = test.call("lessplain_graph_revise", Json.parseToJsonElement(gson.toJson(mapOf("id" to id, "expectedRevision" to 1, "graph" to revised))).jsonObject)
             assertEquals(2, response["revision"]!!.jsonPrimitive.int)
             assertEquals(2, test.graphs.repository.getRecord(id).revision)
-            TutorialStore(test.storeRoot).use { assertNotNull(it.toolReceipt(key), "成功响应也必须保存工具回执") }
+            val replay = test.call("lessplain_graph_revise", Json.parseToJsonElement(gson.toJson(mapOf("id" to id, "expectedRevision" to 1, "graph" to revised))).jsonObject)
+            assertEquals(response, replay, "相同请求通过 SQLite 回执重放，不另建教程缓存")
             val changed = revised.copy(nodes = listOf(revised.nodes.single().copy(label = "另一个修订")))
             val conflict = test.invoke("lessplain_graph_revise", Json.parseToJsonElement(gson.toJson(mapOf("id" to id, "expectedRevision" to 1, "graph" to changed))).jsonObject)
             assertTrue(conflict.isError)

@@ -1,5 +1,6 @@
 package com.lessplain.storage
 
+import com.lessplain.model.UnderstandingContext
 import com.lessplain.model.UnderstandingRecord
 import com.lessplain.model.requireInput
 import java.sql.Connection
@@ -26,6 +27,17 @@ internal fun UnderstandingRepository.validateRecordOrigin(db: Connection, record
             statement.executeQuery().use { rows ->
                 requireInput(rows.next() && rows.getString(1) == record.contextToken, "待答注释的冻结来源已变化")
             }
+        }
+    }
+}
+
+/** 捕获与删除、提问与删除都可能交错；来源存活校验必须与插入共用写事务。 */
+internal fun UnderstandingRepository.validateContextOrigin(db: Connection, context: UnderstandingContext) {
+    requireInput(context.projectId == projectId, "上下文属于其他项目")
+    context.recordId?.let { recordId ->
+        db.prepareStatement("SELECT 1 FROM records WHERE id=?").use { statement ->
+            statement.setString(1, recordId)
+            statement.executeQuery().use { rows -> requireInput(rows.next(), "上下文的来源记录已删除") }
         }
     }
 }

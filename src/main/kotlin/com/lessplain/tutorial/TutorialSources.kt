@@ -71,7 +71,9 @@ internal class TutorialSources(private val project: Project, private val store: 
         val root = Path.of(base).toAbsolutePath().normalize()
         val target = root.resolve(path).normalize()
         if (!target.startsWith(root)) return null
-        return LocalFileSystem.getInstance().findFileByNioFile(target)
+        val realTarget = try { target.toRealPath().takeIf { it.startsWith(root.toRealPath()) } }
+            catch (_: java.io.IOException) { null } ?: return null
+        return LocalFileSystem.getInstance().findFileByNioFile(realTarget)
     }
 
     override fun close() { markers.values.forEach(RangeMarker::dispose); markers.clear() }

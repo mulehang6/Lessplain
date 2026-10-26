@@ -104,7 +104,14 @@ internal class GraphViewStateStore(
     }
 
     fun listen(key: GraphLayerKey, callback: (GraphViewState) -> Unit): AutoCloseable {
-        listeners.computeIfAbsent(key) { CopyOnWriteArrayList() }.add(callback)
-        return AutoCloseable { listeners[key]?.remove(callback) }
+        listeners.compute(key) { _, current ->
+            (current ?: CopyOnWriteArrayList()).also { it.add(callback) }
+        }
+        return AutoCloseable {
+            listeners.computeIfPresent(key) { _, current ->
+                current.remove(callback)
+                current.takeIf { it.isNotEmpty() }
+            }
+        }
     }
 }

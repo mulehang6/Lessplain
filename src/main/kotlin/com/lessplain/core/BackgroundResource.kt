@@ -31,6 +31,7 @@ internal class BackgroundResource<T : AutoCloseable>(private val create: () -> T
                 future.complete(created)
             } catch (failure: Throwable) {
                 future.completeExceptionally(failure)
+                synchronized(this) { if (!closed && loading === future) loading = null }
                 throw failure
             }
         }

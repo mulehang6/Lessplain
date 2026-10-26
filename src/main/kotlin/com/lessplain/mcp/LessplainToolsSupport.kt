@@ -23,18 +23,20 @@ abstract class LessplainToolsSupport : McpToolset {
     protected suspend fun project() = requireNotNull(currentCoroutineContext().projectOrNull) { "没有活动项目" }
     protected suspend fun tutorial() = project().getService(TutorialService::class.java)
     protected suspend fun graph() = project().getService(UnderstandingService::class.java)
-    protected suspend fun writeResult(operation: String, arguments: Any, action: suspend () -> Any?): McpToolCallResult {
-        val store = tutorial().store
-        val key = com.lessplain.storage.sha256(gson.toJson(listOf(operation, arguments)))
-        store.toolReceipt(key)?.let { return response(Json.parseToJsonElement(it) as JsonObject) }
-        val response = resultObject {
-            action().also { value ->
-                store.flush()
-                store.saveToolReceipt(key, success(value).toString())
-                store.flush()
-            }
-        }
-        return response(response)
+    protected suspend fun writeResult(operation: String, arguments: Any, useTutorialReceipt: Boolean = true, action: suspend () -> Any?): McpToolCallResult {
+        // 图库拥有事务内回执和删除墓碑，不能由教程缓存绕过它们。
+        if (!useTutorialReceipt) return durableResult(action)
+        return response(resultEnvelope {
+            val store = tutorial().store
+            val key = com.lessplain.storage.sha256(gson.toJson(listOf(operation, arguments)))
+            store.toolReceipt(key)?.let { return@resultEnvelope Json.parseToJsonElement(it) as JsonObject }
+            val value = action()
+            store.flush()
+            val saved = success(value)
+            store.saveToolReceipt(key, saved.toString())
+            store.flush()
+            saved
+        })
     }
     /** 冻结来源或上下文的读取也必须在成功返回 ID 前落盘；反馈消费独立使用 SQLite。 */
     protected suspend fun durableResult(action: suspend () -> Any?): McpToolCallResult = result {
@@ -42,9 +44,9 @@ abstract class LessplainToolsSupport : McpToolset {
     }
     protected suspend fun result(action: suspend () -> Any?): McpToolCallResult = response(resultObject(action))
     private fun response(value: JsonObject) = McpToolCallResult(arrayOf(McpToolCallResultContent.Text(value.toString())), value, value["ok"].toString() != "true")
-    private suspend fun resultObject(action: suspend () -> Any?): JsonObject = try {
-        val value = action()
-        success(value)
+    private suspend fun resultObject(action: suspend () -> Any?): JsonObject = resultEnvelope { success(action()) }
+    private suspend fun resultEnvelope(action: suspend () -> JsonObject): JsonObject = try {
+        action()
     } catch (failure: CancellationException) { throw failure
     } catch (failure: Exception) {
         buildJsonObject {

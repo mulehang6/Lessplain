@@ -1009,9 +1009,6 @@ button:active:not(:disabled) {
   .workspace {
     grid-template-columns: 270px minmax(450px, 1fr) 510px;
   }
-  .graph-scroll {
-    margin: 0 16px;
-  }
   .code-line code {
     font-size: 13px;
   }
