@@ -100,7 +100,7 @@ Understanding 工具窗口容纳问题图、项目图和历史页。没有活动
 
 当前插件没有 Agent 自动任务交接。节点悬停提供“复制来源”，用户可把来源 token 和问题一起交给 Agent；复制不显示为“发送”。MCP 工具负责接收 Agent 的结果，不能据此推断插件已经能启动 Agent 任务。
 
-首轮先实现复制固定来源，Agent 收到用户问题后通过 MCP 返回结果；`present_understanding` 会在保存子图时补建并关联问题。不为就地提问引入驻留等待或长轮询。未来若 IDE 或其他 Agent 宿主提供稳定的任务交接，只新增宿主适配层，不改变问题、来源和结果协议。
+当前复制固定来源，Agent 用 `lessplain_context_read` 读取冻结上下文，通过 `lessplain_graph_create` 保存子图，再用 `lessplain_question_answer` 按问题 ID 完成答复。创建产物不会隐式完成问题。不为就地提问引入驻留等待或长轮询。未来若 IDE 或其他 Agent 宿主提供稳定的任务交接，只新增宿主适配层，不改变问题、来源和结果协议。
 
 ## 6. 记录来源与代码变化
 
