@@ -5,7 +5,6 @@ import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.ui.popup.JBPopup
 import com.intellij.testFramework.fixtures.IdeaTestFixtureFactory
 import com.lessplain.ide.uiRead
-import com.intellij.ui.popup.list.SelectablePanel
 import org.junit.jupiter.api.Test
 import java.awt.Component
 import java.awt.Container
@@ -31,9 +30,9 @@ class TutorialPopupInteractionTest {
             move(0)
             assertEquals(0, library.activeIndex)
             assertEquals(1, library.list.selectedIndex, "悬停不能修改实际选择")
-            val selected = library.list.cellRenderer.getListCellRendererComponent(library.list, library.list.model.getElementAt(0), 0, false, false) as SelectablePanel
-            assertNotNull(selected.selectionColor)
-            assertTrue(selected.selectionArc > 0)
+            val selected = library.list.cellRenderer.getListCellRendererComponent(library.list, library.list.model.getElementAt(0), 0, false, false)
+            assertEquals(library.list.selectionBackground.rgb, paintedAt(selected, 6, 25))
+            assertEquals(library.list.background.rgb, paintedAt(selected, 0, 0), "选中背景保留圆角外侧留白")
             leave(); assertEquals(-1, library.activeIndex)
             move(0); assertEquals(0, library.activeIndex)
             library.list.dispatchEvent(MouseEvent(library.list, MouseEvent.MOUSE_MOVED, 0, 0, 10, 400, 0, false))
@@ -41,8 +40,8 @@ class TutorialPopupInteractionTest {
             assertEquals(1, library.list.selectedIndex)
             library.search.textEditor.actionMap["catalog.UP"].actionPerformed(ActionEvent(library, 0, "up"))
             assertEquals(0, library.activeIndex)
-            val inactive = library.list.cellRenderer.getListCellRendererComponent(library.list, library.list.model.getElementAt(1), 1, true, false) as SelectablePanel
-            assertNull(inactive.selectionColor)
+            val inactive = library.list.cellRenderer.getListCellRendererComponent(library.list, library.list.model.getElementAt(1), 1, true, false)
+            assertEquals(library.list.background.rgb, paintedAt(inactive, 6, 25))
             move(1); assertEquals(1, library.activeIndex)
             val second = library.list.getCellBounds(1, 1)
             val secondTip = library.list.getToolTipText(MouseEvent(library.list, MouseEvent.MOUSE_MOVED, 0, 0, 10, second.y + 10, 0, false))
@@ -104,9 +103,21 @@ class TutorialPopupInteractionTest {
             assertEquals(3, shown.size)
             actions.hover(owner, 1, Point())
             assertEquals(3, shown.size, "主动选区浮条不被悬停替换")
+            actions.dismiss()
+            actions.changed(owner, 1 until 7, Point(), showPopup = false)
+            actions.selectionSettled()
+            assertEquals(3, shown.size, "恢复预览选择只同步范围，不重新打开已被 Esc 关闭的浮条")
+            assertEquals(1 until 7, actions.selection)
             actions.changed(owner, null, Point())
             assertTrue(shown.last().isDisposed)
         } finally { actions.close(); windows.close() }
+    }
+
+    private fun paintedAt(component: Component, x: Int, y: Int): Int {
+        component.setSize(300, 50)
+        val image = java.awt.image.BufferedImage(300, 50, java.awt.image.BufferedImage.TYPE_INT_ARGB)
+        image.createGraphics().let { graphics -> try { component.paint(graphics) } finally { graphics.dispose() } }
+        return image.getRGB(x, y)
     }
 
     private fun children(component: Component): List<Component> = listOf(component) +

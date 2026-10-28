@@ -26,7 +26,12 @@ internal class TutorialPreviewPane(private val editor: Editor, private val servi
     private val diagrams = mutableMapOf<String, TutorialDiagramView>()
     private val simulations = mutableMapOf<String, TutorialSimulationView>()
     private val slots = mutableMapOf<String, ResourceSlot>()
+    var rebuilding = false
+        private set
     private var fontKey = ""
+    private val tracking = TutorialPreviewTracking(editor.document) {
+        PreviewPosition(model.sourceAt(caretPosition), model.selection(selectionStart, selectionEnd), topSource())
+    }
 
     init {
         isEditable = false
@@ -45,12 +50,19 @@ internal class TutorialPreviewPane(private val editor: Editor, private val servi
     }
     override fun getScrollableTracksViewportWidth() = true
 
-    fun refresh() {
+    fun refresh(): Int {
         val next = service.store.record(tutorialId).markdown
         val scheme = editor.colorsScheme
         val key = "${UIUtil.getLabelFont()}:${scheme.editorFontName}:${scheme.editorFontSize}:${scheme.defaultForeground.rgb}:${scheme.defaultBackground.rgb}"
-        if (next != markdown || key != fontKey) rebuild(next, key)
+        val reading = tracking.take()
         val resources = service.store.resource(tutorialId)
+        val available = (resources.diagrams.map { "diagram/${it.id}" } + resources.simulations.map { "simulation/${it.id}" }).toSet()
+        val referenced = model.parts.map { "${it.block.kind}/${it.block.resourceId}" }.toSet()
+        val installed = slots.keys.map { it.substringBefore('#') }.toSet()
+        if (next != markdown || key != fontKey || available.intersect(referenced) != installed) {
+            rebuilding = true
+            try { rebuild(next, key, reading) } finally { rebuilding = false }
+        }
         resources.diagrams.forEach { value -> diagrams.filterKeys { it.substringBefore('#') == "diagram/${value.id}" }.values.forEach { it.refresh(value) } }
         resources.simulations.forEach { value -> simulations.filterKeys { it.substringBefore('#') == "simulation/${value.id}" }.values.forEach { it.refresh(value) } }
         highlighter.removeAllHighlights()
@@ -60,11 +72,12 @@ internal class TutorialPreviewPane(private val editor: Editor, private val servi
             if (b > a) highlighter.addHighlight(a, b, TutorialRangePainter { g, region -> paintInk(g, region, run.kind, run.seed) })
         }
         revalidate(); repaint()
+        return reading.top
     }
 
-    private fun rebuild(next: String, key: String) {
-        val selection = model.selection(selectionStart, selectionEnd)
-        val oldCaret = model.sourceAt(caretPosition)
+    private fun rebuild(next: String, key: String, reading: PreviewPosition) {
+        val selection = reading.selection
+        val oldCaret = reading.caret
         model = TutorialPreviewModel(next); markdown = next; fontKey = key
         val occurrences = mutableMapOf<String, Int>()
         val resourceKeys = model.parts.filter { it.block.kind in setOf("diagram", "simulation") }.associateWith {
@@ -149,15 +162,19 @@ internal class TutorialPreviewPane(private val editor: Editor, private val servi
         viewport.viewPosition = Point(viewport.viewPosition.x, bounds.y.coerceIn(0, (height - viewport.extentSize.height).coerceAtLeast(0)))
     }
     fun topSource(): Int = model.sourceAt(viewToModel2D(visibleRect.location))
-    fun openLink(point: Point) {
-        if (selectionStart != selectionEnd) return
+    /** 链接与批注共用真实文字命中，行末空白不能触发链接。 */
+    fun linkAt(point: Point): String? {
+        if (selectionStart != selectionEnd || hoverSourceAt(point) == null) return null
         val position = viewToModel2D(point)
-        val part = model.parts.firstOrNull { position in it.from until it.to } ?: return
-        val href = part.mapped.styles.firstOrNull { it.kind == "link" && position - part.from in it.start until it.end }?.href ?: return
+        val part = model.parts.firstOrNull { position in it.from until it.to } ?: return null
+        return part.mapped.styles.firstOrNull { it.kind == "link" && position - part.from in it.start until it.end }?.href
+    }
+    fun openLink(point: Point) {
+        val href = linkAt(point) ?: return
         if (href.startsWith("lessplain://source/")) service.attempt { service.sources.reveal(href.substringAfterLast('/')) }
         else com.intellij.ide.BrowserUtil.browse(href)
     }
-    override fun close() { diagrams.values.forEach { it.close() }; diagrams.clear(); simulations.values.forEach { it.close() }; simulations.clear(); slots.clear() }
+    override fun close() { tracking.close(); diagrams.values.forEach { it.close() }; diagrams.clear(); simulations.values.forEach { it.close() }; simulations.clear(); slots.clear() }
 
     private inner class ResourceSlot(private val child: JComponent) : JPanel(java.awt.BorderLayout()) {
         init {

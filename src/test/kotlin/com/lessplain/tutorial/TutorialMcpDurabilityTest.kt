@@ -98,4 +98,55 @@ class TutorialMcpDurabilityTest {
             assertEquals(2, error["currentRevision"]!!.jsonPrimitive.int)
         }
     }
+    @Test fun `deduplicated creation retains its original reply if the global receipt write fails`() {
+        TutorialMcpFixture("LessplainDuplicateCreationReceipt").use { test ->
+            val service = test.tutorials
+            service.store.saveContext(TutorialContext("ctx_duplicate", "来源", emptyList()))
+            val record = service.create("ctx_duplicate", "已有教程", "原正文", TutorialResourceState())
+            service.store.flush()
+            val arguments = buildJsonObject { put("contextId", "ctx_duplicate"); put("title", "已有教程"); put("markdown", "原正文") }
+            val key = sha256(Gson().toJson(listOf("tutorial_create", listOf("ctx_duplicate", "已有教程", "原正文", emptyList<TutorialDiagram>(), emptyList<TutorialSimulation>()))))
+            val blocked = test.storeRoot.resolve("tool-receipts.json.tmp")
+            Files.createDirectory(blocked)
+            try {
+                val failed = test.invoke("lessplain_tutorial_create", arguments)
+                assertTrue(failed.isError)
+                assertEquals("PERSISTENCE_FAILED", failed.structuredContent?.get("error")?.jsonObject?.get("code")?.jsonPrimitive?.content)
+                TutorialStore(test.storeRoot).use { reader ->
+                    val reply = assertNotNull(reader.toolReceipt(key), "复用既有教程时，也应随正文保存该请求的原始回执")
+                    assertEquals("原正文", Json.parseToJsonElement(reply).jsonObject["data"]!!.jsonObject["tutorial"]!!.jsonObject["markdown"]!!.jsonPrimitive.content)
+                }
+            } finally { Files.delete(blocked) }
+            service.store.change(record.id, record.revision, "修改后正文", 0, record.markdown.length, "修改后正文".length)
+            service.store.flush()
+            TutorialStore(test.storeRoot).use { reader ->
+                val reply = assertNotNull(reader.toolReceipt(key))
+                assertEquals("原正文", Json.parseToJsonElement(reply).jsonObject["data"]!!.jsonObject["tutorial"]!!.jsonObject["markdown"]!!.jsonPrimitive.content)
+                assertEquals("修改后正文", reader.record(record.id).markdown)
+            }
+        }
+    }
+
+    @Test fun `cached answer retries still require a durable checkpoint before returning success`() {
+        TutorialMcpFixture("LessplainCachedAnswerDurability").use { test ->
+            val service = test.tutorials
+            service.store.saveContext(TutorialContext("ctx_retry", "来源", emptyList()))
+            val record = service.create("ctx_retry", "回执", "正文", TutorialResourceState())
+            val question = service.annotationDraft(record.id, 0, 2, "question").copy(text = "为什么", status = "pending")
+            service.store.createAnnotation(question); service.store.flush()
+            val blocked = test.storeRoot.resolve(record.id).resolve("content.json.tmp")
+            Files.createDirectory(blocked)
+            val args = buildJsonObject { put("questionId", question.id); put("markdown", "原始答案") }
+            try {
+                repeat(2) {
+                    val failed = test.invoke("lessplain_question_answer", args)
+                    assertTrue(failed.isError, "缓存中的未持久化回执不能提前返回成功")
+                    assertEquals("PERSISTENCE_FAILED", failed.structuredContent?.get("error")?.jsonObject?.get("code")?.jsonPrimitive?.content)
+                }
+            } finally { Files.delete(blocked) }
+            val saved = test.call("lessplain_question_answer", args)
+            assertEquals("原始答案", saved["answer"]?.jsonPrimitive?.content)
+            TutorialStore(test.storeRoot).use { reader -> assertEquals("原始答案", reader.annotation(question.id).answer) }
+        }
+    }
 }

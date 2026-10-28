@@ -35,7 +35,7 @@ internal class TutorialDiagramView(
             resource.id, "", record.contextId, graph, record.createdAt), state?.let { BrowseState(resource.id, zoom = it.zoom, panX = it.x, panY = it.y, hasPan = true) }).apply {
             preferredSize = Dimension(520, JBUI.scale(360))
             onNodePositionsChanged { positions ->
-                if (!service.store.readOnly) service.store.savePositions(tutorialId, resource.id, positions.mapValues { TutorialPosition(it.value.x.toInt(), it.value.y.toInt()) })
+                if (!service.store.readOnly && !service.store.isUnavailable(tutorialId)) service.store.savePositions(tutorialId, resource.id, positions.mapValues { TutorialPosition(it.value.x.toInt(), it.value.y.toInt()) })
                 LayoutDirection.entries.filterNot { it == activeDirection }.forEach { setDirectionState(it, null, positions) }
             }
             val positions = service.store.resource(tutorialId).positions[resource.id].orEmpty().mapValues { GraphNodePosition(it.value.x.toDouble(), it.value.y.toDouble()) }
@@ -68,7 +68,7 @@ internal class TutorialDiagramView(
         service.changed(tutorialId)
     }
     fun saveViewport() {
-        if (!canvas.initializedViewport || service.store.readOnly) return
+        if (!canvas.initializedViewport || service.store.readOnly || service.store.isUnavailable(tutorialId)) return
         val reading = service.store.reading(tutorialId)
         val viewport = BrowseState(resource.id, zoom = canvas.zoom, panX = canvas.centerX, panY = canvas.centerY, hasPan = true)
         LayoutDirection.entries.forEach { canvas.directionViewports[it] = viewport }

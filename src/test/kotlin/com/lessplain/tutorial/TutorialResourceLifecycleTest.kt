@@ -33,7 +33,7 @@ class TutorialResourceLifecycleTest {
                     val first = simulations[0]
                     fun invoke(index: Int) {
                         val action = first.actions[index]
-                        action.actionPerformed(AnActionEvent.createFromAnAction(action, null, "LessplainTest", DataContext.EMPTY_CONTEXT))
+                        action.actionPerformed(AnActionEvent.createEvent(action, DataContext.EMPTY_CONTEXT, null, "LessplainTest", com.intellij.openapi.actionSystem.ActionUiKind.NONE, null))
                     }
                     invoke(1); invoke(1)
                     assertEquals(1, first.playback.stepIndex)
@@ -53,6 +53,49 @@ class TutorialResourceLifecycleTest {
                     first.animation.start()
                     view.close()
                     assertFalse(first.animation.isRunning)
+                } finally { view.close() }
+            } }
+        }
+    }
+
+    @Test fun `resources saved after markdown references appear without replacing existing playback`() {
+        TutorialMcpFixture("LessplainLateResources").use { fixture ->
+            fixture.onEdt { uiRead {
+                val service = fixture.tutorials
+                service.store.saveContext(TutorialContext("ctx_late_resources", "资源", emptyList()))
+                val simulation = TutorialSimulation("existing", "kotlin", "println(1)", listOf(
+                    SimulationScenario("a", "输出", listOf(SimulationStep(listOf(1), "第一步", "1\n"))),
+                ))
+                val record = service.create("ctx_late_resources", "稍后保存资源", "![已有模拟](lessplain://simulation/existing)",
+                    TutorialResourceState(simulations = listOf(simulation)))
+                val view = TutorialEditorView(fixture.project, record.id)
+                try {
+                    fun component(id: String): java.awt.Component? {
+                        val part = view.preview.model.parts.single { it.block.resourceId == id }
+                        return (StyleConstants.getComponent(view.preview.styledDocument.getCharacterElement(part.from).attributes) as? Container)?.getComponent(0)
+                    }
+                    com.intellij.openapi.command.WriteCommandAction.runWriteCommandAction(fixture.project) {
+                        view.editor.document.insertString(view.editor.document.textLength,
+                            "\n\n![稍后插图](lessplain://diagram/later)\n\n![稍后模拟](lessplain://simulation/later)")
+                    }
+                    view.refresh()
+                    val existing = component("existing") as TutorialSimulationView
+                    existing.actions[1].let { action ->
+                        action.actionPerformed(AnActionEvent.createEvent(action, DataContext.EMPTY_CONTEXT, null, "LessplainTest", com.intellij.openapi.actionSystem.ActionUiKind.NONE, null))
+                    }
+                    assertEquals(0, existing.playback.stepIndex)
+                    val missing = view.preview.model.parts.filter { it.block.resourceId == "later" }
+                    missing.forEach { assertNull(StyleConstants.getComponent(view.preview.styledDocument.getCharacterElement(it.from).attributes)) }
+                    service.store.saveDiagram(record.id, TutorialDiagram("later", TutorialGraph(listOf(TutorialNode("n", "开始")), emptyList())), 0)
+                    service.store.saveSimulation(record.id, simulation.copy(id = "later"), 0)
+                    view.refresh()
+                    missing.forEach { part ->
+                        val slot = StyleConstants.getComponent(view.preview.styledDocument.getCharacterElement(part.from).attributes) as? Container
+                        assertNotNull(slot, "资源落盘后应创建 ${part.block.kind} 组件")
+                        assertEquals(1, slot.componentCount)
+                    }
+                    assertSame(existing, component("existing"))
+                    assertEquals(0, existing.playback.stepIndex, "新增其他资源不能重置已播放的模拟")
                 } finally { view.close() }
             } }
         }

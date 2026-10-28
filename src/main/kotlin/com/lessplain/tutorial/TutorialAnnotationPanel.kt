@@ -39,6 +39,23 @@ internal class TutorialAnnotationPanel(
     private var closed = false
     private var materialGeneration = 0L
     private var materialRead: AutoCloseable? = null
+    private val graph = service.project.getService(com.lessplain.ide.UnderstandingService::class.java)
+    private val referenceRead = com.lessplain.core.LatestBackgroundRead<Pair<String, Result<Boolean>>>(graph::readBackground) { result ->
+        if (!closed) result.onSuccess { (id, availability) ->
+            if (id == snapshot.answerMaterialId) availability.onSuccess { exists ->
+                materialLink.text = if (exists) "查看关联教程或图" else "记录已删除"
+                materialLink.isEnabled = exists
+                materialLink.toolTipText = null
+            }.onFailure {
+                materialLink.text = "关联记录无法读取"
+                materialLink.isEnabled = false
+                materialLink.toolTipText = it.message
+            }
+        }
+    }
+    private val graphChanges = graph.onChanged {
+        snapshot.answerMaterialId?.takeUnless { it.startsWith("tut_") }?.let(::refreshMaterialReference)
+    }
     val input = JTextArea().apply { lineWrap = true; wrapStyleWord = true }
     val answer = JTextArea().apply { isEditable = false; lineWrap = true; wrapStyleWord = true }
     private val quote = JTextArea().apply { isEditable = false; lineWrap = true; wrapStyleWord = true; rows = 2 }
@@ -149,7 +166,7 @@ internal class TutorialAnnotationPanel(
     private fun requestSubmit() {
         val requested = currentId
         input.inputContext?.endComposition()
-        javax.swing.SwingUtilities.invokeLater {
+        com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater {
             if (!closed && currentId == requested && !composition.active && input.text.isNotBlank()) service.attempt {
                 service.submitQuestion(currentId)
                 refresh(false)
@@ -173,6 +190,20 @@ internal class TutorialAnnotationPanel(
                 }
             }
         }
+    }
+
+    /** 关联材料变化时只刷新引用入口，不替换正在输入的问题或回答区。 */
+    fun refreshMaterialReference(id: String) {
+        if (!closed && snapshot.answerMaterialId == id) updateMaterialLink()
+    }
+    private fun updateMaterialLink() {
+        val id = snapshot.answerMaterialId
+        val tutorial = id?.startsWith("tut_") == true
+        val removed = tutorial && service.store.isUnavailable(requireNotNull(id))
+        materialLink.text = if (removed) "教程已删除" else "查看关联教程或图"
+        materialLink.isEnabled = tutorial && !removed
+        materialLink.toolTipText = null
+        if (id != null && !tutorial) referenceRead.request { id to com.lessplain.core.cancellationAwareResult { graph.repository.recordExists(id) } }
     }
 
     fun refresh(replaceInput: Boolean) {
@@ -199,6 +230,7 @@ internal class TutorialAnnotationPanel(
             if (showAnswer && split.secondComponent == null) split.secondComponent = answerPanel
             else if (!showAnswer && split.secondComponent != null) split.secondComponent = null
             materialLink.isVisible = item.answerMaterialId != null
+            updateMaterialLink()
             footer.isVisible = item.kind == "question" && item.status == "draft"
             submit.isEnabled = !service.store.readOnly && input.text.isNotBlank() && item.status == "draft"
             pageIndex = pages.indexOfFirst { it.id == currentId }
@@ -216,5 +248,5 @@ internal class TutorialAnnotationPanel(
         quote.background = UIUtil.getPanelBackground(); quote.foreground = UIUtil.getLabelForeground()
         listOf(inputScroll, answerScroll, quoteScroll).forEach { it.border = JBUI.Borders.empty(); it.viewport.background = background }
     }
-    override fun close() { if (!closed) { closed = true; materialGeneration++; materialRead?.close(); answerSelection.close(); fonts.close() } }
+    override fun close() { if (!closed) { closed = true; materialGeneration++; materialRead?.close(); referenceRead.close(); graphChanges.close(); answerSelection.close(); fonts.close() } }
 }

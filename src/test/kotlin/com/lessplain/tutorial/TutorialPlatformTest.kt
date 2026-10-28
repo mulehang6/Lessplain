@@ -106,7 +106,7 @@ class TutorialPlatformTest {
                     assertEquals("SOURCE_STALE", assertFailsWith<TutorialProblem> { service.sources.reveal(second.id) }.code)
                     service.sources.reveal(first.id)
                     assertEquals("Flow<Event>", editor.selectionModel.selectedText)
-                    assertTrue(editor.markupModel.allHighlighters.none { it.textAttributes?.effectType == com.intellij.openapi.editor.markup.EffectType.LINE_UNDERSCORE })
+                    assertTrue(editor.markupModel.allHighlighters.none { it.getTextAttributes(editor.colorsScheme)?.effectType == com.intellij.openapi.editor.markup.EffectType.LINE_UNDERSCORE })
                     FileEditorManager.getInstance(project).closeFile(file)
                 }
             }

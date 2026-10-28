@@ -97,6 +97,9 @@ class TutorialMcpTest {
             }.toString()
             call("lessplain_question_answer", replayArgs)
             onEdt { tutorials.deleteAnnotation(annotation.id) }
+            val deletionDeadline = System.nanoTime() + 5_000_000_000L
+            while (tutorials.store.annotations(tutorialId).isNotEmpty() && System.nanoTime() < deletionDeadline) Thread.sleep(10)
+            assertTrue(tutorials.store.annotations(tutorialId).isEmpty(), "确认删除必须完成持久化后才发布")
             val deletedAnswer = invoke("lessplain_question_answer", replayArgs)
             assertTrue(deletedAnswer.isError)
             assertEquals("NOT_FOUND", deletedAnswer.structuredContent?.get("error")?.jsonObject?.get("code")?.jsonPrimitive?.content)

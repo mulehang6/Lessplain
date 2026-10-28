@@ -5,7 +5,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.lessplain.ui.PopupUi
 import com.lessplain.ui.nativePopupBuilder
-import com.intellij.ui.popup.list.SelectablePanel
+import com.lessplain.ui.ListSelectionPanel
 import com.intellij.ui.SearchTextField
 import com.intellij.ui.components.JBList
 import com.intellij.ui.components.JBScrollPane
@@ -31,7 +31,7 @@ import javax.swing.event.DocumentListener
 /** 目录独立弹出，工具窗口保留理解图的内容和导航。 */
 internal fun showTutorialLibrary(project: Project, anchor: Component?) {
     val library = TutorialLibrary(project)
-    val popup = nativePopupBuilder(library, library.search.textEditor, "教程目录", cancelOnOutside = true) { !library.composition.active }
+    val popup = nativePopupBuilder(library, library.search.textEditor, "教程目录", cancelOnOutside = true) { !library.composition.active && !project.getService(TutorialService::class.java).deleteConfirming }
         .setResizable(true).setDimensionServiceKey(project, "Lessplain.TutorialLibrary", false).createPopup()
     library.opened = { popup.cancel() }
     Disposer.register(popup, library)
@@ -79,12 +79,8 @@ internal class TutorialLibrary(project: Project) : JPanel(BorderLayout(0, JBUI.s
         list.fixedCellHeight = UIUtil.getLabelFont().size * 2 + JBUI.scale(22)
         list.cellRenderer = ListCellRenderer { owner, value, index, _, _ ->
             val selected = index == activeIndex
-            SelectablePanel().apply {
+            ListSelectionPanel(owner.background, owner.selectionBackground.takeIf { selected }).apply {
                 layout = BorderLayout(0, JBUI.scale(3))
-                background = owner.background
-                selectionArc = JBUI.CurrentTheme.Popup.Selection.ARC.get()
-                selectionInsets = JBUI.insets(2, 4)
-                selectionColor = if (selected) owner.selectionBackground else null
                 border = JBUI.Borders.empty(7, 10)
                 preferredSize = Dimension(1, list.fixedCellHeight)
                 add(JLabel(value.title).apply {
@@ -97,6 +93,7 @@ internal class TutorialLibrary(project: Project) : JPanel(BorderLayout(0, JBUI.s
                 }, BorderLayout.CENTER)
             }
         }
+        com.lessplain.ui.installListDeletionMenu(list, "删除", { !service.store.readOnly }) { service.deleteTutorial(it.id) }
         ToolTipManager.sharedInstance().registerComponent(list)
         list.addMouseListener(object : MouseAdapter() {
             override fun mouseExited(event: MouseEvent) { hoverAt(null) }
@@ -150,10 +147,11 @@ internal class TutorialLibrary(project: Project) : JPanel(BorderLayout(0, JBUI.s
     private fun open() { list.selectedValue?.let { service.open(it.id); opened() } }
     private fun refresh() {
         val selected = list.selectedValue?.id
+        val previous = list.selectedIndex
         hoveredIndex = -1
         model.clear()
         service.store.list().filter { it.title.contains(search.text, true) || it.markdown.contains(search.text, true) }.sortedByDescending { it.createdAt }.forEach(model::addElement)
-        (0 until model.size).find { model[it].id == selected }?.let { list.selectedIndex = it }
+        list.selectedIndex = (0 until model.size).find { model[it].id == selected } ?: previous.coerceAtMost(model.size - 1)
     }
     override fun dispose() { subscription.close(); ToolTipManager.sharedInstance().unregisterComponent(list) }
 }

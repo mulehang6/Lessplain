@@ -44,9 +44,9 @@ internal class TutorialSelectionActions(private val service: TutorialService, pr
     internal fun selectionSettled() { if (!dragging && !menuActive()) pending?.invoke() }
     fun beginSelection() { dragging = true; menuSuspended = false; dismiss() }
     fun endSelection() { dragging = false; timer.restart() }
-    fun changed(component: JComponent, range: IntRange?, point: Point) {
+    fun changed(component: JComponent, range: IntRange?, point: Point, showPopup: Boolean = true) {
         selection = range?.takeUnless { it.isEmpty() }
-        if (selection == null) { pending = null; dismiss(); return }
+        if (selection == null || !showPopup) { pending = null; dismiss(); return }
         pending = { display(component, range!!, point, false) }
         timer.restart()
     }

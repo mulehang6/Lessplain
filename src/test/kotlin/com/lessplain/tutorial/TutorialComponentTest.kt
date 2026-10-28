@@ -32,11 +32,11 @@ class TutorialComponentTest {
                     layout(view)
                     fun invoke(index: Int) {
                         val action = view.actions[index]
-                        action.actionPerformed(AnActionEvent.createFromAnAction(action, null, "LessplainTest", DataContext.EMPTY_CONTEXT))
+                        action.actionPerformed(AnActionEvent.createEvent(action, DataContext.EMPTY_CONTEXT, null, "LessplainTest", com.intellij.openapi.actionSystem.ActionUiKind.NONE, null))
                     }
                     fun enabled(index: Int): Boolean {
                         val action = view.actions[index]
-                        val event = AnActionEvent.createFromAnAction(action, null, "LessplainTest", DataContext.EMPTY_CONTEXT)
+                        val event = AnActionEvent.createEvent(action, DataContext.EMPTY_CONTEXT, null, "LessplainTest", com.intellij.openapi.actionSystem.ActionUiKind.NONE, null)
                         action.update(event)
                         return event.presentation.isEnabled
                     }

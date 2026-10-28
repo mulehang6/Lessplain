@@ -44,11 +44,11 @@ class LessplainAnnotationTools : LessplainToolsSupport() {
 
     @McpTool(name = "lessplain_question_answer")
     @McpDescription("按问题 ID 回答已提交问题，可附已创建产物 ID。回答属于冻结来源，不依赖活动标签，不覆盖笔记或正文。")
-    suspend fun answer(questionId: String, markdown: String, materialId: String? = null): McpToolCallResult = writeResult("question_answer", listOf(questionId, markdown, materialId), useTutorialReceipt = questionId.startsWith("q_")) {
+    suspend fun answer(questionId: String, markdown: String, materialId: String? = null): McpToolCallResult = writeResult("question_answer", listOf(questionId, markdown, materialId), useTutorialReceipt = questionId.startsWith("q_"), targetId = questionId.takeIf { it.startsWith("q_") }) { key ->
         tutorialRequire(markdown.isNotBlank(), "EMPTY_ANSWER", "markdown", "回答不能为空")
         val tutorials = tutorial(); val graphs = graph()
         if (materialId != null) { if (materialId.startsWith("tut_")) tutorials.store.record(materialId) else graphs.repository.getRecord(materialId) }
-        if (questionId.startsWith("q_")) tutorials.answer(questionId, markdown, materialId)
+        if (questionId.startsWith("q_")) tutorials.answer(questionId, markdown, materialId, key)
         else graphs.repository.answerMaterialQuestion(questionId, markdown, materialId).also { graphs.notifyChanged() }
     }
 

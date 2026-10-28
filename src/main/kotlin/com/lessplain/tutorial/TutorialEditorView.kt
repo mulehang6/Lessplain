@@ -44,10 +44,11 @@ internal class TutorialEditorView(private val project: Project, val id: String) 
     var mode = initialReading.mode
         private set
     val focusTarget get() = if (mode == TutorialDisplayMode.EDIT) editor.contentComponent else preview
+    private var registration: AutoCloseable? = null
     private var closed = false
     private var syncing = false
     private var refreshing = false
-    private val timer = Timer(120) { uiRead { refresh() } }.apply { isRepeats = false }
+    private val timer = Timer(120) { com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater { if (!closed) uiRead { refresh() } } }.apply { isRepeats = false }
     private val fonts = com.lessplain.ui.CanvasUiFonts(emptyList()) { timer.restart() }
     private val subscription = service.onChanged { changed -> if (changed == id && !closed) timer.restart() }
 
@@ -88,7 +89,7 @@ internal class TutorialEditorView(private val project: Project, val id: String) 
         }, lifetime)
         preview.addCaretListener {
             val p = preview.modelToView2D(preview.caretPosition)?.bounds?.let { Point(it.x, it.y + it.height + 4) } ?: Point()
-            actions.changed(preview, preview.selectedSource(), p)
+            actions.changed(preview, preview.selectedSource(), p, showPopup = !preview.rebuilding)
         }
         preview.addMouseListener(object : MouseAdapter() {
             override fun mouseExited(event: MouseEvent) { actions.leave(preview) }
@@ -133,9 +134,10 @@ internal class TutorialEditorView(private val project: Project, val id: String) 
         }, lifetime)
         previewScroll.viewport.addChangeListener { syncFromPreview() }
         (editor as? com.intellij.openapi.editor.ex.EditorEx)?.addPropertyChangeListener(java.beans.PropertyChangeListener { timer.restart() }, lifetime)
+        registration = service.registerView(id, this)
         refresh()
         display(mode, false)
-        SwingUtilities.invokeLater {
+        com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater {
             if (!closed) uiRead {
                 syncing = true
                 try { editor.scrollingModel.scrollVertically(initialReading.scroll); preview.followSource(initialReading.previewSource) }
@@ -192,7 +194,7 @@ internal class TutorialEditorView(private val project: Project, val id: String) 
                 TutorialDisplayMode.SPLIT -> { split.firstComponent = editor.component; split.secondComponent = previewScroll; body.add(split) }
             }
             body.revalidate(); body.repaint()
-            SwingUtilities.invokeLater {
+            com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater {
                 if (!closed) uiRead {
                     syncing = true
                     try {
@@ -206,15 +208,18 @@ internal class TutorialEditorView(private val project: Project, val id: String) 
     }
     fun refresh() {
         if (closed) return
-        val source = preview.topSource()
         refreshing = true
-        try { preview.refresh(); marks.refresh(); service.takeAnnotationDestination(id)?.let(floating::open) }
-        finally { refreshing = false }
-        preview.followSource(source)
+        try {
+            val source = preview.refresh()
+            marks.refresh()
+            service.takeAnnotationDestination(id)?.let(floating::open)
+            preview.followSource(source)
+            if (mode == TutorialDisplayMode.SPLIT) scrollEditorTo(source)
+        } finally { refreshing = false }
         toolTipText = service.store.writeFailure?.let { "保存失败：${it.message}" }
     }
     private fun saveReading() {
-        if (service.store.readOnly) return
+        if (service.store.readOnly || service.store.isUnavailable(id)) return
         val reading = service.store.reading(id)
         service.store.saveReading(id, reading.copy(caret = editor.caretModel.offset, scroll = editor.scrollingModel.verticalScrollOffset,
             mode = mode, previewSource = preview.topSource(), divider = if (mode == TutorialDisplayMode.SPLIT) split.proportion.toDouble() else reading.divider))
@@ -223,7 +228,7 @@ internal class TutorialEditorView(private val project: Project, val id: String) 
     override fun globalSchemeChange(scheme: com.intellij.openapi.editor.colors.EditorColorsScheme?) { timer.restart() }
     override fun close() {
         if (closed) return
-        closed = true; timer.stop(); subscription.close(); fonts.close()
+        closed = true; registration?.close(); timer.stop(); subscription.close(); fonts.close()
         preview.close(); saveReading(); actions.close(); floating.close(); marks.close()
         editor.putUserData(tutorialActionsKey, null)
         Disposer.dispose(lifetime); EditorFactory.getInstance().releaseEditor(editor)

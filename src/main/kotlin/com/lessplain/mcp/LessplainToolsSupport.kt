@@ -23,19 +23,25 @@ abstract class LessplainToolsSupport : McpToolset {
     protected suspend fun project() = requireNotNull(currentCoroutineContext().projectOrNull) { "没有活动项目" }
     protected suspend fun tutorial() = project().getService(TutorialService::class.java)
     protected suspend fun graph() = project().getService(UnderstandingService::class.java)
-    protected suspend fun writeResult(operation: String, arguments: Any, useTutorialReceipt: Boolean = true, action: suspend () -> Any?): McpToolCallResult {
+    protected suspend fun writeResult(operation: String, arguments: Any, useTutorialReceipt: Boolean = true, targetId: String? = null, action: suspend (String) -> Any?): McpToolCallResult {
         // 图库拥有事务内回执和删除墓碑，不能由教程缓存绕过它们。
-        if (!useTutorialReceipt) return durableResult(action)
+        if (!useTutorialReceipt) return durableResult { action("") }
         return response(resultEnvelope {
             val store = tutorial().store
             val key = com.lessplain.storage.sha256(gson.toJson(listOf(operation, arguments)))
-            store.toolReceipt(key)?.let { return@resultEnvelope Json.parseToJsonElement(it) as JsonObject }
-            val value = action()
+            store.registerToolWrite(key, targetId)
+            store.toolReceipt(key)?.let {
+                store.flush()
+                val reply = store.toolReceipt(key) ?: throw TutorialProblem("NOT_FOUND", "id", "写入结果已被删除")
+                return@resultEnvelope Json.parseToJsonElement(reply) as JsonObject
+            }
+            val value = action(key)
             store.flush()
             val saved = success(value)
             store.saveToolReceipt(key, saved.toString())
             store.flush()
-            saved
+            val reply = store.toolReceipt(key) ?: throw TutorialProblem("NOT_FOUND", "id", "写入结果已被删除，无法完成答复")
+            Json.parseToJsonElement(reply) as JsonObject
         })
     }
     /** 冻结来源或上下文的读取也必须在成功返回 ID 前落盘；反馈消费独立使用 SQLite。 */

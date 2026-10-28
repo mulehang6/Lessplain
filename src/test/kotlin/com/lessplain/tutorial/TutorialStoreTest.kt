@@ -120,7 +120,7 @@ class TutorialStoreTest {
             assertEquals("NOT_FOUND", assertFailsWith<TutorialProblem> { store.context("ctx_question") }.code)
             assertEquals("NOT_FOUND", assertFailsWith<TutorialProblem> { store.updateAnnotation(question.id) { it.copy(answer = "迟到的回答") } }.code)
             assertEquals("NOT_FOUND", assertFailsWith<TutorialProblem> { store.createAnnotation(question.copy(id = "q_late", parentId = question.id)) }.code)
-            store.saveToolReceipt("late_answer", reply)
+            assertEquals("NOT_FOUND", assertFailsWith<TutorialProblem> { store.saveToolReceipt("late_answer", reply) }.code)
             assertNull(store.toolReceipt("late_answer"))
             assertEquals(record, store.record(record.id))
         }

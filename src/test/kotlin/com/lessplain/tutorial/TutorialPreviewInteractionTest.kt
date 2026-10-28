@@ -18,36 +18,56 @@ import javax.swing.JTextPane
 import kotlin.test.*
 
 class TutorialPreviewInteractionTest {
-    @Test fun `tab actions use platform icons and ordinary text wheel reaches the real scroll container`() = fixture { service ->
-        val record = service.create("ctx_interaction", "页面", (1..100).joinToString("\n\n") { "第${it}段 中文正文，让滚轮滚动整篇教程。" }, TutorialResourceState())
-        val fileEditor = TutorialEditorProvider().createEditor(service.project, TutorialVirtualFile(record.id, record.title))
-        val view = fileEditor.component as TutorialEditorView
-        try {
-            val actions = assertNotNull(fileEditor.tabActions).getChildren(null)
-            assertEquals(listOf(AllIcons.General.LayoutEditorOnly, AllIcons.General.LayoutEditorPreview, AllIcons.General.LayoutPreviewOnly), actions.map { it.templatePresentation.icon })
-            actions.forEachIndexed { index, action ->
-                val event = AnActionEvent.createFromAnAction(action, null, "LessplainTest", DataContext.EMPTY_CONTEXT)
-                (action as ToggleAction).setSelected(event, true)
-                assertEquals(listOf(TutorialDisplayMode.EDIT, TutorialDisplayMode.SPLIT, TutorialDisplayMode.PREVIEW)[index], view.mode)
-            }
-            view.setSize(900, 600)
-            view.addNotify() // 只创建轻量 peer，不创建或显示 Window，覆盖 AWT 向祖先重新派发的真实路径。
-            repeat(3) { layout(view) }
-            view.preview.setSize(view.previewScroll.viewport.extentSize.width, view.preview.preferredSize.height)
-            repeat(2) { layout(view) }
-            assertTrue(view.preview.isDisplayable)
-            val scroll = view.previewScroll.verticalScrollBar
-            val before = scroll.value
-            val ordinary = wheel(view.preview, 1)
-            view.preview.dispatchEvent(ordinary)
-            assertTrue(scroll.value > before, "正文滚动失败：before=$before after=${scroll.value} max=${scroll.maximum} extent=${scroll.visibleAmount} pane=${view.preview.size} viewport=${view.previewScroll.viewport.extentSize} textListeners=${view.preview.mouseWheelListeners.map { it.javaClass.name }} scrollUI=${view.previewScroll.ui.javaClass.name} scrollListeners=${view.previewScroll.mouseWheelListeners.map { it.javaClass.name }} consumed=${ordinary.isConsumed}")
-            val position = scroll.value
-            val size = view.editor.colorsScheme.editorFontSize
-            view.preview.dispatchEvent(wheel(view.preview, -1, InputEvent.CTRL_DOWN_MASK))
-            assertEquals(size + 1, view.editor.colorsScheme.editorFontSize)
-            assertEquals(position, scroll.value)
-            assertEquals(1, view.componentCount, "正文上方不再存在额外按钮条")
-        } finally { view.removeNotify(); fileEditor.dispose() }
+    @Test fun `tab actions use platform icons and ordinary text wheel reaches the real scroll container`() {
+        TutorialMcpFixture("LessplainPreviewWheel").use { fixture ->
+            var fileEditor: com.intellij.openapi.fileEditor.FileEditor? = null
+            var view: TutorialEditorView? = null
+            try {
+                fixture.onEdt { uiRead {
+                    val service = fixture.tutorials
+                    service.store.saveContext(TutorialContext("ctx_interaction", "测试", emptyList()))
+                    val record = service.create("ctx_interaction", "页面", (1..100).joinToString("\n\n") { "第${it}段 中文正文，让滚轮滚动整篇教程。" }, TutorialResourceState())
+                    val opened = TutorialEditorProvider().createEditor(service.project, TutorialVirtualFile(record.id, record.title))
+                    fileEditor = opened
+                    val current = opened.component as TutorialEditorView
+                    view = current
+                    val actions = assertNotNull(opened.tabActions).getChildren(null)
+                    assertEquals(listOf(AllIcons.General.LayoutEditorOnly, AllIcons.General.LayoutEditorPreview, AllIcons.General.LayoutPreviewOnly), actions.map { it.templatePresentation.icon })
+                    actions.forEachIndexed { index, action ->
+                        val event = AnActionEvent.createEvent(action, DataContext.EMPTY_CONTEXT, null, "LessplainTest", com.intellij.openapi.actionSystem.ActionUiKind.NONE, null)
+                        (action as ToggleAction).setSelected(event, true)
+                        assertEquals(listOf(TutorialDisplayMode.EDIT, TutorialDisplayMode.SPLIT, TutorialDisplayMode.PREVIEW)[index], current.mode)
+                    }
+                    current.setSize(900, 600)
+                    current.addNotify() // 只创建轻量 peer，不创建或显示 Window，覆盖 AWT 向祖先重新派发的真实路径。
+                    repeat(3) { layout(current) }
+                    current.preview.setSize(current.previewScroll.viewport.extentSize.width, current.preview.preferredSize.height)
+                    repeat(2) { layout(current) }
+                    assertTrue(current.preview.isDisplayable)
+                } }
+                val scrolled = java.util.concurrent.CountDownLatch(1)
+                var before = 0
+                fixture.onEdt { uiRead {
+                    val current = requireNotNull(view)
+                    val bar = current.previewScroll.verticalScrollBar
+                    before = bar.value
+                    bar.addAdjustmentListener { if (bar.value > before) scrolled.countDown() }
+                    current.preview.dispatchEvent(wheel(current.preview, 1))
+                } }
+                assertTrue(scrolled.await(5, java.util.concurrent.TimeUnit.SECONDS), "正文滚轮应驱动真实滚动容器，包括平台异步动画")
+                fixture.onEdt { uiRead {
+                    val current = requireNotNull(view)
+                    val scroll = current.previewScroll.verticalScrollBar
+                    assertTrue(scroll.value > before)
+                    val position = scroll.value
+                    val size = current.editor.colorsScheme.editorFontSize
+                    current.preview.dispatchEvent(wheel(current.preview, -1, InputEvent.CTRL_DOWN_MASK))
+                    assertEquals(size + 1, current.editor.colorsScheme.editorFontSize)
+                    assertEquals(position, scroll.value)
+                    assertEquals(1, current.componentCount, "正文上方不再存在额外按钮条")
+                } }
+            } finally { fixture.onEdt { view?.removeNotify(); fileEditor?.dispose() } }
+        }
     }
 
     @Test fun `syntax changes do not split background paint and wrapping creates one shape per visual row`() = fixture { service ->
@@ -77,6 +97,25 @@ class TutorialPreviewInteractionTest {
         } finally { view.close() }
     }
 
+    @Test fun `links require a real text hit and never open while text is selected`() = fixture { service ->
+        val href = "https://example.invalid/details"
+        val record = service.create("ctx_interaction", "链接", "[查看说明]($href)", TutorialResourceState())
+        val view = TutorialEditorView(service.project, record.id)
+        try {
+            val preview = view.preview
+            preview.setSize(900, 400)
+            val first = assertNotNull(preview.modelToView2D(0)).bounds
+            val inside = java.awt.Point(first.x + 1, first.y + first.height / 2)
+            assertEquals(href, preview.linkAt(inside))
+            val end = assertNotNull(preview.modelToView2D(preview.document.length)).bounds
+            val whitespace = java.awt.Point(end.x + 80, first.y + first.height / 2)
+            assertNull(preview.hoverSourceAt(whitespace))
+            assertNull(preview.linkAt(whitespace))
+            preview.select(0, 2)
+            assertNull(preview.linkAt(inside))
+        } finally { view.close() }
+    }
+
     private fun wheel(component: Component, rotation: Int, modifiers: Int = 0) = MouseWheelEvent(component,
         MouseWheelEvent.MOUSE_WHEEL, 0, modifiers, 50, 20, 50, 20, 0, false, MouseWheelEvent.WHEEL_UNIT_SCROLL, 3, rotation)
     private fun layout(component: Component) {
@@ -89,10 +128,7 @@ class TutorialPreviewInteractionTest {
             ApplicationManager.getApplication().invokeAndWait { uiRead {
                 val service = fixture.project.getService(TutorialService::class.java)
                 service.store.saveContext(TutorialContext("ctx_interaction", "测试", emptyList()))
-                val settings = com.intellij.ide.ui.UISettings.getInstance()
-                val animated = settings.animatedScrolling
-                settings.getState().animatedScrolling = false // 测试 JVM 关闭延迟插值，确保此 EDT 内可检查真实原生滚动结果。
-                try { test(service) } finally { settings.getState().animatedScrolling = animated }
+                test(service)
             } }
         } finally { ApplicationManager.getApplication().invokeAndWait { fixture.tearDown() } }
     }

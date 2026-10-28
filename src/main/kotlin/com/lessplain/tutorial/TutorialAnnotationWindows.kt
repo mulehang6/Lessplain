@@ -49,7 +49,11 @@ internal class TutorialAnnotationWindows(
             .setBelongsToGlobalPopupStack(false).setMayBeParent(true)
             .setMinSize(JBUI.size(380, 260)).setDimensionServiceKey(project, "Lessplain.Annotation.${initial.kind}", false)
             .createPopup()
-        private val subscription = service.onChanged { id -> if (id == tutorialId && !closed) panel.refresh(false) }
+        private val subscription = service.onChanged { id ->
+            if (!closed) {
+                if (id == tutorialId) panel.refresh(false) else panel.refreshMaterialReference(id)
+            }
+        }
 
         init {
             panel.registerKeyboardAction({ popup.cancel() }, javax.swing.KeyStroke.getKeyStroke("ESCAPE"), javax.swing.JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
