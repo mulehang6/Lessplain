@@ -4,10 +4,10 @@
 
 ## 首次创建
 
-1. context_read 或 context_capture 获取 contextId 和 sourceId。
+1. lessplain_context_read 或 lessplain_context_capture 获取 contextId 和 sourceId。
 2. 读源码，围绕用户当前知识缺口组织文字、代码、表格和必要插图。
-3. tutorial_create 一次提交 title、markdown、diagrams、simulations。整个提交先校验。
-4. 核对返回 ID 和 revision，需要展示时 reveal。
+3. lessplain_tutorial_create 一次提交 title、markdown、diagrams、simulations。整个提交先校验。
+4. 核对返回 ID 和 revision，需要展示时 lessplain_reveal。
 
 Markdown 资源引用：
 
@@ -19,7 +19,7 @@ diagram/simulation 的 ID 只在所属教程内有效。引用必须有对应资
 
 ## 持续编辑
 
-读取教程后，tutorial_edit 使用 expectedRevision 与 edits:[{find,replace}]。每个 find 必须唯一，顺序作用于上一个替换结果，不做模糊替换。
+读取教程后，lessplain_tutorial_edit 使用 expectedRevision 与 edits:[{find,replace}]。每个 find 必须唯一，顺序作用于上一个替换结果，不做模糊替换。
 
 图和模拟用专门工具完整更新，资源版本与正文版本独立。图节点的人工位置按 ID 保留。替换模拟后播放回初始状态。正文删掉引用不会自动删除资源或用户批注。
 
@@ -35,6 +35,6 @@ diagram/simulation 的 ID 只在所属教程内有效。引用必须有对应资
 
 笔记浅黄、追问浅蓝，同时覆盖的文字浅紫。浮窗四个图标用于上一条、下一条、新增和删除；窗口右上角关闭只隐藏窗口，批注索引可重新打开。用户确认删除追问时，该条回答和后续追问一并删除，引用的独立材料保留。
 
-Agent 用 annotations_list 读取，再 question_answer。需要新产物时先创建，再把 materialId 附在答复里。不要用新教程冒充已答复旧问题。
+Agent 用 lessplain_annotations_list 读取，再 lessplain_question_answer。需要新产物时先创建，再把 materialId 附在答复里。不要用新教程冒充已答复旧问题。
 
 调用示例见 [protocol.md](protocol.md)。

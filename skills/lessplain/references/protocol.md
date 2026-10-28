@@ -100,4 +100,6 @@ lessplain_feedback_consume
 
 REVISION_CONFLICT 附 currentRevision；重新读取后按新版本提交。TEXT_NOT_FOUND / AMBIGUOUS_TEXT 要求修正 find。AMBIGUOUS_SOURCE / AMBIGUOUS_FOCUS 要求提供唯一源码上下文，候选行在错误消息中。RESOURCE_NOT_FOUND、INVALID_LINE 分别定位资源引用和模拟行号错误。SOURCE_STALE 保留材料，不导航到同名词。
 
+DELETED 表示教程已由用户删除。停止对该教程及其批注写入，重新查询现有材料；旧创建请求重试仍返回 DELETED，不会复活原教程。只有用户明确要求重新生成时，才捕获新的上下文创建新教程。DELETING 表示正在删除，等待后重新读取状态。PERSISTENCE_FAILED 表示本次写入尚未可靠落盘，不应视为保存成功。保留原参数重试；插件会重试失败的存储写入，正文、资源、批注位置及所属写入回执作为同一快照保存。删除登记失败时仍可在界面重试；CLEANUP_PENDING 表示删除已生效，文件清理将在重试或重开项目时继续。删除在界面右键菜单执行，MCP 没有删除工具。
+
 列表支持 limit=1..100、cursor。普通读取不会清理笔记、问题或反馈。

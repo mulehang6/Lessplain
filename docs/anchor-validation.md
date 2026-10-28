@@ -4,11 +4,11 @@
 
 ## 提交与保存
 
-公开接口采用 [15 个结构化工具](../skills/lessplain/references/protocol.md)。Agent 用 `context_capture` 或 `source_resolve` 取得 `sourceId`；提交图时插件按当前 IDE 文档校验引用，包含未保存编辑。节点、证据和证据依赖的源码引用都必须有效；节点也可通过已有 `evidenceIds` 定位。
+公开接口采用 [15 个结构化工具](../skills/lessplain/references/protocol.md)。Agent 用 `lessplain_context_capture` 或 `lessplain_source_resolve` 取得 `sourceId`；提交图时插件按当前 IDE 文档校验引用，包含未保存编辑。节点、证据和证据依赖的源码引用都必须有效；节点也可通过已有 `evidenceIds` 定位。
 
 - 文档 SHA-256 和精确范围由插件解析，Agent 不提交字符偏移或文件哈希。内部锚点的 `lineHint` 保存实际一基行号。
 - 路径必须在项目内，片段必须唯一，符号必须匹配。校验失败一次列出引用、路径和原因，不创建图、不修订原图、不删除待答注释。
-- 图响应中的节点、证据和依赖使用 `sourceId`，可读取来源或通过 `reveal` 返回精确范围。校验行号保存在内部锚点快照中。
+- 图响应中的节点、证据和依赖使用 `sourceId`，可读取来源或通过 `lessplain_reveal` 返回精确范围。校验行号保存在内部锚点快照中。
 - 工具根据调用内容生成稳定请求标识。成功重试先重放首次保存的结果，再考虑版本与源码校验。源码读取在 SQLite 写事务外，写事务内再次查重并复核父记录和冻结来源。
 
 这项校验只验证源码引用，不证明 Agent 对调用条件、业务职责或修改动机的解释正确。
