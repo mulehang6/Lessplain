@@ -8,6 +8,7 @@ import javax.swing.KeyStroke
 /** 画布获得键盘焦点时，也能执行悬停动作。 */
 internal object DiagramKeyboardActions {
     fun move(diagram: UnderstandingDiagram, delta: Int) {
+        diagram.overlays.titles.focused = null
         if (diagram.routeNavigation?.moveCandidate(delta) == true) return
         val ids = diagram.layout.nodes.keys.toList()
         if (ids.isEmpty()) return

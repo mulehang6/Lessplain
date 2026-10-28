@@ -33,6 +33,12 @@ internal class DiagramHeader(title: String) : JPanel(null), AutoCloseable {
         isOpaque = false
         isVisible = false
     }
+    internal val questionButton = DiagramIconButton(com.lessplain.ui.QuestionBubbleIcon).apply {
+        setToolTipText(HtmlChunk.text("查看原始提问")); accessibleContext.accessibleName = "查看原始提问"
+        border = JBUI.Borders.empty(2); isContentAreaFilled = false; isBorderPainted = false; isOpaque = false; isVisible = false
+    }
+    private var question: (() -> Unit)? = null
+    private val questionAction = java.awt.event.ActionListener { question?.invoke() }
     private val displayTitle = title.replace(Regex("\\s+"), " ")
     private var edit: (() -> Unit)? = null
     private var hovered = false
@@ -47,16 +53,16 @@ internal class DiagramHeader(title: String) : JPanel(null), AutoCloseable {
             refreshEdit()
         }
         override fun mousePressed(e: MouseEvent) {
-            if (e.button == MouseEvent.BUTTON1 && e.component != editButton) requestFocusInWindow()
+            if (e.button == MouseEvent.BUTTON1 && e.component != editButton && e.component != questionButton) requestFocusInWindow()
         }
         override fun mouseClicked(e: MouseEvent) {
-            if (e.button == MouseEvent.BUTTON1 && e.clickCount == 2 && e.component != editButton) edit?.invoke()
+            if (e.button == MouseEvent.BUTTON1 && e.clickCount == 2 && e.component != editButton && e.component != questionButton) edit?.invoke()
         }
     }
     private val focus = object : FocusAdapter() {
         override fun focusGained(e: FocusEvent) { focusWithin = true; refreshEdit() }
         override fun focusLost(e: FocusEvent) {
-            focusWithin = e.oppositeComponent == this@DiagramHeader || e.oppositeComponent == editButton
+            focusWithin = e.oppositeComponent == this@DiagramHeader || e.oppositeComponent == editButton || e.oppositeComponent == questionButton
             refreshEdit()
         }
     }
@@ -69,9 +75,11 @@ internal class DiagramHeader(title: String) : JPanel(null), AutoCloseable {
         getAccessibleContext().accessibleName = title
         getAccessibleContext().accessibleDescription = "Enter 或 F2 编辑标题"
         add(label)
-        add(editButton)
+        add(editButton); add(questionButton)
+        questionButton.addActionListener(questionAction)
+        questionButton.addFocusListener(focus)
         editButton.addActionListener(editAction)
-        listOf(this, label, editButton).forEach { it.addMouseListener(pointer) }
+        listOf(this, label, editButton, questionButton).forEach { it.addMouseListener(pointer) }
         addFocusListener(focus)
         editButton.addFocusListener(focus)
         for (key in listOf("ENTER", "F2")) getInputMap(WHEN_FOCUSED).put(KeyStroke.getKeyStroke(key), "edit")
@@ -105,6 +113,11 @@ internal class DiagramHeader(title: String) : JPanel(null), AutoCloseable {
         }
     }
 
+    fun bindQuestion(action: (() -> Unit)?): AutoCloseable {
+        question = action; refreshEdit(); parent?.revalidate()
+        return AutoCloseable { if (question === action) { question = null; refreshEdit(); parent?.revalidate() } }
+    }
+
     /** 与首行控件共用空间，并预留编辑入口，悬停时不移动文字。 */
     fun arrange(availableWidth: Int, controls: Rectangle, rowHeight: Int) {
         val gap = JBUI.scale(8)
@@ -112,8 +125,9 @@ internal class DiagramHeader(title: String) : JPanel(null), AutoCloseable {
         val start = (controls.x + controls.width + gap).coerceAtMost(availableWidth)
         val available = (availableWidth - start - JBUI.scale(12)).coerceAtLeast(0)
         val metrics = label.getFontMetrics(label.font)
-        hasIconSpace = edit != null && available >= metrics.stringWidth("…") + gap + iconSize
-        val reserve = if (hasIconSpace) gap + iconSize else 0
+        val buttons = listOfNotNull(questionButton.takeIf { question != null }, editButton.takeIf { edit != null })
+        hasIconSpace = buttons.isNotEmpty() && available >= metrics.stringWidth("…") + (gap + iconSize) * buttons.size
+        val reserve = if (hasIconSpace) (gap + iconSize) * buttons.size else 0
         val shown = elide(displayTitle, (available - reserve).coerceAtLeast(0))
         val textWidth = metrics.stringWidth(shown)
         val contentHeight = maxOf(metrics.height, if (hasIconSpace) iconSize else 0)
@@ -121,7 +135,7 @@ internal class DiagramHeader(title: String) : JPanel(null), AutoCloseable {
         setBounds(start, controls.y + (rowHeight - h) / 2, textWidth + reserve, h)
         label.text = shown
         label.setBounds(0, (h - metrics.height) / 2, textWidth, metrics.height)
-        editButton.setBounds(textWidth + gap, (h - iconSize) / 2, iconSize, iconSize)
+        buttons.forEachIndexed { index, button -> button.setBounds(textWidth + gap + index * (gap + iconSize), (h - iconSize) / 2, iconSize, iconSize) }
         isVisible = shown.isNotEmpty()
         refreshEdit()
     }
@@ -140,6 +154,8 @@ internal class DiagramHeader(title: String) : JPanel(null), AutoCloseable {
     }
 
     private fun refreshEdit() {
+        isFocusable = !closed && (edit != null || question != null)
+        questionButton.isVisible = !closed && question != null && hasIconSpace && (hovered || focusWithin)
         editButton.isVisible = !closed && edit != null && hasIconSpace && (hovered || focusWithin)
         repaint()
     }
@@ -147,14 +163,15 @@ internal class DiagramHeader(title: String) : JPanel(null), AutoCloseable {
     override fun close() {
         if (closed) return
         closed = true
-        edit = null
+        edit = null; question = null
         hovered = false
         focusWithin = false
         isFocusable = false
         refreshEdit()
-        listOf(this, label, editButton).forEach { it.removeMouseListener(pointer) }
+        listOf(this, label, editButton, questionButton).forEach { it.removeMouseListener(pointer) }
         removeFocusListener(focus)
         editButton.removeFocusListener(focus)
+        questionButton.removeActionListener(questionAction); questionButton.removeFocusListener(focus)
         editButton.removeActionListener(editAction)
         getInputMap(WHEN_FOCUSED).clear()
         actionMap.clear()

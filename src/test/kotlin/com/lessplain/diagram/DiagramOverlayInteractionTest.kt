@@ -166,6 +166,31 @@ class DiagramOverlayInteractionTest {
         assertEquals(2, edits)
     }
 
+    @Test fun `question glyph stays within hovered title and targets exact cluster without editing`() = withDiagram { diagram ->
+        val input = diagram.mouseListeners.filterIsInstance<DiagramMouseInteraction>().single()
+        diagram.questionClusterIds = setOf("first")
+        var opened = ""
+        var edits = 0
+        diagram.originCallbacks += { opened = it }
+        diagram.onClusterTitleEdit { edits++ }
+        val cluster = diagram.layout.clusters.first()
+        val title = DiagramClusterText.titleBounds(cluster)
+        val question = DiagramClusterText.questionBounds(cluster)
+        assertTrue(!question.intersects(DiagramClusterText.editBounds(cluster)))
+        input.mouseMoved(event(diagram, screen(diagram, title.centerX, title.centerY), MouseEvent.MOUSE_MOVED))
+        val point = screen(diagram, question.centerX, question.centerY)
+        input.mouseMoved(event(diagram, point, MouseEvent.MOUSE_MOVED))
+        assertEquals("first", diagram.clusterQuestionAt(point))
+        input.mousePressed(event(diagram, point, MouseEvent.MOUSE_PRESSED))
+        input.mouseReleased(event(diagram, point, MouseEvent.MOUSE_RELEASED))
+        assertEquals("first", opened); assertEquals(0, edits)
+        diagram.actionMap["focus-group-title"].actionPerformed(java.awt.event.ActionEvent(diagram, 0, "focus"))
+        assertEquals("first", diagram.overlays.titles.focused)
+        opened = ""
+        diagram.actionMap["open-questions"].actionPerformed(java.awt.event.ActionEvent(diagram, 0, "open"))
+        assertEquals("first", opened)
+    }
+
     @Test fun `cluster navigation remembers target preserves zoom and all graph elements`() = withDiagram { diagram ->
         diagram.zoom = 1.3
         val nodeIds = diagram.layout.nodes.keys.toSet()

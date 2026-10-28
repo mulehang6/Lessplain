@@ -26,37 +26,18 @@ internal class IncomingRouteResolver(graph: UnderstandingGraph, scopes: Map<Stri
         }
     }
 
-    fun isEntry(nodeId: String): Boolean = nodeId in entries
     fun outgoing(nodeId: String): List<GraphEdge> = outgoing[nodeId].orEmpty()
     fun incoming(nodeId: String): List<GraphEdge> = incoming[nodeId].orEmpty()
 
     fun begin(
         target: String,
         remembered: Map<String, String>,
-        prefix: List<String> = emptyList(),
-        prefixStart: String? = null,
         fixedSuffix: List<String> = emptyList(),
         knownStart: String? = null,
     ): Fill {
-        val prefixNodes = prefixStart?.let { start -> listOf(start) + prefix.map { edges.getValue(it).to } }.orEmpty()
-        val anchorIndex = prefixNodes.indices.reversed().firstOrNull { index ->
-            val blocked = prefixNodes.take(index).toSet() - prefixNodes[index]
-            target in reachable(setOf(prefixNodes[index]), blocked)
-        }
-        val anchor = anchorIndex?.let(prefixNodes::get)
-        val keptPrefix = anchorIndex?.let { prefix.take(it) }.orEmpty()
-        val origins = anchor?.let(::setOf) ?: entries.filterTo(mutableSetOf()) { target in reachable(setOf(it), emptySet()) }
+        val origins = entries.filterTo(mutableSetOf()) { target in reachable(setOf(it), emptySet()) }
         val fallback = knownStart?.takeIf { target in reachable(setOf(it), emptySet()) }
-        return Fill(target, origins.ifEmpty { fallback?.let(::setOf).orEmpty() }, keptPrefix, anchor,
-            fixedSuffix, remembered, prefixNodes.take(anchorIndex ?: 0).toSet() - setOfNotNull(anchor))
-    }
-
-    fun previousChoices(nodeId: String): List<GraphEdge> {
-        if (isEntry(nodeId)) return emptyList()
-        val reachable = reachable(entries, setOf(nodeId))
-        val candidates = incoming(nodeId).filter { it.from in reachable }
-        // 用户主动后退可以探索孤立循环，自动补全不会增加一轮循环。
-        return candidates.ifEmpty { incoming(nodeId) }
+        return Fill(target, origins.ifEmpty { fallback?.let(::setOf).orEmpty() }, fixedSuffix, remembered)
     }
 
     private fun reachable(origins: Set<String>, blocked: Set<String>): Set<String> =
@@ -76,11 +57,8 @@ internal class IncomingRouteResolver(graph: UnderstandingGraph, scopes: Map<Stri
     inner class Fill internal constructor(
         val target: String,
         private val origins: Set<String>,
-        private val prefix: List<String>,
-        private val anchor: String?,
         fixedSuffix: List<String>,
         private val remembered: Map<String, String>,
-        private val prefixBlocked: Set<String>,
     ) {
         private val reversed = fixedSuffix.asReversed().toMutableList()
         private var cursor = fixedSuffix.firstOrNull()?.let { edges.getValue(it).from } ?: target
@@ -92,7 +70,7 @@ internal class IncomingRouteResolver(graph: UnderstandingGraph, scopes: Map<Stri
             private set
         var reason: String? = null
             private set
-        val path: List<String> get() = (if (complete && anchor != null) prefix else emptyList()) + reversed.asReversed()
+        val path: List<String> get() = reversed.asReversed().toList()
 
         fun advance(): Fill {
             choices = emptyList()
@@ -101,7 +79,7 @@ internal class IncomingRouteResolver(graph: UnderstandingGraph, scopes: Map<Stri
                     complete = true
                     return this
                 }
-                if (reversed.size + prefix.size >= 100) {
+                if (reversed.size >= 100) {
                     reason = "来路超过 100 步，当前显示局部路径"
                     return this
                 }
@@ -109,7 +87,7 @@ internal class IncomingRouteResolver(graph: UnderstandingGraph, scopes: Map<Stri
                     reason = "没有可识别的入口，当前从此节点局部探索"
                     return this
                 }
-                val reachable = reachable(origins, visited + prefixBlocked)
+                val reachable = reachable(origins, visited)
                 val viable = incoming(cursor).filter { it.from in reachable && it.from !in visited }
                 if (viable.isEmpty()) {
                     reason = "无法连接入口，当前显示局部路径"

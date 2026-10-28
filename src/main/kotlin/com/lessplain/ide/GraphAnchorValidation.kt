@@ -4,7 +4,6 @@ import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.psi.PsiDocumentManager
-import com.lessplain.model.SourceAnchor
 import com.lessplain.model.UnderstandingGraph
 import com.lessplain.model.UnderstandingInputException
 import com.lessplain.model.mapAnchors

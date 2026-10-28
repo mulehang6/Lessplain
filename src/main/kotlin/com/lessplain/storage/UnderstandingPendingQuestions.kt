@@ -31,15 +31,3 @@ fun UnderstandingRepository.pendingQuestionsForNode(recordId: String, nodeId: St
         }
         result
     }
-
-fun UnderstandingRepository.pendingQuestions(): List<UnderstandingQuestion> = connect().use { db ->
-    val result = mutableListOf<UnderstandingQuestion>()
-    db.prepareStatement("SELECT data, owner_record_id, status FROM questions WHERE status='pending' ORDER BY rowid").use { statement ->
-        statement.executeQuery().use { rows ->
-            while (rows.next()) result += gson.fromJson(rows.getString(1), UnderstandingQuestion::class.java).copy(
-                ownerRecordId = rows.getString(2), status = rows.getString(3),
-            )
-        }
-    }
-    result
-}

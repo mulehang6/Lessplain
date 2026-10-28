@@ -27,7 +27,7 @@ internal object DiagramClusterText {
     fun measure(title: String, width: Double): ClusterTextLayout {
         val graphics = BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB).createGraphics()
         try {
-            val availableWidth = min((width - HORIZONTAL_PADDING * 2 - 28).toInt(), MAX_TEXT_WIDTH)
+            val availableWidth = min((width - HORIZONTAL_PADDING * 2 - 56).toInt(), MAX_TEXT_WIDTH)
                 .coerceAtLeast(1)
             val titleMetrics = graphics.getFontMetrics(titleFont)
             val titleLines = wrap(title, availableWidth, titleMetrics::stringWidth)
@@ -50,7 +50,9 @@ internal object DiagramClusterText {
         return Rectangle2D.Double(title.maxX - 24, title.y - 3, 24.0, 24.0)
     }
 
-    fun paint(graphics: Graphics2D, cluster: PlacedCluster, state: DiagramTitleState = DiagramTitleState()) {
+    fun questionBounds(cluster: PlacedCluster): Rectangle2D.Double = editBounds(cluster).let { Rectangle2D.Double(it.x - 28, it.y, 24.0, 24.0) }
+
+    fun paint(graphics: Graphics2D, cluster: PlacedCluster, state: DiagramTitleState = DiagramTitleState(), hasQuestion: Boolean = false) {
         val bounds = titleBounds(cluster)
         if (cluster.id == state.hovered || cluster.id == state.selected || cluster.id == state.pressed) {
             val active = cluster.id == state.pressed || cluster.id == state.selected
@@ -64,11 +66,15 @@ internal object DiagramClusterText {
         graphics.color = UnderstandingUiStyle.foreground
         val titleAscent = graphics.fontMetrics.ascent
         text.titleLines.forEach { line ->
-            val x = cluster.bounds.centerX - 14 - graphics.fontMetrics.stringWidth(line) / 2.0
+            val x = cluster.bounds.centerX - 28 - graphics.fontMetrics.stringWidth(line) / 2.0
             graphics.drawString(line, x.toFloat(), (baseline + titleAscent).toFloat())
             baseline += text.titleLineHeight
         }
-        if (cluster.id == state.hovered) {
+        if (cluster.id == state.hovered || cluster.id == state.focused) {
+            if (hasQuestion) {
+                val bounds = questionBounds(cluster)
+                com.lessplain.ui.QuestionBubbleIcon.paintIcon(null, graphics, bounds.x.toInt() + 4, bounds.y.toInt() + 4)
+            }
             val edit = editBounds(cluster)
             val x = edit.x.toInt() + 6
             val y = edit.y.toInt() + 6

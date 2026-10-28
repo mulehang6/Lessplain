@@ -28,8 +28,12 @@ internal class CanvasEditorPopup(
     selectionPreview: SelectedCodePreview? = null,
     saveDispatch: BackgroundReadDispatch<Unit>? = null,
     onSaved: () -> Unit = {},
+    anchorBounds: Rectangle? = null,
 ) : AutoCloseable {
     private val width = JBUI.scale(size.width).coerceAtLeast(1)
+    private var initialAnchor = anchorBounds?.let { bounds ->
+        Rectangle(bounds).apply { location = Point(bounds.location).also { SwingUtilities.convertPointToScreen(it, owner) } }
+    }
     private var closed = false
     private var resizeQueued = false
     private val editor = CanvasTextEditor(
@@ -91,7 +95,7 @@ internal class CanvasEditorPopup(
     private fun resizeToContent() {
         if (closed || popup.isDisposed || !popup.isVisible) return
         val location = nativePopupLocation(popup)
-        val screen = usableScreenBoundsAt(location)
+        val screen = usableScreenBoundsAt(initialAnchor?.location ?: location)
         val currentSize = popup.size
         val contentSize = editor.size.takeIf { it.width > 0 && it.height > 0 } ?: editor.preferredSize
         val popupChromeWidth = (currentSize.width - contentSize.width).coerceAtLeast(0)
@@ -105,8 +109,10 @@ internal class CanvasEditorPopup(
         popup.content.preferredSize = null
         popup.pack(true, true)
 
-        val bounds = clampPopupBounds(location, popup.size, screen)
+        val bounds = initialAnchor?.let { popupNearCodeBounds(it, popup.size, screen, JBUI.scale(8)) }
+            ?: clampPopupBounds(location, popup.size, screen)
         setNativePopupBounds(popup, bounds)
+        initialAnchor = null // 后续输入扩展及用户拖动继续保留当前窗口位置。
     }
 
     private fun release() {
@@ -147,4 +153,19 @@ private fun GraphicsConfiguration.usableBounds(): Rectangle {
     bounds.width = (bounds.width - insets.left - insets.right).coerceAtLeast(1)
     bounds.height = (bounds.height - insets.top - insets.bottom).coerceAtLeast(1)
     return bounds
+}
+
+/** 优先紧邻代码下方；空间不足则放上方，并限制到选区所在显示器的可用区域。 */
+internal fun popupNearCodeBounds(anchor: Rectangle, size: Dimension, screen: Rectangle, gap: Int): Rectangle {
+    val height = size.height.coerceIn(1, screen.height.coerceAtLeast(1))
+    val below = anchor.y + anchor.height + gap
+    val above = anchor.y - gap - height
+    val bottom = screen.y + screen.height
+    val y = when {
+        below + height <= bottom -> below
+        above >= screen.y -> above
+        bottom - anchor.y - anchor.height >= anchor.y - screen.y -> below
+        else -> above
+    }
+    return clampPopupBounds(Point(anchor.x, y), size, screen)
 }

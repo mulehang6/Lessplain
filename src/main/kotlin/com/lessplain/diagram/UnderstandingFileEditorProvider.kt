@@ -30,7 +30,7 @@ import javax.swing.JPanel
 
 /** 标签页身份独立于记录版本；修订只更新展示元数据，不切断返回层级。 */
 class UnderstandingVirtualFile(record: UnderstandingRecord, val questionNodeId: String? = null) :
-    LightVirtualFile(understandingTabTitle(record, questionNodeId), PlainTextFileType.INSTANCE, "") {
+    LightVirtualFile(understandingFileName(record, questionNodeId), PlainTextFileType.INSTANCE, "") {
     val recordId: String = record.id
     var revision: Int = record.revision
         private set
@@ -38,12 +38,16 @@ class UnderstandingVirtualFile(record: UnderstandingRecord, val questionNodeId: 
         private set
     var parentFile: UnderstandingVirtualFile? = null
 
+    var tabTitle: String = understandingTabTitle(record, questionNodeId)
+        private set
+
     internal fun update(record: UnderstandingRecord) {
         require(record.id == recordId)
         if (record.revision < revision) return
         revision = record.revision
         fullTitle = fullTitle(record)
-        val title = understandingTabTitle(record, questionNodeId)
+        tabTitle = understandingTabTitle(record, questionNodeId)
+        val title = understandingFileName(record, questionNodeId)
         if (name != title) rename(this, title)
     }
 
@@ -51,6 +55,14 @@ class UnderstandingVirtualFile(record: UnderstandingRecord, val questionNodeId: 
         val node = record.graph.nodes.firstOrNull { it.id == questionNodeId }?.label ?: "节点"
         "${record.displayTitle ?: record.question} / $node 的追问"
     }
+}
+
+private fun understandingFileName(record: UnderstandingRecord, nodeId: String?): String {
+    val title = if (nodeId == null) record.displayTitle ?: record.question else {
+        val node = record.graph.nodes.firstOrNull { it.id == nodeId }?.label ?: "节点"
+        "${record.displayTitle ?: record.question} / $node 的追问"
+    }
+    return title.replace(Regex("\\s+"), " ").trim().replace('/', '／').replace('\\', '＼')
 }
 
 internal fun understandingTabTitle(record: UnderstandingRecord, questionNodeId: String?): String {
@@ -127,7 +139,6 @@ internal class LoadingUnderstandingFileEditor(private val project: Project, priv
         disableNavigation = true; delegate?.disableAutomaticSourceNavigation()
     }
 
-    override fun selectNotify() { service.editorQuestionOrigins.follow(GraphLayerKey(file.recordId, file.questionNodeId)) }
 
     override fun getComponent(): JComponent = panel
     override fun getPreferredFocusedComponent(): JComponent = delegate?.preferredFocusedComponent ?: panel
@@ -228,7 +239,7 @@ private class UnderstandingFileEditor(
             loaded.onSuccess { hierarchyEntries ->
                 builder.setHierarchy(hierarchyEntries.mapIndexed { index, entry ->
                     DiagramHierarchyItem(entry.title, entry.depth, index, entry.layers == currentLayers)
-                }, showQuestions = { service.editorQuestionOrigins.show(builder, graphKey) }) { index ->
+                }) { index ->
                     hierarchyEntries.getOrNull(index)?.takeIf { it.layers != currentLayers }?.let { destination ->
                         val root = service.storage.record(rootRecordId) ?: return@let
                         var destinationFile = service.editorFile(root).apply { parentFile = null }

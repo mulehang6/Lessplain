@@ -1,5 +1,6 @@
 package com.lessplain.ide
 
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.Editor
@@ -32,8 +33,9 @@ internal class SourceInsightMarker(private val project: Project, parent: Disposa
         factory.addEditorFactoryListener(object : EditorFactoryListener {
             override fun editorCreated(event: EditorFactoryEvent) {
                 val editor = event.editor
-                SwingUtilities.invokeLater {
-                    if (!disposed && factory.getAllEditors().any { it === editor }) uiRead { target?.let { attach(editor, it) } }
+                ApplicationManager.getApplication().invokeLater {
+                    if (!disposed && !project.isDisposed && target != null && factory.getAllEditors().any { it === editor })
+                        uiRead { target?.let { attach(editor, it) } }
                 }
             }
 
@@ -105,7 +107,7 @@ internal class SourceInsightMarker(private val project: Project, parent: Disposa
     override fun dispose() {
         disposed = true
         if (SwingUtilities.isEventDispatchThread()) clear()
-        else SwingUtilities.invokeLater { clear() }
+        else ApplicationManager.getApplication().invokeLater { clear() }
     }
 }
 

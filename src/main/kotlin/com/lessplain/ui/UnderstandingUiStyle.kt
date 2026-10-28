@@ -6,7 +6,7 @@ import java.awt.Color
 import javax.swing.UIManager
 import kotlin.math.roundToInt
 
-/** 从 Jewel 的 IDE 桥所用的同一 Swing 主题中读取图与导航颜色。 */
+/** 从当前 Swing 主题读取图与导航颜色。 */
 internal object UnderstandingUiStyle {
     val NODE_ARC: Int get() = JBUI.scale(UnderstandingUiMetrics.INNER_RADIUS * 2)
     val GROUP_ARC: Int get() = JBUI.scale(UnderstandingUiMetrics.OUTER_RADIUS * 2)
@@ -31,7 +31,6 @@ internal object UnderstandingUiStyle {
     val group: Color get() = blend(canvas, surface, 0.55)
     val groupBorder: Color get() = blend(canvas, border, 0.8)
     val edge: Color get() = blend(canvas, foreground, 0.6)
-    val focusHalo: Color get() = alpha(accent, 36)
     val focusSurface: Color get() = blend(surface, accent, 0.09)
     val graphSelectionHalo: Color get() = alpha(graphSelection, 36)
     val graphSelectionSurface: Color get() = blend(surface, graphSelection, 0.09)

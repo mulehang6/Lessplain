@@ -89,10 +89,12 @@ class QuestionCanvasNavigationTest {
         assertNull(projectSourcePathToCanvas(canvas, listOf("a-read", "b-write"), firstSource,
             firstPrefix + "a-parse"))
         val explorer = StaticExplorer(canvas.record.graph, scopes = canvas.sources.mapValues { it.value.record.id })
-        explorer.selectNode(secondPrefix + "b-save")
+        explorer.jumpTo(secondPrefix + "b-save")
+        explorer.completeRoute()
         assertEquals(listOf("b-read", "b-write"),
             projectCanvasPathToSource(canvas, explorer.path, SourceNode(second, "b-save")))
-        explorer.selectNode(firstPrefix + "a-save")
+        explorer.jumpTo(firstPrefix + "a-save")
+        explorer.completeRoute()
         assertEquals(listOf("a-read", "a-write"),
             projectCanvasPathToSource(canvas, explorer.path, SourceNode(first, "a-save")))
     }

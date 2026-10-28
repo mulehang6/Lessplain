@@ -83,8 +83,10 @@ internal class DiagramMouseInteraction(
             val copyNode = diagram.copyActionAt(event.point)
             val questionNode = diagram.questionActionAt(event.point)
             val noteNode = diagram.noteActionAt(event.point)
+            val origin = diagram.clusterQuestionAt(event.point)
             val titleEdit = diagram.clusterEditAt(event.point)
-            if (titleEdit != null) diagram.titleCallbacks.toList().forEach { it(titleEdit) }
+            if (origin != null) diagram.originCallbacks.toList().forEach { it(origin) }
+            else if (titleEdit != null) diagram.titleCallbacks.toList().forEach { it(titleEdit) }
             else if (noteNode != null) {
                 if (diagram.hasNodeNote(noteNode)) {
                     diagram.noteCallbacks.toList().forEach { it(noteNode, diagram, event.point) }
@@ -114,6 +116,7 @@ internal class DiagramMouseInteraction(
 
     override fun mouseClicked(event: MouseEvent) {
         if (event.button == MouseEvent.BUTTON1 && event.clickCount == 2) {
+            if (diagram.clusterQuestionAt(event.point) != null || diagram.clusterEditAt(event.point) != null) return
             val edge = diagram.edgeAt(event.point)
             if (edge != null && diagram.edgeLabelCallbacks.isNotEmpty()) {
                 diagram.edgeLabelCallbacks.toList().forEach { it(edge.id) }; event.consume(); return

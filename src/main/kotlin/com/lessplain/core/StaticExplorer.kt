@@ -1,6 +1,5 @@
 package com.lessplain.core
 
-import com.lessplain.core.IncomingRouteResolver
 import com.lessplain.model.GraphEdge
 import com.lessplain.model.RouteNavigationState
 import com.lessplain.model.TRAVERSABLE_RELATIONS
@@ -39,7 +38,6 @@ class StaticExplorer(
     val highlightedEdgeIds: Set<String> get() = upstream.edgeIdsTo(startNodeId) + selectedEdges
     val canPrevious: Boolean get() = availableEdges(StepDirection.PREVIOUS).isNotEmpty()
     val canNext: Boolean get() = availableEdges().any(::canAppend)
-    val canGoBack: Boolean get() = canPrevious
     val isChoosingIncoming: Boolean get() = filling != null
     val canComplete: Boolean get() = availableEdges(StepDirection.PREVIOUS).isNotEmpty()
 
@@ -119,9 +117,6 @@ class StaticExplorer(
         return StepResult.Moved(currentNodeId)
     }
 
-    /** 存在多条前驱边时，仍需明确选择后退方向。 */
-    fun back(): Boolean = previous() is StepResult.Moved
-
     private fun truncateToVisit(nodeId: String): Boolean {
         // 排除末尾访问位置，使循环中的后退只移除一次出现。
         val visits = listOf(startNodeId) + selectedEdges.map { edgesById.getValue(it).to }
@@ -150,21 +145,6 @@ class StaticExplorer(
         val start = requireNotNull(first).from
         if (repeatedVisits(start, savedEdges) > MAX_REPEATED_VISITS) return null
         return start to savedEdges.toList()
-    }
-
-    /** 路径补全使用的旧显式推导；普通图节点点击使用 jumpTo。 */
-    fun selectNode(nodeId: String): Boolean {
-        if (nodeId !in nodeIds) return false
-        cancelIncoming()
-        if (nodeId == currentNodeId || nodeId == startNodeId || selectedEdges.any { edgesById[it]?.to == nodeId }) {
-            explicitStart = true
-            return synchronizeNode(nodeId)
-        }
-        val fill = resolver.begin(nodeId, remembered, path, startNodeId.takeIf { explicitStart || path.isNotEmpty() },
-            knownStart = startNodeId.takeIf { explicitStart || path.isNotEmpty() }).advance()
-        applyFill(fill)
-        explicitStart = true
-        return true
     }
 
     /** 显式补全选定路线；临时选择不改变普通的逐步阅读。 */
@@ -214,9 +194,6 @@ class StaticExplorer(
         restorePath(fill.path, fill.target)
         routeNotice = fill.reason
     }
-
-    /** 直接聚焦与图节点点击使用相同的上游展开方式。 */
-    fun focusNode(nodeId: String): Boolean = jumpTo(nodeId)
 
     private fun canAppend(edge: GraphEdge): Boolean =
         repeatedVisits(startNodeId, selectedEdges + edge.id) <= MAX_REPEATED_VISITS

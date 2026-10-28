@@ -14,15 +14,15 @@ internal class OpenUnderstandingInEditorAction(
     private val project: Project,
     private val service: UnderstandingService,
 ) : AnAction("在编辑器打开图", null, AllIcons.Actions.OpenNewTab) {
-    override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
+    override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
 
     override fun update(event: AnActionEvent) {
-        event.presentation.isEnabled = service.panelPage == PanelPage.CANVAS && service.activeRecordId != null
+        event.presentation.isEnabled = service.panelPage == PanelPage.CANVAS && service.panelRecordId != null
     }
 
     override fun actionPerformed(event: AnActionEvent) {
         val layer = service.panelLayers.lastOrNull()
-        val id = layer?.recordId ?: service.activeRecordId ?: return
+        val id = layer?.recordId ?: service.panelRecordId ?: return
         val record = service.storage.record(id) ?: return
         openRecordInEditor(project, record, layer?.nodeId, resetSourceNavigation = true)
     }

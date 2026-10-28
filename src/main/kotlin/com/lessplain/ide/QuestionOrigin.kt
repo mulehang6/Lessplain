@@ -3,25 +3,20 @@ package com.lessplain.ide
 import com.lessplain.model.SourceAnchor
 import com.lessplain.storage.UnderstandingRepository
 
-/** 一页对应产生某个回答的问题；代码始终来自该问题自己的冻结上下文。 */
-internal data class QuestionOrigin(
-    val questionId: String,
-    val question: String,
-    val anchor: SourceAnchor?,
-    val answerRecordId: String,
-)
+/** 目标使用真实回答记录和问题身份，与当前标签、层级和节点选择无关。 */
+internal data class QuestionOriginTarget(val recordId: String, val questionId: String? = null)
+internal data class QuestionOrigin(val questionId: String, val question: String, val anchor: SourceAnchor?, val answerRecordId: String)
 
-/** 只能在后台读取。根图展示起始问题，追问层只读取本记录、本节点的已回答问题。 */
-internal fun readQuestionOrigins(repository: UnderstandingRepository, layer: GraphLayerKey): List<QuestionOrigin> {
-    val record = repository.getRecord(layer.recordId)
-    if (layer.questionNodeId == null) return listOf(QuestionOrigin(
-        record.questionId ?: "root:${record.id}", record.question,
-        record.contextToken?.let(repository::getContext)?.anchor, record.id,
-    ))
-    return repository.questionsForRecord(record.id).mapNotNull { question ->
-        val answer = repository.recordForQuestion(question.id) ?: return@mapNotNull null
+internal fun readQuestionOrigin(repository: UnderstandingRepository, target: QuestionOriginTarget): QuestionOrigin {
+    val record = repository.getRecord(target.recordId)
+    val questionId = target.questionId ?: record.questionId
+    if (questionId != null) {
+        val question = repository.getQuestion(questionId)
+        require(repository.recordForQuestion(questionId)?.id == record.id) { "问题与回答记录不一致" }
         val context = repository.getContext(question.contextToken)
-        if (context.recordId != record.id || context.nodeId != layer.questionNodeId) return@mapNotNull null
-        QuestionOrigin(question.id, question.text, context.anchor, answer.id)
+        require(context.recordId == question.ownerRecordId) { "问题与冻结来源的归属不一致" }
+        return QuestionOrigin(question.id, question.text, context.anchor, record.id)
     }
+    require(record.parentId == null) { "该回答缺少原始问题" }
+    return QuestionOrigin("root:${record.id}", record.question, record.contextToken?.let(repository::getContext)?.anchor, record.id)
 }

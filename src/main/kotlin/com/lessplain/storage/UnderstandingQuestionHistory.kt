@@ -2,7 +2,6 @@ package com.lessplain.storage
 
 import com.lessplain.model.UnderstandingInputException
 import com.lessplain.model.UnderstandingQuestion
-import com.lessplain.model.UnderstandingRecord
 import java.sql.Connection
 
 /** 从回答图还原已回答问题，不额外保留注释行。 */

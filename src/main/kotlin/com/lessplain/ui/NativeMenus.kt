@@ -14,7 +14,7 @@ import javax.swing.JComponent
 import javax.swing.JPopupMenu
 import javax.swing.AbstractButton
 
-internal data class NativeMenuItem(val label: String, val enabled: Boolean = true, val perform: () -> Unit)
+internal data class NativeMenuItem(val label: String, val enabled: Boolean = true, val icon: javax.swing.Icon? = null, val perform: () -> Unit)
 
 /** 统一走 IDE action popup 的行距、圆角、主题选中色及键盘行为。 */
 internal fun showNativeMenu(
@@ -25,7 +25,7 @@ internal fun showNativeMenu(
         else SimpleDataContext.getProjectContext(project ?: return)
     val group = DefaultActionGroup().apply {
         items.forEach { item -> add(object : DumbAwareAction(item.label) {
-            init { templatePresentation.isEnabled = item.enabled }
+            init { templatePresentation.isEnabled = item.enabled; templatePresentation.icon = item.icon }
             override fun actionPerformed(event: AnActionEvent) { item.perform() }
         }) }
     }

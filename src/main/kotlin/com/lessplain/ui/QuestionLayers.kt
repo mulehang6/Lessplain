@@ -1,28 +1,7 @@
 package com.lessplain.ui
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.key
-import androidx.compose.runtime.remember
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.awt.SwingPanel
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
-import com.intellij.openapi.util.Disposer
 import com.lessplain.diagram.DiagramCluster
-import com.lessplain.diagram.DiagramHierarchyItem
 import com.lessplain.diagram.DiagramExamplePanel
-import com.lessplain.diagram.createUnderstandingDiagram
-import com.lessplain.diagram.bindNodeContextCopy
-import com.lessplain.diagram.bindGraphState
-import com.lessplain.diagram.graphBrowseState
-import com.lessplain.diagram.requestFocusCluster
-import com.lessplain.diagram.bindDiagramSourceNavigation
-import com.lessplain.ide.GraphLayerKey
-import com.lessplain.core.StaticExplorer
 import com.lessplain.ide.UnderstandingService
 import com.lessplain.model.GraphNode
 import com.lessplain.model.GraphEdge
@@ -45,85 +24,6 @@ internal data class QuestionCanvas(
     val clusterSources: Map<String, SourceCluster> = emptyMap(),
     val edgeSources: Map<String, CanvasSourceEdge> = emptyMap(),
 )
-
-/** 同一节点的追问共用单张画布，每个问题对应一个可导航分组。 */
-@Composable
-internal fun QuestionIndexView(
-    service: UnderstandingService,
-    record: UnderstandingRecord,
-    nodeId: String,
-    revision: Int,
-    modifier: Modifier,
-    hierarchy: List<DiagramHierarchyItem>,
-    onNavigateIndex: (Int) -> Unit,
-    onChildQuestions: (UnderstandingRecord, String) -> Unit,
-) {
-    val graphKey = GraphLayerKey(record.id, nodeId)
-    val loaded = rememberBackgroundRead(service, Triple(record.id, record.revision, nodeId), revision) {
-        val questions = questionsForNode(service, record, nodeId)
-        val signature = questions.map { question ->
-            val child = service.repository.recordForQuestion(question.id)
-            listOf(question.id, child?.id.orEmpty(), child?.revision.toString()).joinToString(":")
-        }
-        service.storage.remember(record)
-        signature to buildQuestionCanvas(service, record, nodeId, questions, revision).also { canvas ->
-            canvas.sources.values.forEach { service.storage.remember(it.record) }
-        }
-    }
-    val data = loaded?.getOrNull()
-    if (data == null) {
-        org.jetbrains.jewel.ui.component.Text(loaded?.exceptionOrNull()?.let { "图无法加载：${it.message}" } ?: "正在加载…")
-        return
-    }
-    val canvas = remember(record.id, record.revision, nodeId, data.first) { data.second }
-    val diagram = remember(canvas) {
-        createUnderstandingDiagram(canvas.record, graphBrowseState(service, graphKey),
-            clusters = canvas.clusters, examplePanels = canvas.examplePanels).apply {
-            bindGraphState(service.graphStates, graphKey)
-        }
-    }
-    DisposableEffect(diagram, service.panelFocusQuestionId) {
-        service.panelFocusQuestionId?.let { questionId ->
-            canvas.clusters.firstOrNull { cluster ->
-                cluster.id == questionId || canvas.clusterSources[cluster.id]?.record?.questionId == questionId
-            }?.id?.let(diagram::requestFocusCluster)
-        }
-        onDispose { }
-    }
-    DisposableEffect(diagram, hierarchy, onNavigateIndex) {
-        diagram.setHierarchy(hierarchy, showQuestions = { service.panelQuestionOrigins.show(diagram, graphKey) }, onNavigate = onNavigateIndex)
-        onDispose { }
-    }
-    DisposableEffect(diagram, canvas) {
-        val saved = graphBrowseState(service, graphKey)
-        val explorer = canvas.record.graph.nodes.firstOrNull()?.let {
-            StaticExplorer(canvas.record.graph, saved?.staticPath.orEmpty(), saved?.nodeId, saved?.navigationState,
-                scopes = canvas.sources.mapValues { it.value.record.id })
-        }
-        val navigation = bindDiagramSourceNavigation(service, graphKey, diagram, explorer, record, canvas)
-        val copy = diagram.bindNodeContextCopy(service, canvas.sources::get)
-        val content = diagram.bindContentActions(service, record.id, canvas.sources::get, canvas.clusterSources::get,
-            draftHost = com.lessplain.ide.CanvasDraftHost(graphKey, editor = false))
-        val questionSelection = diagram.onQuestionBadgeClicked { id ->
-            canvas.sources[id]?.let {
-                onChildQuestions(it.record, it.nodeId)
-            }
-        }
-        onDispose {
-            navigation.close()
-            copy.close()
-            content.close()
-            questionSelection.close()
-            Disposer.dispose(diagram)
-        }
-    }
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(UnderstandingUiMetrics.GAP.dp)) {
-        key(diagram) {
-            SwingPanel(factory = { diagram.jComponent }, background = Color(UnderstandingUiStyle.canvas.rgb),
-                modifier = Modifier.fillMaxWidth().weight(1f))
-        }
-    }
-}
 
 internal fun questionsForNode(
     service: UnderstandingService, record: UnderstandingRecord, nodeId: String,

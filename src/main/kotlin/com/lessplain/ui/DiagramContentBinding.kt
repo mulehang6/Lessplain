@@ -24,6 +24,7 @@ internal fun UnderstandingDiagram.bindContentActions(
     val actions = service.contentActions
     actions.attachCanvas(this, draftHost)
     val subscriptions = listOf(
+        bindQuestionOrigins(service, titleRecord, clusterSource, draftHost.editor),
         bindPendingQuestionHandoff(service, recordId, actions::notifyQuestionCopy),
         bindNodeQuestionCounts(service, source, onStaleSource),
         header.bindEdit(titleRecord?.let { record ->

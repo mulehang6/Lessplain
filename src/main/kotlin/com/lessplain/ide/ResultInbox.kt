@@ -29,13 +29,6 @@ internal fun resultNotificationTitle(results: List<PendingResult>): String = whe
     else -> "理解图有新增和更新"
 }
 
-internal fun resultUnreadSummary(results: List<PendingResult>): String = buildList {
-    val newCount = results.count { !it.isUpdate }
-    val updatedCount = results.size - newCount
-    if (newCount > 0) add("新增 $newCount")
-    if (updatedCount > 0) add("更新 $updatedCount")
-}.joinToString(" · ")
-
 private data class InboxState(
     val pending: List<PendingResult> = emptyList(),
     val seenKeys: Set<String> = emptySet(),

@@ -68,6 +68,5 @@ class ResultInboxTest {
         assertEquals("新增理解图", resultNotificationTitle(restored.take(1)))
         assertEquals("理解图已更新", resultNotificationTitle(restored.takeLast(1)))
         assertEquals("理解图有新增和更新", resultNotificationTitle(restored))
-        assertEquals("新增 1 · 更新 1", resultUnreadSummary(restored))
     }
 }

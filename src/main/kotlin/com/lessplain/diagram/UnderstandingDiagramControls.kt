@@ -43,8 +43,7 @@ internal class UnderstandingDiagramControls(private val diagram: UnderstandingDi
     val sideControls = JPanel(null).apply { isOpaque = false }
     private var hierarchyItems = emptyList<DiagramHierarchyItem>()
     private var onNavigateHierarchy: ((Int) -> Unit)? = null
-    private var onShowQuestions: (() -> Unit)? = null
-    private val hierarchyPopup = DiagramHierarchyPopup(hierarchy, { hierarchyItems }, { onShowQuestions }) { onNavigateHierarchy?.invoke(it) }
+    private val hierarchyPopup = DiagramHierarchyPopup(hierarchy, { hierarchyItems }) { onNavigateHierarchy?.invoke(it) }
     val previousButton = button(GraphControlIcon(GraphControlIconKind.PREVIOUS), "上一步") { diagram.previousStep() }
     val nextButton = button(GraphControlIcon(GraphControlIconKind.NEXT), "下一步") { diagram.nextStep() }
     private var routeAction: (() -> Unit)? = null
@@ -95,12 +94,11 @@ internal class UnderstandingDiagramControls(private val diagram: UnderstandingDi
         diagram.repaint()
     }
 
-    fun setHierarchy(items: List<DiagramHierarchyItem>, navigate: (Int) -> Unit, showQuestions: (() -> Unit)? = null) {
+    fun setHierarchy(items: List<DiagramHierarchyItem>, navigate: (Int) -> Unit) {
         if (hierarchyItems != items) hierarchyPopup.close()
         hierarchyItems = items
         onNavigateHierarchy = navigate
-        onShowQuestions = showQuestions
-        hierarchy.isVisible = items.size > 1 || showQuestions != null
+        hierarchy.isVisible = items.size > 1
         arrangeSide(diagram.width, diagram.height)
     }
 

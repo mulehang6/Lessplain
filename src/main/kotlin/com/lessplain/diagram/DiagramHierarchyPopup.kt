@@ -44,7 +44,6 @@ import javax.swing.SwingUtilities
 internal class DiagramHierarchyPopup(
     private val anchor: JComponent,
     private val items: () -> List<DiagramHierarchyItem>,
-    private val showQuestions: () -> (() -> Unit)? = { null },
     private val navigate: (Int) -> Unit,
 ) : Disposable {
     private var popup: JBPopup? = null
@@ -62,7 +61,7 @@ internal class DiagramHierarchyPopup(
         if (popup?.isDisposed == false) { close(); return }
         val snapshot = items().toList()
         if (snapshot.isEmpty()) return
-        val content = DiagramHierarchyPanel(snapshot, ::resizeToContent, showQuestions = showQuestions()?.let { action -> { close(); action() } }) { index ->
+        val content = DiagramHierarchyPanel(snapshot, ::resizeToContent) { index ->
             close()
             snapshot.getOrNull(index)?.let { navigate(it.targetIndex) }
         }
@@ -138,7 +137,6 @@ internal class DiagramHierarchyPopup(
 internal class DiagramHierarchyPanel(
     private val entries: List<DiagramHierarchyItem>,
     private val onMetricsChanged: () -> Unit = {},
-    showQuestions: (() -> Unit)? = null,
     private val choose: (Int) -> Unit,
 ) : JPanel(BorderLayout()), AutoCloseable {
     val list = object : JList<DiagramHierarchyItem>(entries.toTypedArray()) {
@@ -161,23 +159,11 @@ internal class DiagramHierarchyPanel(
         isOpaque = false
         viewport.isOpaque = false
     }
-    val questionButton = showQuestions?.let { show -> javax.swing.JButton("查看本层提问", com.lessplain.ui.QuestionBubbleIcon).apply {
-        horizontalAlignment = javax.swing.SwingConstants.LEFT
-        addActionListener { show() }
-        accessibleContext.accessibleName = "查看本层提问"
-    } }
-    private val fonts = CanvasUiFonts(listOfNotNull(list, questionButton)) { measure(); onMetricsChanged() }
+    private val fonts = CanvasUiFonts(listOf(list)) { measure(); onMetricsChanged() }
 
     init {
         background = UnderstandingUiStyle.surface
         border = JBUI.Borders.empty(UnderstandingUiMetrics.GAP)
-        questionButton?.let { button ->
-            add(JPanel(BorderLayout(0, JBUI.scale(4))).apply {
-                isOpaque = false
-                add(button, BorderLayout.NORTH)
-                add(javax.swing.JSeparator(), BorderLayout.SOUTH)
-            }, BorderLayout.NORTH)
-        }
         add(scroll, BorderLayout.CENTER)
         list.addMouseMotionListener(object : MouseMotionAdapter() {
             override fun mouseMoved(event: MouseEvent) {

@@ -156,10 +156,10 @@ class StaticExplorerTest {
         assertEquals(101, explorer.path.size)
         assertEquals(StepResult.Limit, explorer.next())
         val restored = StaticExplorer(graph, explorer.path, explorer.currentNodeId, explorer.navigationState)
-        assertTrue(restored.back())
+        assertTrue(restored.previous() is StepResult.Moved)
         assertEquals(StepResult.Moved("b"), restored.next())
         assertEquals(101, restored.path.size)
-        assertTrue(restored.back())
+        assertTrue(restored.previous() is StepResult.Moved)
         assertEquals(100, restored.path.size)
     }
 }

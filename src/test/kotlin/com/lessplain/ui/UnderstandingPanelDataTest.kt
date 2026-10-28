@@ -44,11 +44,10 @@ class UnderstandingPanelDataTest {
             assertEquals(root.id, data.hierarchyRootId)
             assertEquals(listOf(emptyList(), listOf(layer)), data.hierarchy.map { it.layers })
             assertTrue(data.history.isEmpty())
-            assertTrue(data.recent.isEmpty())
         }
     }
 
-    @Test fun `welcome and history load only their required lists`() {
+    @Test fun `canvas and history load only their required data`() {
         UnderstandingRepository(directory).use { repository ->
             val core = UnderstandingCore(repository)
             val graph = UnderstandingGraph(listOf(GraphNode("n", "节点")), emptyList())
@@ -58,16 +57,10 @@ class UnderstandingPanelDataTest {
             val canvas = readUnderstandingPanelData(repository,
                 UnderstandingPanelRequest(PanelPage.CANVAS, root.id, null, emptyList(), ""))
             assertEquals(browse, canvas.initialBrowse)
-            val welcome = readUnderstandingPanelData(repository,
-                UnderstandingPanelRequest(PanelPage.WELCOME, root.id, null, emptyList(), ""))
-            assertEquals(listOf(root), welcome.recent)
-            assertTrue(welcome.hierarchy.isEmpty())
-            assertTrue(welcome.history.isEmpty())
             val history = readUnderstandingPanelData(repository,
                 UnderstandingPanelRequest(PanelPage.HISTORY, root.id, null, emptyList(), "标题"))
             assertEquals(listOf(root), history.history)
             assertTrue(history.hierarchy.isEmpty())
-            assertTrue(history.recent.isEmpty())
         }
     }
 }

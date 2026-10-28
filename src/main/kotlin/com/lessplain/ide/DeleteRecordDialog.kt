@@ -23,7 +23,7 @@ internal class DeleteRecordDialog(
     closed: () -> Unit,
 ) : DialogWrapper(project), DeleteRecordWindow {
     init {
-        title = "删除历史记录"
+        title = "删除${state.kind}"
         setOKButtonText("删除")
         setCancelButtonText("取消")
         okAction.putValue(DEFAULT_ACTION, null)
@@ -44,9 +44,9 @@ internal class DeleteRecordDialog(
             columns = 42
             rows = 2
             font = JBFont.regular()
-            accessibleContext.accessibleName = "将删除的理解图"
+            accessibleContext.accessibleName = "将删除的${state.kind}"
         }, BorderLayout.CENTER)
-        add(JBLabel("永久删除这条理解图及其全部追问？此操作无法撤销。"), BorderLayout.SOUTH)
+        add(JBLabel(state.description), BorderLayout.SOUTH)
     }
 
     override fun doOKAction() {

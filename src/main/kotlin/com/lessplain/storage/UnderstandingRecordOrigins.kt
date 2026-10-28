@@ -13,14 +13,7 @@ internal fun UnderstandingRepository.validateRecordOrigin(db: Connection, record
             statement.executeQuery().use { rows -> requireInput(rows.next(), "父理解记录已删除") }
         }
     }
-    record.contextToken?.let { token ->
-        db.prepareStatement("SELECT project_id FROM contexts WHERE token=?").use { statement ->
-            statement.setString(1, token)
-            statement.executeQuery().use { rows ->
-                requireInput(rows.next() && rows.getString(1) == projectId, "contextToken 不存在、已失效或属于其他项目")
-            }
-        }
-    }
+    record.contextToken?.let { token -> validateContextOrigin(db, readContext(db, token)) }
     record.questionId?.let { questionId ->
         db.prepareStatement("SELECT context_token FROM questions WHERE id=?").use { statement ->
             statement.setString(1, questionId)

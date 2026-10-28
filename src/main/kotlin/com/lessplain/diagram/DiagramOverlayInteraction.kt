@@ -4,7 +4,7 @@ import java.awt.Point
 import com.lessplain.ui.NativeMenuItem
 import com.lessplain.ui.showNativeMenu
 
-internal data class DiagramTitleState(var hovered: String? = null, var pressed: String? = null, var selected: String? = null)
+internal data class DiagramTitleState(var hovered: String? = null, var pressed: String? = null, var selected: String? = null, var focused: String? = null)
 
 /** 画布管理临时覆盖层和反馈，与图布局及浏览状态分开。 */
 internal class DiagramOverlayInteraction(private val diagram: UnderstandingDiagram) : AutoCloseable {
@@ -31,6 +31,7 @@ internal class DiagramOverlayInteraction(private val diagram: UnderstandingDiagr
     fun exited() { titles.hovered = null }
 
     fun pressed(point: Point) {
+        titles.focused = null
         anchor = point
         titles.pressed = diagram.clusterTitleAt(point)
         diagram.repaint()

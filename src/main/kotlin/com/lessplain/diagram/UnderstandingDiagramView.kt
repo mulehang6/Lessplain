@@ -60,6 +60,8 @@ internal class UnderstandingDiagram(
     internal val renameNodeCallbacks = mutableSetOf<(String) -> Unit>()
     internal val edgeLabelCallbacks = mutableSetOf<(String) -> Unit>()
     internal val noteCallbacks = mutableSetOf<(String, java.awt.Component, java.awt.Point) -> Unit>()
+    internal val originCallbacks = mutableSetOf<(String) -> Unit>()
+    internal var questionClusterIds = emptySet<String>()
     internal val titleCallbacks = mutableSetOf<(String) -> Unit>()
     internal var questionCounts = emptyMap<String, Int>()
     internal var pendingNoteCounts = emptyMap<String, Int>()
@@ -168,8 +170,8 @@ internal class UnderstandingDiagram(
         controls.updateStepAvailability(hasPrevious, hasNext)
     }
 
-    fun setHierarchy(items: List<DiagramHierarchyItem>, showQuestions: (() -> Unit)? = null, onNavigate: (Int) -> Unit) {
-        controls.setHierarchy(items, onNavigate, showQuestions)
+    fun setHierarchy(items: List<DiagramHierarchyItem>, onNavigate: (Int) -> Unit) {
+        controls.setHierarchy(items, onNavigate)
         revalidate()
         repaint()
     }
@@ -352,6 +354,7 @@ internal class UnderstandingDiagram(
 
     override fun getToolTipText(event: MouseEvent): String? {
         noteActionAt(event.point)?.let { return if (hasNodeNote(it)) null else "添加注释" }
+        clusterQuestionAt(event.point)?.let { return "查看这个回答的原始提问" }
         clusterEditAt(event.point)?.let { return "编辑标题" }
         copyActionAt(event.point)?.let { return "复制" }
         questionActionAt(event.point)?.let { return "查看 ${questionCounts.getValue(it)} 个追问" }
@@ -441,7 +444,7 @@ internal class UnderstandingDiagram(
             pendingNoteCounts,
             startIds, endIds, highlightedEdgeIds, choiceTargets, choicePhase, copiedNodeId,
             animateFlow, flowPhase, controls.height, overlays.titles, branchIds, draftNoteNodes,
-            routeChoice.edgeIds, routeChoice.focusedEdgeId, routeChoice.focusedNodeId, actionAvailability()))
+            routeChoice.edgeIds, routeChoice.focusedEdgeId, routeChoice.focusedNodeId, actionAvailability(), questionClusterIds = questionClusterIds))
         if (!layoutReady || layoutFailure != null) {
             val message = layoutFailure?.let { "布局失败：$it（点击重试）" } ?: "正在排版…"
             graphics.font = DiagramTextMetrics.font()
@@ -482,6 +485,7 @@ internal class UnderstandingDiagram(
         edgeLabelCallbacks.clear()
         noteCallbacks.clear()
         draftNoteNodes = emptySet()
+        originCallbacks.clear(); questionClusterIds = emptySet()
         titleCallbacks.clear()
     }
 

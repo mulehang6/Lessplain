@@ -2,11 +2,10 @@ package com.lessplain.ide
 
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.WindowManager
-import com.lessplain.model.UnderstandingRecord
 import com.lessplain.ui.DeleteRecordState
 
 /** 每个项目同时仅管理一个平台对话框，目标固定且需明确确认。 */
-internal class RootDeletionConfirmation(
+internal class MaterialDeletionConfirmation(
     private val project: Project,
     delete: (String) -> Unit,
 ) : AutoCloseable {
@@ -15,9 +14,11 @@ internal class RootDeletionConfirmation(
         DeleteRecordDialog(project, state, confirm, cancel, closed)
     }
 
-    fun show(record: UnderstandingRecord) {
+    val isOpen: Boolean get() = session.isOpen
+
+    fun show(id: String, title: String, kind: String = "理解图", description: String = "永久删除这张理解图及其全部追问和回答？此操作无法撤销。") {
         if (!project.isDisposed && WindowManager.getInstance().getFrame(project) != null)
-            session.show(record.id, record.displayTitle ?: record.question)
+            session.show(id, title, kind, description)
     }
 
     override fun close() { session.close() }
@@ -36,11 +37,12 @@ internal class DeleteRecordSession(
     private var popup: DeleteRecordWindow? = null
     private var state: DeleteRecordState? = null
     private var disposed = false
+    val isOpen: Boolean get() = state != null
 
-    fun show(recordId: String, title: String) {
+    fun show(recordId: String, title: String, kind: String = "理解图", description: String = "永久删除这张理解图及其全部追问和回答？此操作无法撤销。") {
         if (disposed) return
         dismiss()
-        val current = DeleteRecordState(recordId, title)
+        val current = DeleteRecordState(recordId, title, kind, description)
         state = current
         try {
             val handle = open(current,

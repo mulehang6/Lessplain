@@ -55,7 +55,7 @@ class UpstreamRoutesTest {
         val path = graph.edges.map { it.id }
         val explorer = StaticExplorer(graph, path, "n250")
         assertEquals(path, explorer.path)
-        assertTrue(explorer.focusNode("n100"))
+        assertTrue(explorer.jumpTo("n100"))
         assertTrue(explorer.path.isEmpty())
         val stepped = StaticExplorer(graph)
         repeat(250) { assertTrue(stepped.next() is StepResult.Moved) }

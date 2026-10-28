@@ -41,6 +41,7 @@ internal data class DiagramPaintState(
     val focusedChoiceEdgeId: String? = null,
     val focusedChoiceNodeId: String? = null,
     val actions: DiagramActionAvailability = DiagramActionAvailability(),
+    val questionClusterIds: Set<String> = emptySet(),
 )
 
 /** 按快照绘制画布，输入和导航仍由图视图处理。 */
@@ -71,7 +72,7 @@ internal object DiagramCanvasPainter {
                 g.stroke = BasicStroke(1f)
                 g.drawRoundRect(b.x.toInt(), b.y.toInt(), b.width.toInt(), b.height.toInt(),
                     UnderstandingUiStyle.GROUP_ARC, UnderstandingUiStyle.GROUP_ARC)
-                DiagramClusterText.paint(g, cluster, state.titleState)
+                DiagramClusterText.paint(g, cluster, state.titleState, cluster.id in state.questionClusterIds)
                 val panel = state.examplePanels.firstOrNull { it.clusterId == cluster.id }
                 if (panel != null && cluster.exampleBounds != null) {
                     DiagramExamplePainter.paint(g, cluster.exampleBounds, panel, state.currentNodeId)

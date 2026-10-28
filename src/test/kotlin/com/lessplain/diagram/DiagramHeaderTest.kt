@@ -75,6 +75,21 @@ class DiagramHeaderTest {
         assertEquals(2, edits)
     }
 
+    @Test fun `question and edit icons share hover space without moving title and release their actions`() = withDiagram("根问题") { diagram ->
+        val header = diagram.header
+        var questions = 0
+        val question = header.bindQuestion { questions++ }
+        header.bindEdit { }
+        diagram.doLayout()
+        val before = header.label.bounds
+        header.label.dispatchEvent(mouse(header.label, MouseEvent.MOUSE_ENTERED))
+        assertTrue(header.questionButton.isVisible); assertTrue(header.editButton.isVisible)
+        assertFalse(header.questionButton.bounds.intersects(header.editButton.bounds))
+        assertEquals(before, header.label.bounds)
+        header.questionButton.doClick(); assertEquals(1, questions)
+        question.close(); header.questionButton.doClick(); assertEquals(1, questions)
+    }
+
     @Test fun `pencil moves with actual title length and narrow title preserves full tooltip and surrogate pairs`() {
         val positions = mutableListOf<Int>()
         for (title in listOf("短标题", "付费文章购买回调与阅读")) withDiagram(title) { diagram ->

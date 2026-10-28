@@ -46,7 +46,7 @@ internal class EditorSourceInsightMarker(
         override fun documentChanged(event: DocumentEvent) {
             val onEdt = SwingUtilities.isEventDispatchThread()
             if (onEdt) navigation.cancelChoices()
-            SwingUtilities.invokeLater {
+            com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater {
                 if (!disposed) {
                     if (!onEdt) navigation.cancelChoices()
                     val range = highlighter

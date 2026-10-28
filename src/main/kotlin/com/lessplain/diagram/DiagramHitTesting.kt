@@ -11,7 +11,7 @@ internal fun UnderstandingDiagram.screenToWorld(point: Point): Point2D.Double = 
 
 internal fun UnderstandingDiagram.clusterTitleAt(point: Point): String? {
     val world = screenToWorld(point)
-    return layout.clusters.firstOrNull { DiagramClusterText.titleBounds(it).contains(world) }?.id
+    return layout.clusters.firstOrNull { DiagramClusterText.titleBounds(it).createUnion(DiagramClusterText.editBounds(it)).contains(world) }?.id
 }
 
 internal fun UnderstandingDiagram.nodeAt(point: Point): String? {
@@ -99,6 +99,12 @@ internal fun UnderstandingDiagram.notePopupAnchor(point: Point): Point {
 internal fun UnderstandingDiagram.clusterEditAt(point: Point): String? {
     val world = screenToWorld(point)
     return layout.clusters.firstOrNull {
-        it.id == overlays.titles.hovered && DiagramClusterText.editBounds(it).contains(world)
+        (it.id == overlays.titles.hovered || it.id == overlays.titles.focused) && DiagramClusterText.editBounds(it).contains(world)
     }?.id
+}
+
+internal fun UnderstandingDiagram.clusterQuestionAt(point: Point): String? {
+    val world = screenToWorld(point)
+    return layout.clusters.firstOrNull { it.id in questionClusterIds &&
+        (it.id == overlays.titles.hovered || it.id == overlays.titles.focused) && DiagramClusterText.questionBounds(it).contains(world) }?.id
 }

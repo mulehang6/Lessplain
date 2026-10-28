@@ -312,13 +312,10 @@ class UnderstandingRepository(
         }
     }
 
-    fun getAnswer(id: String): UnderstandingAnswer = connect().use { db ->
-        db.prepareStatement("SELECT data FROM answers WHERE id=?").use { statement ->
+    fun recordExists(id: String): Boolean = connect().use { db ->
+        db.prepareStatement("SELECT 1 FROM records WHERE id=?").use { statement ->
             statement.setString(1, id)
-            statement.executeQuery().use { rows ->
-                if (!rows.next()) throw UnderstandingInputException("旧回答不存在")
-                gson.fromJson(rows.getString(1), UnderstandingAnswer::class.java)
-            }
+            statement.executeQuery().use { it.next() }
         }
     }
 

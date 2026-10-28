@@ -151,7 +151,7 @@ class UnderstandingCoreTest {
         assertTrue(pending is StepResult.Choose)
         assertEquals("start", explorer.currentNodeId)
         assertEquals(StepResult.Moved("yes"), explorer.choose("e-yes"))
-        assertTrue(explorer.back())
+        assertTrue(explorer.previous() is StepResult.Moved)
         assertEquals(StepResult.Moved("no"), explorer.choose("e-no"))
         assertEquals(listOf("e-no"), explorer.path)
     }
@@ -173,7 +173,7 @@ class UnderstandingCoreTest {
         assertTrue(explorer.jumpTo("ok"))
         assertEquals(emptyList(), explorer.path)
         assertEquals("ok", explorer.currentNodeId)
-        assertTrue(explorer.back())
+        assertTrue(explorer.previous() is StepResult.Moved)
         assertEquals("lookup", explorer.currentNodeId)
         assertEquals("ok", StaticExplorer(flow, savedNodeId = "ok").currentNodeId)
     }
@@ -216,7 +216,7 @@ class UnderstandingCoreTest {
         assertEquals(StepResult.Moved("read"), explorer.next())
         assertEquals(StepResult.Moved("result"), explorer.next())
         assertEquals(listOf("read-edge", "result-edge"), explorer.path)
-        assertTrue(explorer.back())
+        assertTrue(explorer.previous() is StepResult.Moved)
         assertEquals("read", explorer.currentNodeId)
         val restored = StaticExplorer(twoQuestions, explorer.path, explorer.currentNodeId)
         assertEquals("read", restored.currentNodeId)
@@ -254,7 +254,7 @@ class UnderstandingCoreTest {
         assertEquals(StepResult.Moved("read"), explorer.next())
         assertTrue(explorer.next() is StepResult.Choose)
         assertEquals(StepResult.Moved("value"), explorer.choose("e2"))
-        assertTrue(explorer.back())
+        assertTrue(explorer.previous() is StepResult.Moved)
         assertEquals("read", explorer.currentNodeId)
         assertEquals(StepResult.Moved("value"), explorer.choose("e2"))
         assertEquals(StepResult.Moved("assign"), explorer.next())
@@ -263,7 +263,7 @@ class UnderstandingCoreTest {
 
         val restoredAtBranch = StaticExplorer(nested, savedNodeId = "read")
         assertEquals(emptyList(), restoredAtBranch.path)
-        assertTrue(restoredAtBranch.back())
+        assertTrue(restoredAtBranch.previous() is StepResult.Moved)
         assertEquals("request", restoredAtBranch.currentNodeId)
     }
 

@@ -41,11 +41,14 @@ class RequestLifetimeTest {
             val record = core.present(4, "root", "起始问题", graph, "root")
             val context = core.captureContext(record.id, "n")
             // 独立根图仍引用原快照，不能因此允许向已删除的来源追加问题。
-            core.present(4, "other", "另一张图", graph, "root", context.token)
+            val other = core.present(4, "other", "另一张图", graph, "root", context.token)
             repository.deleteRootRecord(record.id)
             assertEquals(context, repository.getContext(context.token))
             assertFailsWith<UnderstandingInputException> { repository.putContext(context.copy(token = "late")) }
             assertFailsWith<UnderstandingInputException> { core.prepareQuestion("迟到的问题", context.token) }
+            assertFailsWith<UnderstandingInputException> {
+                core.present(4, "late-child", "迟到的子图", graph, "explicit", context.token, parentId = other.id)
+            }
             assertTrue(repository.recentQuestions().isEmpty())
         }
     }

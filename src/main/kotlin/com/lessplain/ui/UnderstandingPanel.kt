@@ -1,228 +1,186 @@
 package com.lessplain.ui
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.text.input.TextFieldState
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.key
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.awt.SwingPanel
-import androidx.compose.ui.unit.dp
-import com.lessplain.core.StaticExplorer
-import com.lessplain.diagram.DiagramHierarchyItem
-import com.lessplain.diagram.createUnderstandingDiagram
-import com.lessplain.diagram.bindNodeContextCopy
-import com.lessplain.diagram.bindGraphState
-import com.lessplain.diagram.bindDiagramSourceNavigation
+import com.intellij.openapi.Disposable
+import com.intellij.util.ui.JBUI
+import com.lessplain.core.LatestBackgroundRead
 import com.lessplain.ide.GraphLayerKey
-import com.lessplain.ide.UnderstandingService
+import com.lessplain.ide.PanelCanvasRoute
 import com.lessplain.ide.PanelPage
-import com.lessplain.model.BrowseState
+import com.lessplain.ide.UnderstandingService
 import com.lessplain.model.UnderstandingRecord
-import com.intellij.openapi.util.Disposer
-import org.jetbrains.jewel.ui.component.OutlinedButton
-import org.jetbrains.jewel.ui.component.Text
-import org.jetbrains.jewel.ui.component.TextField
-import org.jetbrains.jewel.foundation.theme.JewelTheme
-import androidx.compose.ui.graphics.Color
+import java.awt.BorderLayout
+import java.awt.CardLayout
+import javax.swing.JLabel
+import javax.swing.JPanel
 
-@Composable
-fun UnderstandingPanel(service: UnderstandingService) {
-    var revision by remember { mutableStateOf(0) }
-    var layers by remember(service) { mutableStateOf(service.panelLayers) }
-    var rootRecordId by remember(service) { mutableStateOf(service.panelRootRecordId) }
-    val setLayers: (List<FollowUpLayer>) -> Unit = { value ->
-        layers = value
-        service.panelLayers = value
+private data class PreparedPanel(
+    val request: UnderstandingPanelRequest,
+    val data: UnderstandingPanelData,
+    val canvas: QuestionCanvas?,
+)
+
+/** 原生组件持续存活；读取只更新列表或实际发生修订的画布，不卸载搜索输入框。 */
+class UnderstandingPanel(private val service: UnderstandingService) : JPanel(BorderLayout()), Disposable {
+    private val cards = CardLayout()
+    private val content = JPanel(cards)
+    private val message = JLabel("正在加载…")
+    internal val history = HistoryPanel(service) { query ->
+        historySearch = query
+        historyPage = 0
+        refresh()
     }
-    val setRootRecordId: (String?) -> Unit = { value ->
-        rootRecordId = value
-        service.panelRootRecordId = value
+    private var historySearch = ""
+    private var historyPage = 0
+    private var disposed = false
+    private var request: UnderstandingPanelRequest? = null
+    private var loaded: PreparedPanel? = null
+    private var canvasKey: List<Any?>? = null
+    internal var canvas: PanelCanvasView? = null
+        private set
+    private val loader = LatestBackgroundRead<PreparedPanel>(service::readBackground, ::publish)
+    private val subscription = service.onChanged(::refresh)
+
+    init {
+        message.border = JBUI.Borders.empty(UnderstandingUiMetrics.PAGE_PADDING)
+        content.add(history, "history")
+        content.add(message, "message")
+        add(content, BorderLayout.CENTER)
+        refresh()
     }
-    val history = service.panelPage == PanelPage.HISTORY
-    val search = remember { TextFieldState() }
-    DisposableEffect(service) {
-        val subscription = service.onChanged {
-            layers = service.panelLayers
-            rootRecordId = service.panelRootRecordId
-            revision++
+
+    private fun refresh() {
+        if (disposed) return
+        val historyVisible = service.panelPage == PanelPage.HISTORY || service.panelRecordId == null
+        val next = UnderstandingPanelRequest(
+            if (historyVisible) PanelPage.HISTORY else PanelPage.CANVAS,
+            service.panelRecordId, service.panelRootRecordId, service.panelLayers.toList(),
+            if (historyVisible) historySearch else "", historyPage,
+        )
+        if (request != next) {
+            request = next
+            loaded = null
+            if (historyVisible) {
+                closeCanvas()
+                updateHistory(null)
+            } else if (canvasKey?.get(0) != (next.layers.lastOrNull()?.recordId ?: next.activeRecordId) ||
+                canvasKey?.get(2) != next.layers.lastOrNull()?.nodeId) showMessage("正在加载…")
         }
-        onDispose {
-            subscription.close()
-        }
-    }
-    val historyQuery = if (history) search.text.toString() else ""
-    var historyPage by remember(historyQuery) { mutableStateOf(0) }
-    val request = UnderstandingPanelRequest(service.panelPage, service.activeRecordId, rootRecordId,
-        layers.toList(), historyQuery, historyPage)
-    val loaded = rememberBackgroundRead(service, request, revision) {
-        readUnderstandingPanelData(service.repository, request).also { data ->
-            (data.recent + data.history + listOfNotNull(data.selected, data.displayed)).forEach(service.storage::remember)
+        val pending = service.resultInbox.pending()
+        loader.request {
+            val data = readUnderstandingPanelData(service.repository, next, pending)
+            (data.history + listOfNotNull(data.selected, data.displayed)).forEach(service.storage::remember)
             data.hierarchy.flatMap { it.layers }.distinctBy { it.recordId }.forEach { service.storage.loadRecord(it.recordId) }
             data.hierarchyRootId?.let { service.storage.loadRecord(it) }
             data.displayed?.let { service.storage.rememberBrowse(it.id, data.initialBrowse ?: service.storage.loadBrowse(it.id)) }
-        }
-    }
-    val data = loaded?.getOrNull()
-    if (data == null) {
-        Box(Modifier.fillMaxSize().background(JewelTheme.globalColors.toolwindowBackground)
-            .padding(UnderstandingUiMetrics.PAGE_PADDING.dp)) {
-            Text(loaded?.exceptionOrNull()?.let { "图无法加载：${it.message}" } ?: "正在加载…")
-        }
-        return
-    }
-    val recentRecords = data.recent
-    val records = data.history
-    val selected = data.selected
-    val currentLayer = layers.lastOrNull()
-    val displayedRecord = data.displayed
-    DisposableEffect(service, displayedRecord?.id, currentLayer) {
-        displayedRecord?.let { service.panelQuestionOrigins.follow(GraphLayerKey(it.id, currentLayer?.nodeId)) }
-        onDispose { }
-    }
-    val selectRoot: (UnderstandingRecord) -> Unit = { record -> service.showRoot(record) }
-    val hierarchyRootId = data.hierarchyRootId
-    val hierarchyEntries = data.hierarchy
-    val hierarchyItems = hierarchyEntries.mapIndexed { index, entry ->
-        DiagramHierarchyItem(entry.title, entry.depth, index, entry.layers == layers)
-    }
-    val navigateToIndex: (Int) -> Unit = { index ->
-        hierarchyEntries.getOrNull(index)?.let { destination ->
-            val targetLayer = destination.layers.lastOrNull()
-            val target = targetLayer?.let { service.storage.record(it.recordId) }
-                ?: hierarchyRootId?.let(service.storage::record)
-            setLayers(destination.layers)
-            setRootRecordId(hierarchyRootId.takeIf { destination.layers.isNotEmpty() })
-            target?.let { service.select(it, targetLayer?.nodeId,
-                navigateSource = !service.graphStates.get(GraphLayerKey(it.id, targetLayer?.nodeId)).navigationPinned) }
+            val questionCanvas = next.layers.lastOrNull()?.let { layer ->
+                data.displayed?.let { record ->
+                    buildQuestionCanvas(service, record, layer.nodeId,
+                        questionsForNode(service, record, layer.nodeId), record.revision).also { canvas ->
+                        canvas.sources.values.forEach { service.storage.remember(it.record) }
+                    }
+                }
+            }
+            PreparedPanel(next, data, questionCanvas)
         }
     }
 
-    Column(Modifier.fillMaxSize().background(JewelTheme.globalColors.toolwindowBackground)
-        .padding(UnderstandingUiMetrics.PAGE_PADDING.dp),
-        verticalArrangement = Arrangement.spacedBy(UnderstandingUiMetrics.SECTION_GAP.dp)) {
-        if (history) {
-            UnderstandingSectionTitle("历史记录")
-            TextField(search, modifier = Modifier.fillMaxWidth(), placeholder = { Text("搜索标题或问题") })
-        }
-        if (service.readOnly) Text("此项目已在另一 IDE 实例中打开，当前只读",
-            color = JewelTheme.globalColors.text.info)
-        if (service.panelPage == PanelPage.WELCOME || (selected == null && layers.isEmpty() && !history)) {
-            UnderstandingWelcome(service, recentRecords, Modifier.weight(1f), selectRoot)
-        } else if (history) {
-            Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(UnderstandingUiMetrics.SMALL_GAP.dp)) {
-                if (records.isEmpty()) Text("暂无理解记录", color = JewelTheme.globalColors.text.info)
-                records.forEach { record ->
-                    RecordCandidateRow(record, selected?.id == record.id,
-                        onClick = { selectRoot(record) },
-                        onDelete = { service.deleteRoot(record.id) })
+    private fun publish(result: Result<PreparedPanel>) {
+        if (disposed) return
+        result.onFailure { failure ->
+            if (request?.page == PanelPage.HISTORY) updateHistory(Result.failure(failure))
+            else if (loaded == null || canvas == null) showMessage("图无法加载：${failure.message}")
+            else service.storageFailed(failure)
+        }.onSuccess { prepared ->
+            if (prepared.request != request) return@onSuccess
+            loaded = prepared
+            val data = prepared.data
+            if (prepared.request.page == PanelPage.HISTORY) {
+                if (data.history.isEmpty() && historyPage > 0) {
+                    historyPage--
+                    refresh()
+                } else updateHistory(Result.success(data))
+                return@onSuccess
+            }
+            val record = data.displayed
+            if (record == null) {
+                service.panelRecordId = null
+                service.showHistory()
+                return@onSuccess
+            }
+            val key = listOf(record.id, record.revision, prepared.request.layers.lastOrNull()?.nodeId, prepared.canvas)
+            if (canvasKey != key) {
+                closeCanvas()
+                com.lessplain.core.cancellationAwareResult {
+                    PanelCanvasView(service, record, prepared.request.layers.lastOrNull()?.nodeId,
+                        data.initialBrowse, prepared.canvas, ::openQuestions)
+                }.onSuccess {
+                    canvas = it
+                    canvasKey = key
+                    content.add(it, "canvas")
+                }.onFailure {
+                    showMessage("图无法加载：${it.message}")
+                    return@onSuccess
                 }
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(UnderstandingUiMetrics.SMALL_GAP.dp)) {
-                OutlinedButton(onClick = { historyPage-- }, enabled = historyPage > 0) { Text("上一页") }
-                Text("第 ${historyPage + 1} 页")
-                OutlinedButton(onClick = { historyPage++ }, enabled = data.historyHasNext) { Text("下一页") }
-            }
-        } else {
-            Box(Modifier.weight(1f)) {
-                when (currentLayer) {
-                    is FollowUpLayer -> QuestionIndexView(
-                        service, requireNotNull(displayedRecord), currentLayer.nodeId, revision, Modifier.fillMaxSize(),
-                        hierarchyItems, navigateToIndex,
-                    ) { child, nodeId ->
-                        service.select(child, nodeId, navigateSource = !service.graphStates.get(GraphLayerKey(child.id, nodeId)).navigationPinned)
-                        setLayers(layers + FollowUpLayer(child.id, nodeId))
-                    }
-                    null -> RecordView(service, requireNotNull(displayedRecord), data.initialBrowse, Modifier.fillMaxSize(),
-                        hierarchyItems, navigateToIndex) { nodeId ->
-                        setRootRecordId(displayedRecord.id)
-                        service.select(displayedRecord, nodeId, navigateSource = !service.graphStates.get(GraphLayerKey(displayedRecord.id, nodeId)).navigationPinned)
-                        setLayers(layers + FollowUpLayer(displayedRecord.id, nodeId))
-                    }
-                }
-                if (layers.isNotEmpty() || service.canReturnToPrevious) {
-                    Column(Modifier.align(Alignment.TopEnd).padding(UnderstandingUiMetrics.GAP.dp),
-                        verticalArrangement = Arrangement.spacedBy(UnderstandingUiMetrics.SMALL_GAP.dp)) {
-                        if (layers.isNotEmpty()) {
-                            OutlinedButton(onClick = {
-                                val parentLayers = layers.dropLast(1)
-                                val parentIndex = hierarchyEntries.indexOfFirst { it.layers == parentLayers }
-                                if (parentIndex >= 0) navigateToIndex(parentIndex)
-                            }) { Text("‹ 返回") }
-                        }
-                        if (service.canReturnToPrevious) {
-                            OutlinedButton(onClick = service::returnToPrevious) { Text(service.returnLabel) }
-                        }
-                    }
-                }
-            }
+            canvas?.update(data.hierarchy, prepared.request.layers, service.panelFocusQuestionId,
+                service.canReturnToPrevious, service.returnLabel, ::navigateTo, service::returnToPrevious)
+            cards.show(content, "canvas")
+            service.panelSession.remember(PanelCanvasRoute(data.hierarchyRootId ?: record.id, prepared.request.layers))
+            revalidate()
+            repaint()
         }
     }
-}
 
-@Composable
-private fun RecordView(
-    service: UnderstandingService,
-    record: UnderstandingRecord,
-    initialBrowse: BrowseState?,
-    modifier: Modifier,
-    hierarchy: List<DiagramHierarchyItem>,
-    onNavigateIndex: (Int) -> Unit,
-    onQuestions: (String) -> Unit,
-) {
-    val graphKey = GraphLayerKey(record.id)
-    val explorer = remember(record.id, record.revision) {
-        val state = service.graphStates.get(graphKey).browse ?: initialBrowse
-        StaticExplorer(record.graph, state?.staticPath.orEmpty(), service.activeNodeId ?: state?.nodeId,
-            state?.navigationState)
+    private fun updateHistory(result: Result<UnderstandingPanelData>?) {
+        history.update(result, historyPage, {
+            if (historyPage > 0) { historyPage--; refresh() }
+        }, { historyPage++; refresh() })
+        cards.show(content, "history")
     }
-    val diagram = remember(record.id, record.revision) {
-        runCatching { createUnderstandingDiagram(record, service.graphStates.get(graphKey).browse ?: initialBrowse).apply {
-            bindGraphState(service.graphStates, graphKey)
-        } }
+
+    private fun navigateTo(index: Int) {
+        val prepared = loaded ?: return
+        val destination = prepared.data.hierarchy.getOrNull(index) ?: return
+        val layer = destination.layers.lastOrNull()
+        val target = (layer?.recordId ?: prepared.data.hierarchyRootId)?.let(service.storage::record) ?: return
+        service.panelLayers = destination.layers
+        service.panelRootRecordId = prepared.data.hierarchyRootId.takeIf { destination.layers.isNotEmpty() }
+        service.panelFocusQuestionId = null
+        selectTarget(target, layer?.nodeId)
     }
-    DisposableEffect(diagram, hierarchy, onNavigateIndex) {
-        diagram.getOrNull()?.let { builder ->
-            builder.setHierarchy(hierarchy, showQuestions = { service.panelQuestionOrigins.show(builder, graphKey) }, onNavigate = onNavigateIndex)
-        }
-        onDispose { }
+
+    private fun openQuestions(record: UnderstandingRecord, nodeId: String) {
+        if (service.panelLayers.isEmpty()) service.panelRootRecordId = record.id
+        service.panelLayers = service.panelLayers + FollowUpLayer(record.id, nodeId)
+        service.panelFocusQuestionId = null
+        selectTarget(record, nodeId)
     }
-    DisposableEffect(diagram) {
-        val builder = diagram.getOrNull()
-        val navigation = builder?.let { bindDiagramSourceNavigation(service, graphKey, it, explorer, record) }
-        val questionSelection = builder?.onQuestionBadgeClicked(onQuestions)
-        val copySelection = builder?.bindNodeContextCopy(service) { nodeId -> SourceNode(record, nodeId) }
-        val content = builder?.bindContentActions(service, record.id, { SourceNode(record, it) },
-            { null }, titleRecord = record)
-        onDispose {
-            navigation?.close()
-            questionSelection?.close()
-            copySelection?.close()
-            content?.close()
-            builder?.let(Disposer::dispose)
-        }
+
+    private fun selectTarget(record: UnderstandingRecord, nodeId: String?) {
+        service.panelRecordId = record.id
+        service.select(record, nodeId,
+            navigateSource = !service.graphStates.get(GraphLayerKey(record.id, nodeId)).navigationPinned)
+        service.notifyChanged()
     }
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(UnderstandingUiMetrics.GAP.dp)) {
-        diagram.onSuccess { builder ->
-            key(builder) {
-                SwingPanel(factory = { builder.jComponent }, background = Color(UnderstandingUiStyle.canvas.rgb),
-                    modifier = Modifier.fillMaxWidth().weight(1f))
-            }
-        }.onFailure { failure -> Text("图无法加载：${failure.message}", color = Color(UnderstandingUiStyle.failure.rgb)) }
+
+    private fun showMessage(text: String) {
+        message.text = text
+        cards.show(content, "message")
+    }
+
+    private fun closeCanvas() {
+        canvas?.let { content.remove(it); it.close() }
+        canvas = null
+        canvasKey = null
+    }
+
+    override fun dispose() {
+        if (disposed) return
+        disposed = true
+        subscription.close()
+        loader.close()
+        history.close()
+        closeCanvas()
+        removeAll()
     }
 }

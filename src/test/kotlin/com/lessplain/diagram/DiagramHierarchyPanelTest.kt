@@ -51,20 +51,6 @@ class DiagramHierarchyPanelTest {
         }
     }
 
-    @Test fun `question command is independent of hierarchy indices and empty space`() = SwingUtilities.invokeAndWait {
-        var questions = 0
-        var selected = -1
-        val panel = DiagramHierarchyPanel(listOf(DiagramHierarchyItem("根层", 0, 7, true)),
-            showQuestions = { questions++ }) { selected = it }
-        try {
-            requireNotNull(panel.questionButton).doClick()
-            assertEquals(1, questions)
-            assertEquals(-1, selected)
-            panel.list.actionMap["choose-level"].actionPerformed(ActionEvent(panel.list, 0, "ENTER"))
-            assertEquals(0, selected, "命令不能占用层级行索引")
-        } finally { panel.close() }
-    }
-
     @Test fun `long tree is scrollable width bounded and live fonts release listeners`() {
         val original = UIManager.getFont("Label.font")
         var panel: DiagramHierarchyPanel? = null
@@ -77,14 +63,14 @@ class DiagramHierarchyPanelTest {
                 panel = DiagramHierarchyPanel((0..20).map {
                     DiagramHierarchyItem("很长的层级标题".repeat(40), it, it, it == 16)
                 }) { }
-                val current = panel!!
+                val current = kotlin.test.assertNotNull(panel)
                 val scroll = current.components.filterIsInstance<JScrollPane>().single()
                 assertTrue(current.preferredSize.width <= com.intellij.util.ui.JBUI.scale(656))
                 assertEquals(current.list.fixedCellHeight * 8, scroll.preferredSize.height)
                 UIManager.put("Label.font", Font(Font.DIALOG, Font.PLAIN, 23))
             }
             SwingUtilities.invokeAndWait {
-                val current = panel!!
+                val current = kotlin.test.assertNotNull(panel)
                 assertEquals(23, current.list.font.size)
                 val row = current.list.cellRenderer.getListCellRendererComponent(current.list,
                     current.list.model.getElementAt(16), 16, true, false) as JPanel

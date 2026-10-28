@@ -32,7 +32,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 import javax.swing.SwingUtilities
 import javax.swing.Timer
 
-internal enum class PanelPage { WELCOME, HISTORY, CANVAS }
+internal enum class PanelPage { HISTORY, CANVAS }
 
 internal data class PanelLocation(
     val page: PanelPage,
@@ -48,7 +48,9 @@ class UnderstandingService(private val project: Project, coroutineScope: Corouti
     @Volatile
     private var disposed = false
     private var storageError: String? = null
-    private val tasks = BackgroundTasks(coroutineScope) { action -> SwingUtilities.invokeLater(action) }
+    private val tasks = BackgroundTasks(coroutineScope) { action ->
+        com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater(action)
+    }
     internal val storage = UnderstandingStorage(
         Path.of(requireNotNull(project.basePath)), tasks,
         ::notifyChanged, ::storageFailed
@@ -79,8 +81,10 @@ class UnderstandingService(private val project: Project, coroutineScope: Corouti
     private val selection = UnderstandingSelection(project, this, storage)
     internal val resultInbox = ResultInbox(project)
     @Volatile
-    private var pendingAutoOpenKey: String? = resultInbox.pending().lastOrNull()?.key
-    internal var panelPage: PanelPage = PanelPage.WELCOME
+    private var pendingAutoOpenKey: String? = null
+    internal var panelPage: PanelPage = PanelPage.HISTORY
+    internal var panelRecordId: String? = null
+    internal val panelSession = PanelCanvasSession(project)
     internal var panelFocusQuestionId: String? = null
     private var previousLocation: PanelLocation? = null
     private var navigationGeneration = 0L
@@ -89,7 +93,10 @@ class UnderstandingService(private val project: Project, coroutineScope: Corouti
     private val editorOrigins = lazy { QuestionOriginWindow(this, project) }
     internal val panelQuestionOrigins: QuestionOriginWindow get() = panelOrigins.value
     internal val editorQuestionOrigins: QuestionOriginWindow get() = editorOrigins.value
-    private val deletionConfirmation = RootDeletionConfirmation(project, ::deleteConfirmedRoot)
+    private val confirmedWrites = com.lessplain.core.ConfirmedWrites { action ->
+        com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater { if (!disposed && !project.isDisposed) action() }
+    }
+    private val deletionConfirmation = MaterialDeletionConfirmation(project, ::deleteConfirmedRoot)
     private val resultTimer = Timer(180) { handlePendingResults() }.apply { isRepeats = false }
     private val focusListener = PropertyChangeListener {
         SwingUtilities.invokeLater { if (!project.isDisposed && panelIsActive()) showLatestPendingResult() }
@@ -97,11 +104,13 @@ class UnderstandingService(private val project: Project, coroutineScope: Corouti
 
     init {
         storage.initialize()
+        val restoreGeneration = navigationGeneration
+        SwingUtilities.invokeLater { if (!disposed && !project.isDisposed && restoreGeneration == navigationGeneration) restorePanelCanvas() }
         KeyboardFocusManager.getCurrentKeyboardFocusManager()
             .addPropertyChangeListener("focusOwner", focusListener)
     }
 
-    /** 工具窗口导航状态跨 Compose 和 Swing 内容重建保留。 */
+    /** 工具窗口导航状态独立于组件生命周期保留。 */
     internal var panelLayers: List<FollowUpLayer> = emptyList()
     internal var panelRootRecordId: String? = null
 
@@ -109,13 +118,6 @@ class UnderstandingService(private val project: Project, coroutineScope: Corouti
     internal val returnLabel: String
         get() = if (previousLocation?.page == PanelPage.CANVAS)
             "返回刚才的画布" else "返回刚才的页面"
-
-    internal fun showWelcome() {
-        navigationGeneration++
-        panelPage = PanelPage.WELCOME
-        previousLocation = null
-        notifyChanged()
-    }
 
     internal fun showHistory() {
         navigationGeneration++
@@ -126,7 +128,11 @@ class UnderstandingService(private val project: Project, coroutineScope: Corouti
     }
 
     internal fun showRoot(record: UnderstandingRecord) {
+        storage.remember(record)
+        if (storage.record(record.id) == null) return
         navigationGeneration++
+        panelRecordId = record.id
+        panelSession.remember(PanelCanvasRoute(record.id))
         panelLayers = emptyList()
         panelRootRecordId = null
         panelFocusQuestionId = null
@@ -144,10 +150,12 @@ class UnderstandingService(private val project: Project, coroutineScope: Corouti
         navigationGeneration++
         val previous = previousLocation ?: return
         previousLocation = null
+        panelRecordId = previous.recordId
         panelPage = previous.page
         panelLayers = previous.layers
         panelRootRecordId = previous.rootRecordId
         panelFocusQuestionId = previous.focusQuestionId
+        if (previous.page == PanelPage.CANVAS) previous.recordId?.let { panelSession.remember(PanelCanvasRoute(previous.rootRecordId ?: it, previous.layers)) }
         previous.recordId?.let { id ->
             storage.record(id)?.let {
                 select(it, previous.nodeId, navigateSource = false)
@@ -170,7 +178,7 @@ class UnderstandingService(private val project: Project, coroutineScope: Corouti
         // 结果已经提交，预热快照失败也必须保留待查看入口。
         recordId?.let { id -> com.lessplain.core.cancellationAwareResult { storage.loadRecord(id) }.onFailure(::storageFailed) }
         if (recordId != null && revision != null && revision > 1) {
-            SwingUtilities.invokeLater { if (!disposed) refreshOpenDiagrams(recordId) }
+            com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater { if (!disposed) refreshOpenDiagrams(recordId) }
         }
         val isUpdate = (revision != null && revision > 1) || questionId != null || answerId != null ||
                 recordId?.let { storage.record(it)?.parentId != null } == true
@@ -201,7 +209,7 @@ class UnderstandingService(private val project: Project, coroutineScope: Corouti
         NotificationGroupManager.getInstance().getNotificationGroup("code.comprehension.results")
             .createNotification(
                 resultNotificationTitle(fresh),
-                "打开理解工具窗口即可查看",
+                "从历史中打开带蓝点的记录查看",
                 NotificationType.INFORMATION
             )
             .notify(project)
@@ -223,24 +231,26 @@ class UnderstandingService(private val project: Project, coroutineScope: Corouti
         val key = pendingAutoOpenKey ?: return
         val result = resultInbox.pending().firstOrNull { it.key == key }
             ?: run { pendingAutoOpenKey = null; return }
-        if (showResult(result, automatic = true)) pendingAutoOpenKey = null
+        showResult(result, automatic = true)
     }
 
-    internal fun showResult(result: PendingResult, automatic: Boolean = false): Boolean {
-        val previous = if (automatic) previousLocation
+    internal fun showResult(result: PendingResult, automatic: Boolean = false) {
+        val previous = previousLocation
             ?: PanelLocation(
-                panelPage, activeRecordId, activeNodeId, panelLayers,
+                panelPage, panelRecordId, activeNodeId.takeIf { activeRecordId == panelRecordId }, panelLayers,
                 panelRootRecordId, panelFocusQuestionId
-            ) else null
+            )
         val request = ++navigationGeneration
         readBackground({ loadResultLocation(repository, result)?.also { storage.remember(it.record) } }) { loaded ->
-            if (request != navigationGeneration) return@readBackground
-            loaded.onFailure(::storageFailed).onSuccess { destination ->
-                if (destination == null) return@onSuccess
+            if (request != navigationGeneration || automatic && !panelIsActive()) return@readBackground
+            loaded.onFailure { storageFailed(it); contentActions.notifyQuestionCopy("结果无法打开：${it.message}", true) }.onSuccess { destination ->
+                if (destination == null || storage.record(destination.record.id) == null) { contentActions.notifyQuestionCopy("该结果已失效，无法定位", true); return@onSuccess }
+                panelRecordId = destination.record.id
                 panelLayers = destination.layers
                 panelRootRecordId = destination.rootRecordId
                 panelFocusQuestionId = destination.questionId
                 panelPage = PanelPage.CANVAS
+                panelSession.remember(PanelCanvasRoute(destination.rootRecordId ?: destination.record.id, destination.layers))
                 select(destination.record, navigateSource = false)
                 previousLocation = previous
                 resultInbox.markViewed(result.key)
@@ -248,7 +258,6 @@ class UnderstandingService(private val project: Project, coroutineScope: Corouti
                 notifyChanged()
             }
         }
-        return true
     }
 
     val activeRecordId: String? get() = selection.activeRecordId
@@ -295,11 +304,8 @@ class UnderstandingService(private val project: Project, coroutineScope: Corouti
         return core.captureContext(record?.id, node?.id, source, staticPath)
     }
 
-    fun addNodeNote(record: UnderstandingRecord, nodeId: String) = contentActions.addNodeNote(record, nodeId)
     fun showNodeNotes(record: UnderstandingRecord, nodeId: String, component: Component, point: Point) =
         contentActions.showNodeNotes(record, nodeId, component, point)
-
-    fun editRecordTitle(recordId: String) = contentActions.editRecordTitle(recordId)
 
     internal fun refreshOpenDiagrams(recordId: String) = uiRead {
         val manager = FileEditorManager.getInstance(project)
@@ -315,13 +321,15 @@ class UnderstandingService(private val project: Project, coroutineScope: Corouti
     }
 
     fun deleteRoot(recordId: String) {
-        if (!readOnly) storage.record(recordId)?.let(deletionConfirmation::show)
+        if (!readOnly) storage.record(recordId)?.let { deletionConfirmation.show(it.id, it.displayTitle ?: it.question) }
     }
+
+    internal val deleteConfirming: Boolean get() = deletionConfirmation.isOpen
 
     private fun deleteConfirmedRoot(recordId: String) {
         check(!project.isDisposed && !readOnly) { "当前项目不可删除记录" }
-        readBackground({ repository.deleteRootRecord(recordId) }) { result ->
-            result.onFailure(::storageFailed).onSuccess { deleted ->
+        confirmedWrites.dispatch({ repository.deleteRootRecord(recordId) }) { result ->
+            result.onFailure { storageFailed(it); contentActions.notifyQuestionCopy("删除失败：${it.message}", true) }.onSuccess { deleted ->
                 storage.remove(deleted.recordIds)
                 resultInbox.removeDeleted(deleted.recordIds, deleted.questionIds)
                 editorFiles.entries.removeIf { (_, file) ->
@@ -330,16 +338,47 @@ class UnderstandingService(private val project: Project, coroutineScope: Corouti
                         true
                     }
                 }
-                if (activeRecordId in deleted.recordIds) {
-                    selection.reset()
+                panelSession.removeDeleted(deleted.recordIds)
+                if (panelOrigins.isInitialized()) panelOrigins.value.removeDeleted(deleted.recordIds)
+                if (editorOrigins.isInitialized()) editorOrigins.value.removeDeleted(deleted.recordIds)
+                if (activeRecordId in deleted.recordIds) selection.reset()
+                if (panelRecordId in deleted.recordIds || panelRootRecordId in deleted.recordIds || panelLayers.any { it.recordId in deleted.recordIds }) {
+                    panelRecordId = null
                     panelLayers = emptyList()
                     panelRootRecordId = null
                     panelFocusQuestionId = null
                     panelPage = PanelPage.HISTORY
                     selection.clear()
                 }
-                previousLocation = null
+                previousLocation?.let { previous ->
+                    if (previous.recordId in deleted.recordIds || previous.rootRecordId in deleted.recordIds || previous.layers.any { it.recordId in deleted.recordIds }) previousLocation = null
+                }
                 notifyChanged()
+            }
+        }
+    }
+
+    private fun restorePanelCanvas() {
+        val route = panelSession.load() ?: return
+        if (panelRecordId != null || disposed) return
+        val request = navigationGeneration
+        readBackground({ loadPanelCanvas(repository, route).onEach { record ->
+            storage.remember(record); storage.rememberBrowse(record.id, storage.loadBrowse(record.id))
+        } }) { result ->
+            if (request != navigationGeneration || disposed || panelRecordId != null) return@readBackground
+            result.onSuccess { records ->
+                if (records.any { storage.record(it.id) == null }) return@onSuccess
+                val displayed = records.last()
+                panelRecordId = displayed.id
+                panelLayers = route.layers
+                panelRootRecordId = route.rootId.takeIf { route.layers.isNotEmpty() }
+                panelPage = PanelPage.CANVAS
+                select(displayed, navigateSource = false)
+                notifyChanged()
+            }.onFailure {
+                if (it is IllegalArgumentException) panelSession.clear()
+                storageFailed(it)
+                contentActions.notifyQuestionCopy("上次画布无法恢复，可从历史记录重新打开：${it.message}", true)
             }
         }
     }
@@ -387,7 +426,7 @@ class UnderstandingService(private val project: Project, coroutineScope: Corouti
     fun notifyChanged() {
         if (disposed) return
         listeners.forEach { listener ->
-            SwingUtilities.invokeLater {
+            com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater {
                 if (!disposed && listener in listeners) listener()
             }
         }
@@ -398,6 +437,7 @@ class UnderstandingService(private val project: Project, coroutineScope: Corouti
         selection.close()
         if (panelOrigins.isInitialized()) panelOrigins.value.close()
         if (editorOrigins.isInitialized()) editorOrigins.value.close()
+        confirmedWrites.close()
         tasks.close()
         deletionConfirmation.close()
         contentActions.close()
