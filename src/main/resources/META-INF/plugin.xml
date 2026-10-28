@@ -16,7 +16,7 @@
 
     <!-- 产品和插件兼容要求，更多说明：https://plugins.jetbrains.com/docs/intellij/plugin-compatibility.html -->
     <depends>com.intellij.modules.platform</depends>
-    <depends>com.intellij.modules.compose</depends>
+    <depends>org.intellij.plugins.markdown</depends>
     <depends>com.intellij.mcpServer</depends>
 
     <!-- 插件定义的扩展，更多说明：https://plugins.jetbrains.com/docs/intellij/plugin-extension-points.html -->
@@ -26,7 +26,6 @@
         <fileEditorProvider implementation="com.lessplain.diagram.UnderstandingFileEditorProvider"/>
         <fileEditorProvider implementation="com.lessplain.tutorial.TutorialEditorProvider"/>
         <editorTabTitleProvider implementation="com.lessplain.diagram.UnderstandingTabTitleProvider"/>
-        <editorTabTitleProvider implementation="com.lessplain.tutorial.TutorialTabTitleProvider"/>
         <toolWindow id="Understanding" factoryClass="com.lessplain.MyToolWindowFactory"
                     icon="AllIcons.Toolwindows.ToolWindowPalette"/>
         <notificationGroup id="code.comprehension.results" displayType="BALLOON"/>

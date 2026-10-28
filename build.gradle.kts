@@ -4,7 +4,6 @@ import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 plugins {
     id("org.jetbrains.kotlin.jvm")
     id("org.jetbrains.kotlin.plugin.serialization")
-    id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.changelog")
     id("org.jetbrains.intellij.platform")
 }
@@ -24,7 +23,7 @@ dependencies {
     intellijPlatform {
         intellijIdea("2026.1.5")
         testFramework(TestFrameworkType.Platform)
-        composeUI()
+        bundledPlugin("org.intellij.plugins.markdown")
         bundledPlugin("com.intellij.mcpServer")
 
         // 在此添加编译所需的插件依赖，例如：

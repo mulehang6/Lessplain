@@ -3,7 +3,7 @@ package com.lessplain.tutorial
 import org.junit.jupiter.api.Test
 import kotlin.test.*
 
-class TutorialMarkdownTest {
+class TutorialMarkdownTest : MarkdownParsingTest() {
     @Test fun `Chinese emoji repeated text emphasis inline code and links map to original UTF16 spans`() {
         val raw = "前😀 **中文** 与 `Flow` 再 **中文** [项目](lessplain://source/src_flow)"
         val mapped = inlineMarkdown(raw, 13)

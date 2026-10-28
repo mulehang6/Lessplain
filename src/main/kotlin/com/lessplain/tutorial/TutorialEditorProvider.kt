@@ -6,7 +6,6 @@ import com.intellij.openapi.fileEditor.FileEditorProvider
 import com.intellij.openapi.fileEditor.FileEditorState
 import com.intellij.openapi.fileEditor.TextEditor
 import com.intellij.pom.Navigatable
-import com.intellij.openapi.fileEditor.impl.EditorTabTitleProvider
 import com.intellij.openapi.fileTypes.PlainTextFileType
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
@@ -23,12 +22,6 @@ class TutorialEditorProvider : FileEditorProvider, DumbAware {
     override fun createEditor(project: Project, file: VirtualFile): FileEditor = TutorialFileEditor(project, file as TutorialVirtualFile)
     override fun getEditorTypeId() = "lessplain-tutorial"
     override fun getPolicy() = FileEditorPolicy.HIDE_DEFAULT_EDITOR
-}
-
-class TutorialTabTitleProvider : EditorTabTitleProvider {
-    override fun getEditorTabTitle(project: Project, file: VirtualFile): String? = (file as? TutorialVirtualFile)?.let {
-        project.getService(TutorialService::class.java).store.record(it.tutorialId).title
-    }
 }
 
 private class TutorialFileEditor(project: Project, private val virtualFile: TutorialVirtualFile) : UserDataHolderBase(), TextEditor {

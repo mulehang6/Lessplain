@@ -1,9 +1,8 @@
 package com.lessplain.tutorial
 
-import org.intellij.markdown.flavours.gfm.GFMFlavourDescriptor
 import org.intellij.markdown.MarkdownElementTypes
-import org.intellij.markdown.ast.ASTNode
-import org.intellij.markdown.parser.MarkdownParser
+import org.intellij.markdown.flavours.gfm.GFMFlavourDescriptor
+import org.intellij.plugins.markdown.lang.parser.MarkdownParserManager
 
 /** 可见文字的每个 UTF-16 单元保留其 Markdown 偏移，样式不参与选区计数。 */
 internal data class MappedText(val text: String, val offsets: List<Int>, val styles: List<TextStyle> = emptyList()) {
@@ -16,28 +15,20 @@ internal data class MarkdownContent(val start: Int, val end: Int, val kind: Stri
 /** 使用平台 GFM 解析器确定块边界，再生成保留源范围的有限预览模型。 */
 internal fun parseMarkdown(markdown: String): List<MarkdownContent> {
     if (markdown.isEmpty()) return emptyList()
-    val root = MarkdownParser(GFMFlavourDescriptor()).buildMarkdownTreeFromString(markdown)
+    val root = MarkdownParserManager.parseContent(markdown, GFMFlavourDescriptor())
     return root.children.filter { it.endOffset > it.startOffset && markdown.substring(it.startOffset, it.endOffset).isNotBlank() }.flatMap { node ->
         val start = node.startOffset
         val raw = markdown.substring(start, node.endOffset)
         val end = node.endOffset
-        val imagePattern = Regex("^!\\[.*?]\\(lessplain://(diagram|simulation)/([A-Za-z0-9_.-]+)\\)$")
-        fun images(current: ASTNode): List<ASTNode> = if (current.type == MarkdownElementTypes.IMAGE) listOf(current)
-            else current.children.flatMap(::images)
-        val references = images(node).mapNotNull { image ->
-            imagePattern.matchEntire(markdown.substring(image.startOffset, image.endOffset))?.let { image to it }
+        val code = node.type == MarkdownElementTypes.CODE_FENCE || node.type == MarkdownElementTypes.CODE_BLOCK
+        val references = if (code) emptyList()
+            else resourceReferences(raw, start)
+        val resource = references.singleOrNull()?.takeIf { image ->
+            markdown.substring(start, image.start).isBlank() && markdown.substring(image.end, end).isBlank()
         }
-        val resource = references.singleOrNull()?.takeIf { (image, _) ->
-            markdown.substring(start, image.startOffset).isBlank() && markdown.substring(image.endOffset, end).isBlank()
-        }?.second
         when {
-            resource != null -> listOf(MarkdownContent(start, end, resource.groupValues[1], mappedPlain(raw, start), resourceId = resource.groupValues[2]))
-            raw.startsWith("```") || raw.startsWith("~~~") -> {
-                val first = raw.indexOf('\n').let { if (it < 0) raw.length else it + 1 }
-                val last = if (raw.trimEnd().lineSequence().last().matches(Regex("(`{3,}|~{3,})"))) raw.lastIndexOf('\n').coerceAtLeast(first) else raw.length
-                val contentEnd = if (last > first && raw[last - 1] == '\r') last - 1 else last
-                listOf(MarkdownContent(start, end, "code", mappedPlain(raw.substring(first, contentEnd), start + first), raw.lineSequence().first().drop(3).trim()))
-            }
+            resource != null -> listOf(MarkdownContent(start, end, resource.kind, mappedPlain(raw, start), resourceId = resource.id))
+            code -> listOf(markdownCode(raw, start, end, node.type == MarkdownElementTypes.CODE_FENCE))
             node.type.toString().contains("TABLE") && references.isEmpty() -> listOf(MarkdownContent(start, end, "table", mappedPlain(raw, start)))
             else -> {
                 val prefix = Regex("^(#{1,6})\\s+").find(raw)
@@ -49,11 +40,11 @@ internal fun parseMarkdown(markdown: String): List<MarkdownContent> {
                         if (to > cursor && raw.substring(cursor, to).isNotBlank())
                             add(MarkdownContent(start + cursor, start + to, kind, inlineMarkdown(raw.substring(cursor, to), start + cursor)))
                     }
-                    references.forEach { (image, match) ->
-                        textUntil(image.startOffset - start)
-                        add(MarkdownContent(image.startOffset, image.endOffset,
-                            match.groupValues[1], mappedPlain(match.value, image.startOffset), resourceId = match.groupValues[2]))
-                        cursor = image.endOffset - start
+                    references.forEach { image ->
+                        textUntil(image.start - start)
+                        add(MarkdownContent(image.start, image.end,
+                            image.kind, mappedPlain(markdown.substring(image.start, image.end), image.start), resourceId = image.id))
+                        cursor = image.end - start
                     }
                     textUntil(raw.length)
                 }
