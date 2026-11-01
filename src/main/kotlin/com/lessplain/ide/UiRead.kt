@@ -1,10 +1,10 @@
 package com.lessplain.ide
 
+import com.intellij.openapi.application.WriteIntentReadAction
 import com.intellij.util.concurrency.ThreadingAssertions
 
-/** 原生 UI 回调必须已有 EDT 与写意图读域，保留内部写命令升级的能力。 */
+/** 在 EDT 回调中显式建立写意图读域，兼容未持锁的 Swing 事件并允许内部写命令升级。 */
 internal fun <T> uiRead(action: () -> T): T {
     ThreadingAssertions.assertEventDispatchThread()
-    ThreadingAssertions.assertWriteIntentReadAccess()
-    return action()
+    return WriteIntentReadAction.compute<T> { action() }
 }

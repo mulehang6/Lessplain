@@ -18,6 +18,8 @@ UnderstandingService 使用平台注入的 CoroutineScope 管理后台 IO。Unde
 
 结果携带文档版本，应用前检查版本、选择、请求代次与项目存活状态。涉及 IDE 模型的延迟操作由 Application.invokeLater 等平台入口调度，不能仅用普通 Swing 回调假定已处于合法读写意图域。平台取消异常继续传播，不转换成普通错误提示。
 
+同步 Swing 事件通过 `uiRead` 显式建立写意图读域，不假定鼠标回调已持锁；该入口仍要求 EDT，并允许教程编辑等内部操作升级为写命令。`TutorialOpeningThreadingTest` 从未持锁的 Swing 回调验证教程打开与编辑，避免平台 `invokeAndWait` 自带的锁掩盖问题。
+
 读取可取消；视图关闭后取消任务并丢弃已排队回调。资源初始化晚于所属对象关闭时，由创建线程释放结果，不能重新打开已关闭仓库。
 
 ## 写入与关闭
