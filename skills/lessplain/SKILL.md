@@ -7,7 +7,11 @@ description: 当用户明确要求使用 Lessplain 或要求可视化代码理�
 
 先冻结问题来源，再读源码。根据问题选择理解图或教程，产物保存成功后才说明已保存。工具参数以实际 schema 为准，对象和数组直接传递。
 
-默认把读者当成零基础：先用日常语言说清代码在做什么、按什么顺序发生，再引入必要术语并当场解释。正文、回答、图标签和模拟说明都遵守这点。保留源码中的名称，帮助读者认出它；按当前问题补足知识，不把相关概念一次全部展开。用户已明确知识水平或表达偏好时以用户要求为准。
+先读用户明确表达的背景与讲解偏好；上下文若返回偏好记录，一并采用，当前要求优先。背景未知时用日常语言给出容易开始的入口，不要求用户每次自评水平。项目对象首次出现时交代来源、职责和当前用途，再解释必要术语。保留源码名称以便对照；普通判断与见名知意的调用简述作用，被调函数内部只在当前问题需要时展开。提问过或阅读过不代表水平低或已经掌握。
+
+## 组织首次阅读
+
+用户说“带我看看”或“这块看不懂”即可开始，在给定范围内组织阅读。面对完整流程或陌生主题，按[教程工作流](references/lessons.md#分遍阅读与节点细讲)提前准备几遍可独立停下的阅读：先走通一个具体例子，再加入工具、分支或失败路径。每遍交代范围和停点，保留尚未展开的轮廓，按理解需要决定遍数。先组织必要铺垫，不等用户逐个发现该问什么。
 
 ## 开始
 
@@ -23,7 +27,9 @@ ID 与 revision 均从工具返回值取得。插件负责偏移、文件版本�
 
 关系问题画图，单个值或名称可直接回答。每图通常不超过 8 个节点，范围大时将子流程收为入口节点。节点标签说明做什么或得到什么，不复述代码。
 
-每个源码节点用 sourceId 引用它自己的精确来源。控制流分支写 condition，其他关系可为 call、data_flow、dependency、structure。边的 label 是简短关系说明，coverage 放完整依据。推断关系标 inferred=true 并提供 coverage。节点 flowRoles 可为 start/end，结束结果可用 endOutcome=success/failure。图不能证明真实运行发生。
+每个源码节点用 sourceId 引用它自己负责的代码范围。source_resolve 的 context 用于唯一定位，focus 对应实际解释的字段、表达式或代码块；简短标签与范围精确对应，整份函数只在解释整个函数时使用。控制流分支写 condition，其他关系可为 call、data_flow、dependency、structure。边的 label 是简短关系说明，coverage 放完整依据。推断关系标 inferred=true 并提供 coverage。节点 flowRoles 可为 start/end，结束结果可用 endOutcome=success/failure。图不能证明真实运行发生。
+
+图给出主线后，为理解门槛高的节点预先准备教程式细讲，按[节点细讲规则](references/lessons.md#分遍阅读与节点细讲)组织。必要性取决于陌生对象、语法和隐藏前提，按已知读者背景判断，不能用代码行数代替。先保存教程，将返回 ID 放进节点的 tutorialId，再创建或修订图；已有 tutorialId 时直接读改该教程。细讲不能强迫读者逐步走完才能继续看主节点。
 
 调用 lessplain_graph_create，parentId 省略为根图，追问图使用来源图 ID 作为 parentId。lessplain_graph_revise 保留节点及边 ID、顺序、端点、关系类型；需要改结构时新建图。根图可有完整、互斥、单层 clusters，每组用 id、label、nodeIds。
 
@@ -38,7 +44,7 @@ lessplain_tutorial_create 一次提交 Markdown、插图和模拟。教材可以
 ## 回答已有问题
 
 1. lessplain_annotations_list(kind=question,status=pending) 批量读取已提交问题及冻结来源。
-2. 每项分别核实源码，必要时先创建教程或图。
+2. 每项分别核实源码。对既有细讲的补问，先读原教程并整合修订相关段落；真正独立的新问题才按需创建材料。
 3. lessplain_question_answer 按 questionId 明确完成，markdown 为回答，可附 materialId。
 4. 复查待答列表。创建产物本身不会完成问题。
 

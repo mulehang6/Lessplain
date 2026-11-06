@@ -84,6 +84,15 @@ lessplain_annotations_list
 ~~~
 省略 materialId 查询项目。图注释没有语义分类；kind=feedback 返回 feedbackEligible 的候选，须由用户或 Agent 明确确认。
 
+## 节点细讲、阅读目录与偏好
+
+工具数量仍为 15，以下为既有工具的可选字段。
+
+- 图节点可带 `tutorialId`，指向已保存的教程。先用 tutorial_create 保存正文，再将返回 ID 写入 graph_create/graph_revise 的对应节点。同一节点只有一个细讲入口；读取图也返回该 ID。修订时省略该字段保留既有关联，提供新 ID 替换关联；新引用不存在或已删教程时保存失败。
+- tutorial_create 可带 `folderPath:["Agent 完整流程","第一遍"]`，首次将教程引用放入嵌套目录。空列表保持默认目录；重试保留用户已安排的位置。目录移动和改名不复制正文，界面支持多个目录引用同一材料。
+- context_capture 与 context_read 返回 `readerPreferences:{guidance,projectBackground}`。前者为本机用户的通用讲解要求，后者只属于当前项目；可能均为空。记录是读取时的当前偏好，冻结问题与源码不随之改写。其他工具不重复携带，Agent 本轮明确要求优先；插件不根据提问次数推断能力。
+- 细讲中的补问先用 tutorial_edit 更新同一正文，再用 question_answer 完成原问题；单独回答问题不会自动修改正文。
+
 lessplain_question_answer
 ~~~json
 {"questionId":"q_collect","markdown":"尚未开始收集，所以 flow 内的 println 还没有执行。"}
