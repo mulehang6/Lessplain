@@ -64,6 +64,7 @@ internal class SourceSelectionDrafts {
         capture: () -> SourceSelectionQuestion): SourceSelectionQuestion =
         values.firstOrNull { it.draft.retain && it.binding == binding && it.anchor.path == anchor.path &&
             it.anchor.version == anchor.version && it.anchor.text == anchor.text &&
+            it.anchor.focusStart == anchor.focusStart && it.anchor.focusEnd == anchor.focusEnd &&
             it.anchor.lineHint == anchor.lineHint } ?: capture().also { values += it }
 
     fun closed(question: SourceSelectionQuestion) {

@@ -37,7 +37,10 @@ internal fun validateGraphAnchors(
             val offset = content.indexOf(text)
             if (offset < 0) throw UnderstandingInputException("源码片段已变化或不存在")
             if (content.indexOf(text, offset + 1) >= 0) throw UnderstandingInputException("源码片段不唯一")
-            val symbolOffset = offset + text.indexOfFirst { !it.isWhitespace() }.coerceAtLeast(0)
+            val focusStart = anchor.focusStart?.let { anchor.text.take(it).replace("\r\n", "\n").length }
+            val focusEnd = anchor.focusEnd?.let { anchor.text.take(it).replace("\r\n", "\n").length }
+            val focusedText = text.substring(focusStart ?: 0, focusEnd ?: text.length)
+            val symbolOffset = offset + (focusStart ?: 0) + focusedText.indexOfFirst { !it.isWhitespace() }.coerceAtLeast(0)
             if (anchor.symbol != null && !symbolMatches(anchor.symbol, snapshot.symbolAt(symbolOffset))) {
                 throw UnderstandingInputException("源码片段所属符号不匹配")
             }
@@ -46,7 +49,8 @@ internal fun validateGraphAnchors(
             if (anchor.version.isNotEmpty() && supplied != version && supplied != sha256(content.replace("\n", "\r\n"))) {
                 throw UnderstandingInputException("文件版本已变化，请重新核实源码")
             }
-            anchor.copy(text = text, version = version, lineHint = content.take(offset).count { it == '\n' } + 1)
+            anchor.copy(text = text, version = version, lineHint = content.take(offset).count { it == '\n' } + 1,
+                focusStart = focusStart, focusEnd = focusEnd)
         } catch (failure: IllegalArgumentException) {
             errors += reference + "（" + anchor.path + "）：" + failure.message
             anchor

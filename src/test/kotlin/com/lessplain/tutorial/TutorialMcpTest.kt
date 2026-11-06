@@ -84,6 +84,19 @@ class TutorialMcpTest {
             call("lessplain_simulation_save", """{"tutorialId":"$tutorialId","id":"cold","expectedRevision":1,"language":"kotlin","code":"println(2)","scenarios":[{"id":"on","label":"执行","steps":[{"highlightLines":[1],"caption":"打印","stdout":"2\n"}]}]}""")
             val createdGraph = call("lessplain_graph_create", """{"contextId":"$contextId","title":"运行入口","graph":{"nodes":[{"id":"flow","label":"返回事件流","sourceId":"$sourceId"}],"edges":[]}}""")
             val graphId = createdGraph["id"]!!.jsonPrimitive.content
+            val focusedAnchor = graphs.repository.getRecord(graphId).graph.nodes.single().anchor!!
+            assertEquals("Flow<Event>", focusedAnchor.focusedText)
+            assertEquals("fun run(): Flow<Event> = TODO()", focusedAnchor.text)
+            val restoredSourceId = createdGraph["graph"]!!.jsonObject["nodes"]!!.jsonArray.single().jsonObject["sourceId"]!!.jsonPrimitive.content
+            assertEquals("Flow<Event>", tutorials.store.source(restoredSourceId).focus)
+            assertEquals(11, tutorials.store.source(restoredSourceId).start)
+            onEdt { uiRead {
+                val animation = com.lessplain.ide.SourceScrollAnimation()
+                try {
+                    com.lessplain.ide.navigateToSource(project, focusedAnchor, animation)
+                    assertEquals("Flow<Event>", FileEditorManager.getInstance(project).selectedTextEditor!!.selectionModel.selectedText)
+                } finally { animation.dispose() }
+            } }
             call("lessplain_graph_revise", """{"id":"$graphId","expectedRevision":1,"graph":{"nodes":[{"id":"flow","label":"准备事件流","sourceId":"$sourceId"}],"edges":[]}}""")
             lateinit var annotation: TutorialAnnotation
             onEdt { annotation = tutorials.annotationDraft(tutorialId, 0, 6, "question"); tutorials.store.createAnnotation(annotation.copy(text = "为什么？")); tutorials.submitQuestion(annotation.id) }

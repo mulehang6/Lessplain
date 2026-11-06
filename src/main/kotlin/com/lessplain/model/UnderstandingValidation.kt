@@ -13,6 +13,11 @@ fun SourceAnchor.validate() {
     requireInput(text.isNotBlank(), "锚点缺少源码文本")
     requireInput(version.isNotBlank(), "锚点缺少固定版本")
     requireInput(lineHint == null || lineHint > 0, "锚点行号必须大于零")
+    requireInput((focusStart == null) == (focusEnd == null), "关注范围必须同时提供起止位置")
+    if (focusStart != null && focusEnd != null) {
+        requireInput(focusStart >= 0 && focusEnd > focusStart && focusEnd <= text.length, "关注范围超出源码上下文")
+        requireInput(focusedText.isNotBlank(), "关注范围不能只有空白")
+    }
 }
 
 fun UnderstandingGraph.validate(validateAnchors: Boolean = true) {

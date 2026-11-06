@@ -76,7 +76,8 @@ abstract class LessplainToolsSupport : McpToolset {
     }
 
     protected fun registerSource(service: TutorialService, anchor: SourceAnchor): TutorialSource = service.store.saveSource(
-        TutorialSource(newId("src"), anchor.path, anchor.text, anchor.text, 0, anchor.text.length, anchor.version),
+        TutorialSource(newId("src"), anchor.path, anchor.text, anchor.focusedText,
+            anchor.focusStart ?: 0, anchor.focusEnd ?: anchor.text.length, anchor.version),
     )
 
     protected fun graphResult(service: TutorialService, record: UnderstandingRecord): Map<String, Any?> = mapOf(

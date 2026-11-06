@@ -8,7 +8,12 @@ data class SourceAnchor(
     val version: String,
     val lineHint: Int? = null,
     val fingerprint: String? = null,
-)
+    /** 上下文内的 UTF-16 关注范围；旧锚点缺省仍指向整段 text。 */
+    val focusStart: Int? = null,
+    val focusEnd: Int? = null,
+) {
+    val focusedText: String get() = text.substring(focusStart ?: 0, focusEnd ?: text.length)
+}
 
 data class GraphNode(
     val id: String,

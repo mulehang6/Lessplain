@@ -36,7 +36,7 @@ internal class TutorialSources(private val project: Project, private val store: 
 
     fun anchor(id: String): SourceAnchor {
         val source = store.source(id)
-        return SourceAnchor(source.path, null, source.context, source.version)
+        return SourceAnchor(source.path, null, source.context, source.version, focusStart = source.start, focusEnd = source.end)
     }
 
     fun track(source: TutorialSource): RangeMarker? {

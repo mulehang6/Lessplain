@@ -18,6 +18,20 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class UnderstandingAnchorPersistenceTest {
+    @Test
+    fun `field focus and surrounding context survive database reopen`() {
+        val context = "val source = window.find(id)"
+        val start = context.indexOf("window")
+        val focused = SourceAnchor("src/A.kt", null, context, "version", focusStart = start, focusEnd = start + 6)
+        val input = UnderstandingGraph(listOf(GraphNode("source", "找到会话", anchor = focused)), emptyList())
+        val id = UnderstandingRepository(root).use { UnderstandingCore(it).present(4, "field", "字段", input, "root").id }
+        UnderstandingRepository(root).use { repository ->
+            val restored = repository.getRecord(id).graph.nodes.single().anchor!!
+            assertEquals(focused, restored)
+            assertEquals("window", restored.focusedText)
+        }
+    }
+
     @TempDir lateinit var root: Path
     private val graph = UnderstandingGraph(listOf(GraphNode("save", "保存", anchor =
         SourceAnchor("src/A.kt", "submit", "fun submit() { save() }", ""))), emptyList())

@@ -14,6 +14,7 @@
 | [源码锚点](anchor-validation.md) | 引用校验、旧位置回退、边依据与定位边界 |
 | [线程与生命周期](platform-integration-threading.md) | 后台读写、延迟回调、取消、界面加载和释放 |
 | [图布局基准](graph-layout-benchmark.md) | 复现命令、采样方法及有日期的历史测量 |
+| [阅读体验实施清单](learning-experience-implementation.md) | 节点细讲、教程目录、精确锚点、讲解偏好与聚焦导航的已定约定和进度 |
 
 ## 维护记录
 

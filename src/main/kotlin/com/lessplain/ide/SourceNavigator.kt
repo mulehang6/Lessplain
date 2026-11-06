@@ -91,11 +91,11 @@ internal fun matchAnchorText(
         if (onHintLine.size > 1) return LocatedSource(LocationStatus.AMBIGUOUS, EvidenceStatus.UNKNOWN)
         if (onHintLine.size == 1) {
             val match = onHintLine.single()
-            val codeOffset = match + anchor.text.indexOfFirst { !it.isWhitespace() }.coerceAtLeast(0)
+            val codeOffset = match + (anchor.focusStart ?: 0) + anchor.focusedText.indexOfFirst { !it.isWhitespace() }.coerceAtLeast(0)
             if (anchor.symbol != null && !symbolMatches(anchor.symbol, symbolAt(codeOffset))) {
                 return LocatedSource(LocationStatus.UNRESOLVED, EvidenceStatus.UNKNOWN)
             }
-            return LocatedSource(LocationStatus.EXACT, EvidenceStatus.UNCHANGED, match)
+            return LocatedSource(LocationStatus.EXACT, EvidenceStatus.UNCHANGED, match + (anchor.focusStart ?: 0))
         }
     }
     if (matches.isEmpty()) {
@@ -109,13 +109,13 @@ internal fun matchAnchorText(
     if (matches.size > 1) return LocatedSource(LocationStatus.AMBIGUOUS, EvidenceStatus.UNKNOWN)
     val match = matches.single()
     // 缩进对应的 PSI 可能属于外层类，而非方法声明。
-    val symbolOffset = match + anchor.text.indexOfFirst { !it.isWhitespace() }.coerceAtLeast(0)
+    val symbolOffset = match + (anchor.focusStart ?: 0) + anchor.focusedText.indexOfFirst { !it.isWhitespace() }.coerceAtLeast(0)
     if (anchor.symbol != null && !symbolMatches(anchor.symbol, symbolAt(symbolOffset))) {
         return LocatedSource(LocationStatus.UNRESOLVED, EvidenceStatus.UNKNOWN)
     }
     return LocatedSource(
         if (versionMatches) LocationStatus.EXACT else LocationStatus.RELOCATED,
-        if (versionMatches) EvidenceStatus.UNCHANGED else EvidenceStatus.UNKNOWN, matches.single()
+        if (versionMatches) EvidenceStatus.UNCHANGED else EvidenceStatus.UNKNOWN, matches.single() + (anchor.focusStart ?: 0)
     )
 }
 
@@ -134,9 +134,15 @@ internal fun navigateToSource(
     val editor = FileEditorManager.getInstance(project).selectedTextEditor
     if (editor != null && !editor.isDisposed && FileDocumentManager.getInstance().getFile(editor.document) == file) {
         animation.moveTo(editor, offset)
+        if (located.evidence != EvidenceStatus.CHANGED) editor.selectionModel.setSelection(offset, offset + anchor.focusedText.length)
         return located
     }
     animation.cancel()
     OpenFileDescriptor(project, file, offset).navigate(true)
+    if (located.evidence != EvidenceStatus.CHANGED) {
+        FileEditorManager.getInstance(project).selectedTextEditor?.takeIf {
+            FileDocumentManager.getInstance().getFile(it.document) == file
+        }?.selectionModel?.setSelection(offset, offset + anchor.focusedText.length)
+    }
     return located
 }

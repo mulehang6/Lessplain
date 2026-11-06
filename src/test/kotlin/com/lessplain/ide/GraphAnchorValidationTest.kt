@@ -12,6 +12,23 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class GraphAnchorValidationTest {
+    @Test
+    fun `focus survives normalization and is rejected when out of bounds`() {
+        val context = "fun submit() {\r\n    window.save()\r\n}"
+        val start = context.indexOf("window")
+        val focused = SourceAnchor("src/Service.kt", null, context, "",
+            focusStart = start, focusEnd = start + 6)
+        val prepared = validateGraphAnchors(graph(focused)) { snapshot(context) }.nodes.single().anchor!!
+        assertEquals("window", prepared.focusedText)
+        assertEquals(start - 1, prepared.focusStart)
+        assertFailsWith<UnderstandingInputException> {
+            validateGraphAnchors(graph(focused.copy(focusEnd = context.length + 1))) { snapshot(context) }
+        }
+        assertFailsWith<UnderstandingInputException> {
+            validateGraphAnchors(graph(focused.copy(focusEnd = null))) { snapshot(context) }
+        }
+    }
+
     private val content = "class Service {\n    fun submit() { save() }\n}"
     private val anchor = SourceAnchor("src/Service.kt", "Service.submit", "fun submit() { save() }", "")
     private fun graph(value: SourceAnchor = anchor) = UnderstandingGraph(listOf(GraphNode("submit", "保存", anchor = value)), emptyList())

@@ -8,6 +8,23 @@ import kotlin.test.assertNull
 
 class SourceNavigatorTest {
     @Test
+    fun `field focus resolves within unique context rather than another occurrence`() {
+        val context = "val source = window.findConversationOrNull(id)"
+        val content = "val other = window.other()\n$context"
+        val start = context.indexOf("window")
+        val anchor = SourceAnchor("src/A.kt", null, context, sha256(content),
+            focusStart = start, focusEnd = start + "window".length)
+        val located = matchAnchorText(anchor, content) { null }
+        assertEquals(content.lastIndexOf("window"), located.offset)
+        assertEquals("window", anchor.focusedText)
+        val moved = "// inserted\n$content"
+        assertEquals(moved.lastIndexOf("window"), matchAnchorText(anchor, moved) { null }.offset)
+        val ambiguous = matchAnchorText(anchor, "$content\n$context") { null }
+        assertEquals(LocationStatus.AMBIGUOUS, ambiguous.location)
+        assertNull(ambiguous.offset)
+    }
+
+    @Test
     fun `missing block returns unique function with changed evidence without changing old anchor`() {
         val content = "fun submit() { checkPermission(); save() }"
         val anchor = SourceAnchor("src/A.kt", "submit", "if (valid) save()", "old")

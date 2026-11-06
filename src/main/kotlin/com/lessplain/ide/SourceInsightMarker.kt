@@ -61,10 +61,10 @@ internal class SourceInsightMarker(private val project: Project, parent: Disposa
         val path = root.resolve(anchor.path).normalize()
         if (!path.startsWith(root)) return located
         val document = resolution.document ?: return located
-        val end = start + anchor.text.length
+        val end = start + anchor.focusedText.length
         if (start < 0 || end > document.textLength || end <= start) return located
-        if (sourceExcerptChanged(document.charsSequence, start, end, anchor.text)) return located
-        target = Target(document, document.createRangeMarker(start, end), anchor.text, label.replace('\n', ' '), navigation, binding)
+        if (sourceExcerptChanged(document.charsSequence, start, end, anchor.focusedText)) return located
+        target = Target(document, document.createRangeMarker(start, end), anchor.focusedText, label.replace('\n', ' '), navigation, binding)
         refreshOpenEditors()
         return located
     }

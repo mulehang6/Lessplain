@@ -7,7 +7,6 @@ import com.lessplain.diagram.createUnderstandingDiagram
 import com.lessplain.diagram.LayoutDirection
 import com.lessplain.ide.GraphNodePosition
 import com.lessplain.model.BrowseState
-import com.lessplain.model.SourceAnchor
 import com.lessplain.model.UnderstandingRecord
 import java.awt.BorderLayout
 import java.awt.Dimension
@@ -29,7 +28,7 @@ internal class TutorialDiagramView(
 
     private fun createCanvas(): UnderstandingDiagram {
         val record = service.store.record(tutorialId)
-        val graph = resource.graph.toUnderstanding { id -> service.store.source(id).let { SourceAnchor(it.path, null, it.focus, it.version) } }
+        val graph = resource.graph.toUnderstanding(service.sources::anchor)
         val state = service.store.reading(tutorialId).diagrams[resource.id]
         return createUnderstandingDiagram(UnderstandingRecord("$tutorialId/diagrams/${resource.id}", resource.revision, null, null,
             resource.id, "", record.contextId, graph, record.createdAt), state?.let { BrowseState(resource.id, zoom = it.zoom, panX = it.x, panY = it.y, hasPan = true) }).apply {
