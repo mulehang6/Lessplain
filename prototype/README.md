@@ -27,6 +27,8 @@ pnpm run check
 
 不需要开发服务时，也可以在构建后直接打开 [dist/preview.html](dist/preview.html)。
 
+2026-11-06 的两个独立小验证位于 [learning-trials](learning-trials/README.md)：分遍阅读 Agent 流程，以及保留父目录、同级目录与阅读位置的聚焦导航。两页都能构建成直接打开的 HTML，尚未接入正式插件导航。
+
 ## 建议体验顺序
 
 1. 在右上角“体验场景”选“看一次分支”。图底部直接回放、上一步、下一步；运行值贴在节点上。点击节点同步定位源码。
