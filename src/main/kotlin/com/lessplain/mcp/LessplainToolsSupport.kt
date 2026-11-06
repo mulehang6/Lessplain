@@ -83,7 +83,7 @@ abstract class LessplainToolsSupport : McpToolset {
     protected fun graphResult(service: TutorialService, record: UnderstandingRecord): Map<String, Any?> = mapOf(
         "id" to record.id, "revision" to record.revision, "title" to (record.displayTitle ?: record.question), "parentId" to record.parentId,
         "graph" to TutorialGraph(
-            record.graph.nodes.map { TutorialNode(it.id, it.label, it.anchor?.let { anchor -> registerSource(service, anchor).id }, it.kind, it.evidenceIds, it.flowRoles, it.endOutcome) },
+            record.graph.nodes.map { TutorialNode(it.id, it.label, it.anchor?.let { anchor -> registerSource(service, anchor).id }, it.kind, it.evidenceIds, it.flowRoles, it.endOutcome, it.tutorialId) },
             record.graph.edges.map { TutorialEdge(it.id, it.from, it.to, it.summary.orEmpty(), it.relation, it.condition, it.coverage, it.evidenceIds, it.inferred) },
             record.graph.evidence.map { TutorialEvidence(it.id, registerSource(service, it.anchor).id, it.note, it.dependencies.map { dependency -> registerSource(service, dependency).id }) },
             record.graph.clusters.map { TutorialCluster(it.id, it.title, it.nodeIds) },

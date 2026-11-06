@@ -25,6 +25,8 @@ data class GraphNode(
     val flowRoles: List<String> = emptyList(),
     /** 当前解释范围的 success 或 failure；null 表示结果未归类。 */
     val endOutcome: String? = null,
+    /** 当前节点的唯一细讲正文；图和教程目录引用同一材料。 */
+    val tutorialId: String? = null,
 )
 
 data class GraphEdge(

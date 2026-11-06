@@ -36,6 +36,12 @@
         <mcpToolset implementation="com.lessplain.mcp.LessplainAnnotationTools"/>
     </extensions>
     <actions>
+        <action id="Lessplain.FocusedSource" class="com.lessplain.ui.FocusedSourceAction" text="源码位置">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+        <action id="Lessplain.ReaderPreferences" class="com.lessplain.tutorial.ReaderPreferencesAction" text="讲解偏好">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
         <action id="Lessplain.OpenTutorials" class="com.lessplain.tutorial.OpenTutorialsAction" text="教程目录">
             <add-to-group group-id="ToolsMenu" anchor="last"/>
         </action>

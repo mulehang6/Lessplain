@@ -37,6 +37,8 @@ class UnderstandingPanel(private val service: UnderstandingService) : JPanel(Bor
     private var canvasKey: List<Any?>? = null
     internal var canvas: PanelCanvasView? = null
         private set
+    internal var explanation: NodeExplanationPanel? = null
+        private set
     private val loader = LatestBackgroundRead<PreparedPanel>(service::readBackground, ::publish)
     private val subscription = service.onChanged(::refresh)
 
@@ -60,6 +62,7 @@ class UnderstandingPanel(private val service: UnderstandingService) : JPanel(Bor
             request = next
             loaded = null
             if (historyVisible) {
+                closeExplanation()
                 closeCanvas()
                 updateHistory(null)
             } else if (canvasKey?.get(0) != (next.layers.lastOrNull()?.recordId ?: next.activeRecordId) ||
@@ -112,7 +115,7 @@ class UnderstandingPanel(private val service: UnderstandingService) : JPanel(Bor
                 closeCanvas()
                 com.lessplain.core.cancellationAwareResult {
                     PanelCanvasView(service, record, prepared.request.layers.lastOrNull()?.nodeId,
-                        data.initialBrowse, prepared.canvas, ::openQuestions)
+                        data.initialBrowse, prepared.canvas, ::openQuestions, ::openExplanation)
                 }.onSuccess {
                     canvas = it
                     canvasKey = key
@@ -124,7 +127,18 @@ class UnderstandingPanel(private val service: UnderstandingService) : JPanel(Bor
             }
             canvas?.update(data.hierarchy, prepared.request.layers, service.panelFocusQuestionId,
                 service.canReturnToPrevious, service.returnLabel, ::navigateTo, service::returnToPrevious)
-            cards.show(content, "canvas")
+            val currentExplanation = explanation
+            val detailRecord = currentExplanation?.let { detail ->
+                if (detail.record.id == record.id) record
+                else prepared.canvas?.sources?.values?.firstOrNull { it.record.id == detail.record.id }?.record
+            }
+            if (currentExplanation != null && detailRecord != null) {
+                if (currentExplanation.record.revision != detailRecord.revision) openExplanation(detailRecord, currentExplanation.nodeId)
+                else cards.show(content, "explanation")
+            } else {
+                closeExplanation()
+                cards.show(content, "canvas")
+            }
             service.panelSession.remember(PanelCanvasRoute(data.hierarchyRootId ?: record.id, prepared.request.layers))
             revalidate()
             repaint()
@@ -174,12 +188,32 @@ class UnderstandingPanel(private val service: UnderstandingService) : JPanel(Bor
         canvasKey = null
     }
 
+    private fun openExplanation(record: UnderstandingRecord, nodeId: String) {
+        if (disposed || record.graph.nodes.none { it.id == nodeId }) return
+        closeExplanation()
+        val next = NodeExplanationPanel(service, record, nodeId, back = {
+            closeExplanation()
+            cards.show(content, "canvas")
+        }, selected = { id -> service.select(record, id) })
+        explanation = next
+        content.add(next, "explanation")
+        cards.show(content, "explanation")
+        revalidate()
+        repaint()
+    }
+
+    private fun closeExplanation() {
+        explanation?.let { content.remove(it); it.close() }
+        explanation = null
+    }
+
     override fun dispose() {
         if (disposed) return
         disposed = true
         subscription.close()
         loader.close()
         history.close()
+        closeExplanation()
         closeCanvas()
         removeAll()
     }

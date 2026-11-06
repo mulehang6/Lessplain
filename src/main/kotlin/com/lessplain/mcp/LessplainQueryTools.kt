@@ -13,7 +13,8 @@ class LessplainQueryTools : LessplainToolsSupport() {
     suspend fun capture(question: String): McpToolCallResult = durableResult {
         val service = tutorial()
         val context = service.capture(question)
-        mapOf("contextId" to context.id, "sourceId" to context.sourceIds.singleOrNull(), "context" to context, "sources" to context.sourceIds.map(service.store::source))
+        mapOf("contextId" to context.id, "sourceId" to context.sourceIds.singleOrNull(), "context" to context, "sources" to context.sourceIds.map(service.store::source),
+            "readerPreferences" to edt { ReaderPreferencesStore(service.project).snapshot() })
     }
 
     @McpTool(name = "lessplain_context_read")
@@ -21,7 +22,8 @@ class LessplainQueryTools : LessplainToolsSupport() {
     suspend fun contextRead(contextId: String): McpToolCallResult = durableResult {
         val tutorials = tutorial()
         val context = try { tutorials.store.context(contextId) } catch (_: TutorialProblem) { importContext(tutorials, graph().core.context(contextId)) }
-        mapOf("context" to context, "sources" to context.sourceIds.map(tutorials.store::source), "graphContext" to context.graphContextToken?.let { graph().core.context(it) })
+        mapOf("context" to context, "sources" to context.sourceIds.map(tutorials.store::source), "graphContext" to context.graphContextToken?.let { graph().core.context(it) },
+            "readerPreferences" to edt { ReaderPreferencesStore(tutorials.project).snapshot() })
     }
 
     @McpTool(name = "lessplain_materials_list")

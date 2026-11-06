@@ -35,6 +35,7 @@ fun UnderstandingGraph.validate(validateAnchors: Boolean = true) {
         requireInput(node.endOutcome == null || node.endOutcome in setOf("success", "failure"), "节点 ${node.id} 结束结果无效")
         requireInput(node.endOutcome == null || "end" in node.flowRoles, "节点 ${node.id} 结束结果需要 end 角色")
         requireInput(node.label.isNotBlank(), "节点 ${node.id} 缺少标签")
+        requireInput(node.tutorialId == null || node.tutorialId.startsWith("tut_"), "节点 ${node.id} 细讲引用无效")
         if (validateAnchors) node.anchor?.validate()
         requireInput(node.evidenceIds.all(evidenceIds::contains), "节点 ${node.id} 引用未知证据")
     }

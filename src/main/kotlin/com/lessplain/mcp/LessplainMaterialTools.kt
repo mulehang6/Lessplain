@@ -14,6 +14,7 @@ class LessplainMaterialTools : LessplainToolsSupport() {
     @McpDescription("创建理解图，省略 parentId 为根图。保留现有关系语义和证据要求；sourceId 从冻结上下文或 source_resolve 获取；不传坐标。")
     suspend fun graphCreate(contextId: String, title: String, graph: TutorialGraph, parentId: String? = null): McpToolCallResult = writeResult("graph_create", listOf(contextId, title, graph, parentId), useTutorialReceipt = false) {
         val tutorials = tutorial(); val graphs = graph()
+        graph.nodes.mapNotNull { it.tutorialId }.distinct().forEach(tutorials.store::record)
         val context = try { tutorials.store.context(contextId) } catch (_: TutorialProblem) { importContext(tutorials, graphs.core.context(contextId)) }
         val request = sha256(gson.toJson(listOf("graph_create", contextId, title, graph, parentId)))
         val record = graphs.core.present(UNDERSTANDING_SCHEMA_REVISION, request, context.question.ifBlank { title }, graph.toUnderstanding(tutorials.sources::anchor),
@@ -26,7 +27,11 @@ class LessplainMaterialTools : LessplainToolsSupport() {
     @McpDescription("修订理解图。保留节点与连线 ID、顺序、端点和关系类型；不改变原问题、归属或批注。")
     suspend fun graphRevise(id: String, expectedRevision: Int, graph: TutorialGraph): McpToolCallResult = writeResult("graph_revise", listOf(id, expectedRevision, graph), useTutorialReceipt = false) {
         val tutorials = tutorial(); val graphs = graph(); val old = graphs.repository.getRecord(id)
-        val value = graph.toUnderstanding(tutorials.sources::anchor)
+        graph.nodes.mapNotNull { it.tutorialId }.distinct().forEach(tutorials.store::record)
+        val previousTutorials = old.graph.nodes.associate { it.id to it.tutorialId }
+        val value = graph.copy(nodes = graph.nodes.map { node ->
+            node.copy(tutorialId = node.tutorialId ?: previousTutorials[node.id])
+        }).toUnderstanding(tutorials.sources::anchor)
         val record = try {
             graphs.core.revise(UNDERSTANDING_SCHEMA_REVISION, sha256(gson.toJson(listOf("graph_revise", id, expectedRevision, graph))), old.question, value, id, expectedRevision, ClusterUpdate.Replace(value.clusters))
         } catch (conflict: UnderstandingRevisionConflict) {
@@ -38,9 +43,12 @@ class LessplainMaterialTools : LessplainToolsSupport() {
 
     @McpTool(name = "lessplain_tutorial_create")
     @McpDescription("原子校验并创建 Markdown 教程及全部插图/教学模拟。资源引用使用 lessplain://diagram/id、lessplain://simulation/id；源码链接使用 lessplain://source/sourceId。")
-    suspend fun tutorialCreate(contextId: String, title: String, markdown: String, diagrams: List<TutorialDiagram> = emptyList(), simulations: List<TutorialSimulation> = emptyList()): McpToolCallResult = writeResult("tutorial_create", listOf(contextId, title, markdown, diagrams, simulations)) { requestKey ->
+    suspend fun tutorialCreate(contextId: String, title: String, markdown: String, diagrams: List<TutorialDiagram> = emptyList(), simulations: List<TutorialSimulation> = emptyList(), folderPath: List<String> = emptyList()): McpToolCallResult = writeResult("tutorial_create",
+        listOf(contextId, title, markdown, diagrams, simulations).let { if (folderPath.isEmpty()) it else it + listOf(folderPath) }) { requestKey ->
+        tutorialRequire(folderPath.all { it.isNotBlank() }, "EMPTY_TITLE", "folderPath", "目录名称不能为空")
         val service = tutorial()
         val record = service.create(contextId, title, markdown, TutorialResourceState(diagrams, simulations), requestKey)
+        edt { service.catalog.placeNew(record.id, record.title, folderPath); service.changed(record.id) }
         mapOf("tutorial" to record, "resources" to service.store.resource(record.id))
     }
 

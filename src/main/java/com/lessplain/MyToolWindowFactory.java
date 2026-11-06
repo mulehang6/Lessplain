@@ -9,6 +9,7 @@ import com.lessplain.tutorial.OpenTutorialsAction;
 import com.lessplain.ui.OpenUnderstandingInEditorAction;
 import com.lessplain.ui.UnderstandingHistoryAction;
 import com.lessplain.ui.UnderstandingPanel;
+import com.lessplain.ui.FocusedSourceAction;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
@@ -18,7 +19,7 @@ public final class MyToolWindowFactory implements ToolWindowFactory {
     @Override
     public void createToolWindowContent(@NotNull Project project, @NotNull ToolWindow toolWindow) {
         var service = project.getService(UnderstandingService.class);
-        toolWindow.setTitleActions(List.of(new OpenTutorialsAction(),
+        toolWindow.setTitleActions(List.of(new OpenTutorialsAction(), new FocusedSourceAction(),
                 new UnderstandingHistoryAction(service), new OpenUnderstandingInEditorAction(project, service)));
         var panel = new UnderstandingPanel(service);
         var content = ContentFactory.getInstance().createContent(panel, null, false);

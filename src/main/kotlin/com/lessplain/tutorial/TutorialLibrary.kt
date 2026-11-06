@@ -25,6 +25,7 @@ import javax.swing.KeyStroke
 import javax.swing.ListCellRenderer
 import javax.swing.ScrollPaneConstants
 import javax.swing.ToolTipManager
+import javax.swing.JButton
 import javax.swing.event.DocumentEvent
 import javax.swing.event.DocumentListener
 
@@ -60,6 +61,10 @@ internal class TutorialLibrary(project: Project) : JPanel(BorderLayout(0, JBUI.s
     private var mouseActive = false
     internal val activeIndex: Int get() = if (mouseActive) hoveredIndex else list.selectedIndex
     private val subscription = service.onChanged { refresh() }
+    private val catalog = TutorialCatalogTree(service) { opened() }
+    private val pages = java.awt.CardLayout()
+    private val results = JPanel(pages)
+    private var catalogVisible = false
 
     init {
         preferredSize = JBUI.size(520, 400)
@@ -73,7 +78,13 @@ internal class TutorialLibrary(project: Project) : JPanel(BorderLayout(0, JBUI.s
             override fun caretPositionChanged(event: java.awt.event.InputMethodEvent) = Unit
         })
         add(search, BorderLayout.NORTH)
-        add(JBScrollPane(list, ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED, ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER), BorderLayout.CENTER)
+        results.add(JBScrollPane(list, ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED, ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER), "list")
+        results.add(catalog, "catalog")
+        add(results, BorderLayout.CENTER)
+        add(JPanel(java.awt.FlowLayout(java.awt.FlowLayout.LEADING)).apply {
+            add(JButton("新建目录").apply { isEnabled = !service.store.readOnly; addActionListener { catalog.createFolder() } })
+            add(JButton("讲解偏好").apply { addActionListener { ReaderPreferencesAction.edit(project) } })
+        }, BorderLayout.SOUTH)
         // 只使用按当前鼠标位置取值的普通提示，避免平台扩展行提示继续绑定旧选择。
         list.setExpandableItemsEnabled(false)
         list.fixedCellHeight = UIUtil.getLabelFont().size * 2 + JBUI.scale(22)
@@ -116,7 +127,8 @@ internal class TutorialLibrary(project: Project) : JPanel(BorderLayout(0, JBUI.s
             search.textEditor.actionMap.put("catalog.$key", object : AbstractAction() {
                 override fun actionPerformed(event: java.awt.event.ActionEvent) {
                     mouseActive = false
-                    if (!model.isEmpty) {
+                    if (catalogVisible) catalog.moveSelection(delta)
+                    else if (!model.isEmpty) {
                         list.selectedIndex = (list.selectedIndex + delta).coerceIn(0, model.size - 1)
                         list.ensureIndexIsVisible(list.selectedIndex)
                     }
@@ -144,7 +156,10 @@ internal class TutorialLibrary(project: Project) : JPanel(BorderLayout(0, JBUI.s
         list.repaint()
     }
     private fun paths(record: TutorialRecord) = record.sourceIds.map { service.store.source(it).path }.distinct().joinToString().ifBlank { "独立学习文档" }
-    private fun open() { list.selectedValue?.let { service.open(it.id); opened() } }
+    private fun open() {
+        if (catalogVisible) catalog.openSelection()
+        else list.selectedValue?.let { service.open(it.id); opened() }
+    }
     private fun refresh() {
         val selected = list.selectedValue?.id
         val previous = list.selectedIndex
@@ -152,6 +167,9 @@ internal class TutorialLibrary(project: Project) : JPanel(BorderLayout(0, JBUI.s
         model.clear()
         service.store.list().filter { it.title.contains(search.text, true) || it.markdown.contains(search.text, true) }.sortedByDescending { it.createdAt }.forEach(model::addElement)
         list.selectedIndex = (0 until model.size).find { model[it].id == selected } ?: previous.coerceAtMost(model.size - 1)
+        catalog.refresh(service.store.list())
+        catalogVisible = search.text.isBlank() && service.catalog.snapshot().isNotEmpty()
+        pages.show(results, if (catalogVisible) "catalog" else "list")
     }
     override fun dispose() { subscription.close(); ToolTipManager.sharedInstance().unregisterComponent(list) }
 }

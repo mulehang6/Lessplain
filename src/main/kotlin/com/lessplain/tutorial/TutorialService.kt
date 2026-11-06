@@ -21,6 +21,7 @@ import javax.swing.SwingUtilities
 
 /** 所有 UI 写入经 EDT；磁盘写入由 store 串行异步完成。正文更新不会重建编辑器。 */
 class TutorialService(internal val project: Project) : Disposable {
+    internal val catalog = TutorialCatalog(project)
     private var disposed = false
     val store = TutorialStore(PathManager.getConfigDir().resolve("lessplain/tutorials").resolve(sha256(project.locationHash)), cleanupFailed = { _, failure ->
         SwingUtilities.invokeLater {

@@ -22,6 +22,7 @@ class TutorialStore(private val root: Path, private val cleanupDeleted: (Path, S
     private val contexts = linkedMapOf<String, TutorialContext>()
     private val sources = linkedMapOf<String, TutorialSource>()
     private val reading = linkedMapOf<String, TutorialReadingState>()
+    private val panelReading = linkedMapOf<String, TutorialReadingState>()
     private val receipts = linkedMapOf<String, TutorialRecord>()
     private val toolReceipts = linkedMapOf<String, String>()
     private val removedContexts = linkedMapOf<String, Set<String>>()
@@ -48,6 +49,7 @@ class TutorialStore(private val root: Path, private val cleanupDeleted: (Path, S
                 content?.toolReceipts?.let(toolReceipts::putAll)
                 content?.removedContexts?.let { removedContexts[path.fileName.toString()] = it }
                 read(path.resolve("reading.json"), TutorialReadingState::class.java)?.let { reading[path.fileName.toString()] = it }
+                read(path.resolve("reading-panel.json"), TutorialReadingState::class.java)?.let { panelReading[path.fileName.toString()] = it }
             } }
             read(root.resolve("contexts.json"), Array<TutorialContext>::class.java)?.forEach { contexts[it.id] = it }
             read(root.resolve("sources.json"), Array<TutorialSource>::class.java)?.forEach { sources[it.id] = it }
@@ -99,7 +101,7 @@ class TutorialStore(private val root: Path, private val cleanupDeleted: (Path, S
     @Synchronized fun sources() = sources.values.toList()
     @Synchronized fun annotations(id: String? = null) = annotations.values.filter { id == null || it.materialId == id }
     @Synchronized fun annotation(id: String): TutorialAnnotation { lifetimes.deletedAnnotation(id)?.let(::available); return annotations[id] ?: throw TutorialProblem("NOT_FOUND", "id", "批注不存在：$id") }
-    @Synchronized fun reading(id: String) = reading[id] ?: TutorialReadingState()
+    @Synchronized fun reading(id: String, panel: Boolean = false) = (if (panel) panelReading else reading)[id] ?: TutorialReadingState()
     @Synchronized fun receipt(key: String) = receipts[key]?.also { available(it.id) }
     @Synchronized fun toolReceipt(key: String): String? {
         tutorialRequire(lifetimes.requestOwner(key) !in deleting, "DELETING", "id", "教程正在删除")
@@ -393,11 +395,11 @@ class TutorialStore(private val root: Path, private val cleanupDeleted: (Path, S
         return data.asJsonObject.get("id")?.takeIf { it.isJsonPrimitive }?.asString?.takeIf { it.startsWith("q_") || it.startsWith("note_") }
     }
 
-    @Synchronized fun saveReading(id: String, state: TutorialReadingState) {
+    @Synchronized fun saveReading(id: String, state: TutorialReadingState, panel: Boolean = false) {
         writable()
         editable(id)
-        reading[id] = state
-        persist(root.resolve(id).resolve("reading.json"), state)
+        (if (panel) panelReading else reading)[id] = state
+        persist(root.resolve(id).resolve(if (panel) "reading-panel.json" else "reading.json"), state)
     }
 
     /** 删除登记先落盘，目录清理排在全部旧保存之后；登记成功后任何迟到写入均拒绝。 */
@@ -421,7 +423,7 @@ class TutorialStore(private val root: Path, private val cleanupDeleted: (Path, S
         val cleanup = synchronized(this) {
             val contextIds = listOfNotNull(records[id]?.contextId) + annotations(id).mapNotNull { it.contextId } + contexts.values.filter { it.materialId == id }.map { it.id } + removedContexts[id].orEmpty()
             val ownedResources = resources[id]
-            records.remove(id); resources.remove(id); reading.remove(id); removedContexts.remove(id)
+            records.remove(id); resources.remove(id); reading.remove(id); panelReading.remove(id); removedContexts.remove(id)
             annotations.entries.removeIf { it.value.materialId == id }
             receipts.entries.removeIf { it.value.id == id }
             writer.discard(root.resolve(id))

@@ -28,7 +28,7 @@ import javax.swing.SwingUtilities
 import javax.swing.Timer
 
 /** 编辑与只读预览明确分离，模式切换不替换规范 Document 或输入状态。 */
-internal class TutorialEditorView(private val project: Project, val id: String) : JPanel(BorderLayout()), AutoCloseable, com.intellij.openapi.editor.colors.EditorColorsListener {
+internal class TutorialEditorView(private val project: Project, val id: String, private val panel: Boolean = false) : JPanel(BorderLayout()), AutoCloseable, com.intellij.openapi.editor.colors.EditorColorsListener {
     val service = project.getService(TutorialService::class.java)
     val editor = EditorFactory.getInstance().createEditor(service.document(id), project)
     val preview = TutorialPreviewPane(editor, service, id)
@@ -40,7 +40,7 @@ internal class TutorialEditorView(private val project: Project, val id: String) 
     private val body = JPanel(BorderLayout())
     val split = OnePixelSplitter(false, 0.5f).apply { setHonorComponentsMinimumSize(false) }
     val tabActions = TutorialLayoutActions(this)
-    private val initialReading = service.store.reading(id)
+    private val initialReading = service.store.reading(id, panel)
     var mode = initialReading.mode
         private set
     val focusTarget get() = if (mode == TutorialDisplayMode.EDIT) editor.contentComponent else preview
@@ -198,7 +198,7 @@ internal class TutorialEditorView(private val project: Project, val id: String) 
                 if (!closed) uiRead {
                     syncing = true
                     try {
-                        if (next == TutorialDisplayMode.SPLIT) split.proportion = service.store.reading(id).divider.coerceIn(0.15, 0.85).toFloat()
+                        if (next == TutorialDisplayMode.SPLIT) split.proportion = service.store.reading(id, panel).divider.coerceIn(0.15, 0.85).toFloat()
                         scrollEditorTo(source)
                         preview.followSource(source)
                     } finally { syncing = false }
@@ -220,9 +220,9 @@ internal class TutorialEditorView(private val project: Project, val id: String) 
     }
     private fun saveReading() {
         if (service.store.readOnly || service.store.isUnavailable(id)) return
-        val reading = service.store.reading(id)
+        val reading = service.store.reading(id, panel)
         service.store.saveReading(id, reading.copy(caret = editor.caretModel.offset, scroll = editor.scrollingModel.verticalScrollOffset,
-            mode = mode, previewSource = preview.topSource(), divider = if (mode == TutorialDisplayMode.SPLIT) split.proportion.toDouble() else reading.divider))
+            mode = mode, previewSource = preview.topSource(), divider = if (mode == TutorialDisplayMode.SPLIT) split.proportion.toDouble() else reading.divider), panel)
     }
     fun active(value: Boolean) { floating.active(value); actions.active(value); if (value) timer.restart() }
     override fun globalSchemeChange(scheme: com.intellij.openapi.editor.colors.EditorColorsScheme?) { timer.restart() }

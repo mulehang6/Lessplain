@@ -43,7 +43,7 @@ internal data class PanelLocation(
     val focusQuestionId: String?,
 )
 
-class UnderstandingService(private val project: Project, coroutineScope: CoroutineScope) : Disposable {
+class UnderstandingService(internal val project: Project, coroutineScope: CoroutineScope) : Disposable {
     private val log = Logger.getInstance(UnderstandingService::class.java)
     @Volatile
     private var disposed = false

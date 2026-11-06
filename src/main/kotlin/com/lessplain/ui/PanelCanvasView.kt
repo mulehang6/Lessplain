@@ -30,6 +30,7 @@ internal class PanelCanvasView(
     initialBrowse: BrowseState?,
     private val canvas: QuestionCanvas?,
     onQuestions: (UnderstandingRecord, String) -> Unit,
+    onExplanation: (UnderstandingRecord, String) -> Unit = { _, _ -> },
 ) : JPanel(BorderLayout()), AutoCloseable {
     private val graphKey = GraphLayerKey(record.id, nodeId)
     private val saved = if (canvas == null) service.graphStates.get(graphKey).browse ?: initialBrowse
@@ -48,6 +49,11 @@ internal class PanelCanvasView(
         { canvas?.clusterSources?.get(it) }, titleRecord = record.takeIf { canvas == null },
         draftHost = CanvasDraftHost(graphKey, editor = false))
     private val questions = diagram.onQuestionBadgeClicked { id -> source(id)?.let { onQuestions(it.record, it.nodeId) } }
+    private val explanations = diagram.onNodeSelected { id ->
+        source(id)?.let { target ->
+            if (target.record.graph.nodes.find { it.id == target.nodeId }?.tutorialId != null) onExplanation(target.record, target.nodeId)
+        }
+    }
     private val back = JButton("‹ 返回")
     private val previous = JButton()
     private val controls = JPanel().apply {
@@ -116,6 +122,7 @@ internal class PanelCanvasView(
         closed = true
         navigation.close()
         questions.close()
+        explanations.close()
         copy.close()
         content.close()
         fonts.close()

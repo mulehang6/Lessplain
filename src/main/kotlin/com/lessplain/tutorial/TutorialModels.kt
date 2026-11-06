@@ -12,6 +12,7 @@ data class TutorialNode(
     val evidenceIds: List<String> = emptyList(),
     val flowRoles: List<String> = emptyList(),
     val endOutcome: String? = null,
+    val tutorialId: String? = null,
 )
 
 @Serializable
