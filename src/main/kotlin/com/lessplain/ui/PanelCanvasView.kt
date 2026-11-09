@@ -35,8 +35,9 @@ internal class PanelCanvasView(
     private val graphKey = GraphLayerKey(record.id, nodeId)
     private val saved = if (canvas == null) service.graphStates.get(graphKey).browse ?: initialBrowse
         else graphBrowseState(service, graphKey)
-    internal val diagram = createUnderstandingDiagram(canvas?.record ?: record, saved,
-        clusters = canvas?.clusters.orEmpty(), examplePanels = canvas?.examplePanels.orEmpty()).apply {
+    internal val diagram = (canvas?.let {
+        createUnderstandingDiagram(it.record, saved, clusters = it.clusters, examplePanels = it.examplePanels)
+    } ?: createUnderstandingDiagram(record, saved)).apply {
         bindGraphState(service.graphStates, graphKey)
     }
     private val explorer = StaticExplorer((canvas?.record ?: record).graph, saved?.staticPath.orEmpty(),
