@@ -36,9 +36,10 @@
         <mcpToolset implementation="com.lessplain.mcp.LessplainAnnotationTools"/>
     </extensions>
     <actions>
-        <action id="Lessplain.FocusedSource" class="com.lessplain.ui.FocusedSourceAction" text="源码位置">
+        <!-- 复用 Project 原生跟随设置与同一状态，不复制其实现。 -->
+        <reference ref="ProjectView.AutoscrollFromSource">
             <add-to-group group-id="ToolsMenu" anchor="last"/>
-        </action>
+        </reference>
         <action id="Lessplain.ReaderPreferences" class="com.lessplain.tutorial.ReaderPreferencesAction" text="讲解偏好">
             <add-to-group group-id="ToolsMenu" anchor="last"/>
         </action>
