@@ -40,6 +40,7 @@ class DiagramSourceActivationTest {
                 val file = requireNotNull(LocalFileSystem.getInstance().refreshAndFindFileByNioFile(other))
                 FileEditorManager.getInstance(fixture.project).openTextEditor(OpenFileDescriptor(fixture.project, file, 0), true)
             } }
+            openOther()
             try {
                 fixture.onEdt { uiRead {
                     diagram = createUnderstandingDiagram(record)
@@ -47,6 +48,9 @@ class DiagramSourceActivationTest {
                     requireNotNull(diagram).selectUnderstandingNode("n", notify = true)
                 } }
                 await { selectedPath() == "Flow.txt" }
+                fixture.onEdt {
+                    assertFalse(requireNotNull(FileEditorManager.getInstance(fixture.project).selectedTextEditor).selectionModel.hasSelection())
+                }
                 // 先切到另一个编辑器，再点击仍保持选中的节点。
                 openOther()
                 fixture.onEdt { uiRead { requireNotNull(diagram).selectUnderstandingNode("n", notify = true) } }

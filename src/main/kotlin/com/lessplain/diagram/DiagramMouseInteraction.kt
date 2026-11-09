@@ -117,6 +117,7 @@ internal class DiagramMouseInteraction(
     override fun mouseClicked(event: MouseEvent) {
         if (event.button == MouseEvent.BUTTON1 && event.clickCount == 2) {
             if (diagram.clusterQuestionAt(event.point) != null || diagram.clusterEditAt(event.point) != null) return
+            diagram.nodeAt(event.point)?.let { id -> if (diagram.activateNode(id)) { event.consume(); return } }
             val edge = diagram.edgeAt(event.point)
             if (edge != null && diagram.edgeLabelCallbacks.isNotEmpty()) {
                 diagram.edgeLabelCallbacks.toList().forEach { it(edge.id) }; event.consume(); return

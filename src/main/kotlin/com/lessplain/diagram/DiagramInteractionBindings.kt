@@ -11,6 +11,7 @@ internal fun UnderstandingDiagram.installDiagramInteractions() {
         onQuestions = questions@ {
             overlays.titles.focused?.takeIf { it in questionClusterIds }?.let { id -> originCallbacks.toList().forEach { it(id) }; return@questions }
             if (routeNavigation?.confirmCandidate() == true) return@questions
+            currentNodeId?.let { if (activateNode(it)) return@questions }
             currentNodeId?.takeIf { (questionCounts[it] ?: 0) > 0 }?.let { id ->
                 questionCallbacks.toList().forEach { it(id) }
             }

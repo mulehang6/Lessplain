@@ -193,7 +193,7 @@ class TutorialStore(private val root: Path, private val cleanupDeleted: (Path, S
         val updated = old.copy(markdown = markdown, revision = old.revision + 1, sourceIds = associatedSources(old.contextId, markdown, resource(id)))
         records[id] = updated
         annotations(id).forEach {
-            var relocated = relocateAnnotation(it, offset, removed, inserted)
+            var relocated = movedStepAnnotation(it, old.markdown, markdown) ?: relocateAnnotation(it, offset, removed, inserted)
             if (!it.orphaned && relocated.orphaned) relocated = relocated.copy(relocatable = occurrences(old.markdown, it.quote).size == 1)
             val found = if (relocated.orphaned) occurrences(markdown, relocated.quote) else emptyList()
             annotations[it.id] = if (relocated.relocatable && found.size == 1) relocated.copy(start = found.single(), end = found.single() + relocated.quote.length, orphaned = false, relocatable = false) else relocated
@@ -252,7 +252,7 @@ class TutorialStore(private val root: Path, private val cleanupDeleted: (Path, S
     }
 
     private fun associatedSources(contextId: String, markdown: String, state: TutorialResourceState): List<String> = (
-        context(contextId).sourceIds + Regex("lessplain://source/([^\\s)]+)").findAll(markdown).map { it.groupValues[1] }.toList() +
+        context(contextId).sourceIds + tutorialSourceIds(markdown) +
             state.diagrams.flatMap { diagram -> diagram.graph.nodes.mapNotNull { it.sourceId } + diagram.graph.evidence.flatMap { listOf(it.sourceId) + it.dependencySourceIds } }
         ).distinct().filter { it in sources }
 

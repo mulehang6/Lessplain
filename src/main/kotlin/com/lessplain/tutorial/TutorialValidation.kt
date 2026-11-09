@@ -2,6 +2,7 @@ package com.lessplain.tutorial
 
 /** 先验证整个提交，再修改任何磁盘或内存状态。 */
 internal fun validateTutorial(markdown: String, resources: TutorialResourceState) {
+    tutorialSteps(markdown, strict = true)
     val diagrams = resources.diagrams.map { it.id }
     val simulations = resources.simulations.map { it.id }
     uniqueIds(diagrams, "diagrams")

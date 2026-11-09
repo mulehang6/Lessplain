@@ -41,8 +41,9 @@ internal class TutorialEditorView(private val project: Project, val id: String, 
     val split = OnePixelSplitter(false, 0.5f).apply { setHonorComponentsMinimumSize(false) }
     val tabActions = TutorialLayoutActions(this)
     private val initialReading = service.store.reading(id, panel)
-    var mode = initialReading.mode
+    var mode = if (panel && initialReading.stepId == null && tutorialSteps(editor.document.text).isNotEmpty()) TutorialDisplayMode.STEPS else initialReading.mode
         private set
+    internal val steps = TutorialStepReader(this, initialReading)
     val focusTarget get() = if (mode == TutorialDisplayMode.EDIT) editor.contentComponent else preview
     private var registration: AutoCloseable? = null
     private var closed = false
@@ -53,6 +54,7 @@ internal class TutorialEditorView(private val project: Project, val id: String, 
     private val subscription = service.onChanged { changed -> if (changed == id && !closed) timer.restart() }
 
     init {
+        previewScroll.onStepWheel = steps::wheel
         editor.settings.apply { isUseSoftWraps = true; additionalColumnsCount = 0; isShowIntentionBulb = false }
         (editor as? com.intellij.openapi.editor.ex.EditorEx)?.highlighter = com.intellij.openapi.editor.highlighter.EditorHighlighterFactory.getInstance().createEditorHighlighter(project, "tutorial.md")
         editor.putUserData(tutorialActionsKey, actions)
@@ -192,7 +194,11 @@ internal class TutorialEditorView(private val project: Project, val id: String, 
                 TutorialDisplayMode.EDIT -> body.add(editor.component)
                 TutorialDisplayMode.PREVIEW -> body.add(previewScroll)
                 TutorialDisplayMode.SPLIT -> { split.firstComponent = editor.component; split.secondComponent = previewScroll; body.add(split) }
+                TutorialDisplayMode.STEPS -> { body.add(steps, BorderLayout.NORTH); body.add(previewScroll, BorderLayout.CENTER) }
             }
+            steps.prepare()
+            preview.refresh()
+            steps.active(next == TutorialDisplayMode.STEPS && isShowing)
             body.revalidate(); body.repaint()
             com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater {
                 if (!closed) uiRead {
@@ -210,9 +216,16 @@ internal class TutorialEditorView(private val project: Project, val id: String, 
         if (closed) return
         refreshing = true
         try {
+            steps.prepare()
             val source = preview.refresh()
             marks.refresh()
-            service.takeAnnotationDestination(id)?.let(floating::open)
+            service.takeAnnotationDestination(id)?.let { annotation ->
+                if (mode == TutorialDisplayMode.STEPS) {
+                    steps.revealPosition(annotation.start)
+                    preview.refresh()
+                }
+                floating.open(annotation)
+            }
             preview.followSource(source)
             if (mode == TutorialDisplayMode.SPLIT) scrollEditorTo(source)
         } finally { refreshing = false }
@@ -222,14 +235,15 @@ internal class TutorialEditorView(private val project: Project, val id: String, 
         if (service.store.readOnly || service.store.isUnavailable(id)) return
         val reading = service.store.reading(id, panel)
         service.store.saveReading(id, reading.copy(caret = editor.caretModel.offset, scroll = editor.scrollingModel.verticalScrollOffset,
-            mode = mode, previewSource = preview.topSource(), divider = if (mode == TutorialDisplayMode.SPLIT) split.proportion.toDouble() else reading.divider), panel)
+            mode = mode, previewSource = preview.topSource(), divider = if (mode == TutorialDisplayMode.SPLIT) split.proportion.toDouble() else reading.divider,
+            stepId = steps.stepId, followSource = steps.followSource), panel)
     }
-    fun active(value: Boolean) { floating.active(value); actions.active(value); if (value) timer.restart() }
+    fun active(value: Boolean) { floating.active(value); actions.active(value); steps.active(value && mode == TutorialDisplayMode.STEPS); if (value) timer.restart() }
     override fun globalSchemeChange(scheme: com.intellij.openapi.editor.colors.EditorColorsScheme?) { timer.restart() }
     override fun close() {
         if (closed) return
         closed = true; registration?.close(); timer.stop(); subscription.close(); fonts.close()
-        preview.close(); saveReading(); actions.close(); floating.close(); marks.close()
+        preview.close(); saveReading(); steps.close(); actions.close(); floating.close(); marks.close()
         editor.putUserData(tutorialActionsKey, null)
         Disposer.dispose(lifetime); EditorFactory.getInstance().releaseEditor(editor)
     }

@@ -134,15 +134,13 @@ internal fun navigateToSource(
     val editor = FileEditorManager.getInstance(project).selectedTextEditor
     if (editor != null && !editor.isDisposed && FileDocumentManager.getInstance().getFile(editor.document) == file) {
         animation.moveTo(editor, offset)
-        if (located.evidence != EvidenceStatus.CHANGED) editor.selectionModel.setSelection(offset, offset + anchor.focusedText.length)
+        editor.selectionModel.removeSelection()
         return located
     }
     animation.cancel()
     OpenFileDescriptor(project, file, offset).navigate(true)
-    if (located.evidence != EvidenceStatus.CHANGED) {
-        FileEditorManager.getInstance(project).selectedTextEditor?.takeIf {
-            FileDocumentManager.getInstance().getFile(it.document) == file
-        }?.selectionModel?.setSelection(offset, offset + anchor.focusedText.length)
-    }
+    FileEditorManager.getInstance(project).selectedTextEditor?.takeIf {
+        FileDocumentManager.getInstance().getFile(it.document) == file
+    }?.selectionModel?.removeSelection()
     return located
 }

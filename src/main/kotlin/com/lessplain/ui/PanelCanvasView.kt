@@ -10,6 +10,7 @@ import com.lessplain.diagram.bindNodeContextCopy
 import com.lessplain.diagram.createUnderstandingDiagram
 import com.lessplain.diagram.graphBrowseState
 import com.lessplain.diagram.requestFocusCluster
+import com.lessplain.diagram.onNodeActivated
 import com.lessplain.ide.CanvasDraftHost
 import com.lessplain.ide.GraphLayerKey
 import com.lessplain.ide.UnderstandingService
@@ -50,11 +51,16 @@ internal class PanelCanvasView(
         { canvas?.clusterSources?.get(it) }, titleRecord = record.takeIf { canvas == null },
         draftHost = CanvasDraftHost(graphKey, editor = false))
     private val questions = diagram.onQuestionBadgeClicked { id -> source(id)?.let { onQuestions(it.record, it.nodeId) } }
-    private val explanations = diagram.onNodeSelected { id ->
+    private val explanations = diagram.onNodeActivated { id ->
         source(id)?.let { target ->
-            if (target.record.graph.nodes.find { it.id == target.nodeId }?.tutorialId != null) onExplanation(target.record, target.nodeId)
-        }
+            if (target.record.graph.nodes.find { it.id == target.nodeId }?.tutorialId != null) {
+                onExplanation(target.record, target.nodeId)
+                true
+            } else false
+        } ?: false
     }
+    internal val explain = JButton("讲解")
+    private val explanationSelection = diagram.onNodeSelected { updateExplanation() }
     private val back = JButton("‹ 返回")
     private val previous = JButton()
     private val controls = JPanel().apply {
@@ -62,6 +68,7 @@ internal class PanelCanvasView(
         layout = BoxLayout(this, BoxLayout.Y_AXIS)
         add(back)
         add(previous)
+        add(explain)
     }
     private val overlay = object : JLayeredPane() {
         override fun getPreferredSize() = diagram.jComponent.preferredSize
@@ -90,6 +97,17 @@ internal class PanelCanvasView(
         add(overlay, BorderLayout.CENTER)
         back.addActionListener { if (parentIndex >= 0) navigate(parentIndex) }
         previous.addActionListener { returnPrevious() }
+        explain.addActionListener { diagram.currentNodeId?.let { id ->
+            source(id)?.let { target -> onExplanation(target.record, target.nodeId) }
+        } }
+        updateExplanation()
+    }
+
+    private fun updateExplanation() {
+        val target = diagram.currentNodeId?.let(::source)
+        explain.isVisible = target?.record?.graph?.nodes?.find { it.id == target.nodeId }?.tutorialId != null
+        controls.isVisible = back.isVisible || previous.isVisible || explain.isVisible
+        overlay.revalidate()
     }
 
     fun update(entries: List<GraphHierarchyEntry>, layers: List<FollowUpLayer>, focusQuestionId: String?,
@@ -104,7 +122,7 @@ internal class PanelCanvasView(
         back.isEnabled = parentIndex >= 0
         previous.text = returnLabel
         previous.isVisible = canReturn
-        controls.isVisible = layers.isNotEmpty() || canReturn
+        updateExplanation()
         readOnly.isVisible = service.readOnly
         if (focusedQuestion != focusQuestionId) {
             focusedQuestion = focusQuestionId
@@ -124,6 +142,7 @@ internal class PanelCanvasView(
         navigation.close()
         questions.close()
         explanations.close()
+        explanationSelection.close()
         copy.close()
         content.close()
         fonts.close()

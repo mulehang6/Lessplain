@@ -7,8 +7,41 @@ import com.lessplain.ui.NodeExplanationPanel
 import kotlinx.serialization.json.*
 import org.junit.jupiter.api.Test
 import kotlin.test.*
+import com.lessplain.diagram.activateNode
+import com.lessplain.diagram.selectUnderstandingNode
+import com.lessplain.ui.PanelCanvasView
+import com.lessplain.ide.uiRead
 
 class NodeExplanationTest {
+    @Test fun `node selection navigates without entering explanation and explicit actions open it`() {
+        TutorialMcpFixture("ExplanationActivation").use { fixture ->
+            val sourceId = fixture.source()["sourceId"]!!.jsonPrimitive.content
+            val anchor = fixture.tutorials.sources.anchor(sourceId)
+            val context = fixture.call("lessplain_context_capture", buildJsonObject { put("question", "讲解入口") })["contextId"]!!.jsonPrimitive.content
+            val tutorial = fixture.call("lessplain_tutorial_create", buildJsonObject {
+                put("contextId", context); put("title", "细讲"); put("markdown", "正文")
+            })["tutorial"]!!.jsonObject["id"]!!.jsonPrimitive.content
+            val record = fixture.graphs.core.present(4, "activation", "节点选择",
+                UnderstandingGraph(listOf(GraphNode("a", "有细讲", anchor = anchor, tutorialId = tutorial), GraphNode("b", "无细讲", anchor = anchor)), emptyList()), "root")
+            fixture.graphs.storage.loadRecord(record.id)
+            fixture.onEdt { uiRead {
+                val entered = mutableListOf<String>()
+                val canvas = PanelCanvasView(fixture.graphs, record, null, null, null, { _, _ -> }, { _, id -> entered += id })
+                try {
+                    canvas.diagram.selectUnderstandingNode("a", notify = true)
+                    assertTrue(entered.isEmpty())
+                    assertTrue(canvas.explain.isVisible)
+                    canvas.explain.doClick()
+                    assertEquals(listOf("a"), entered)
+                    assertTrue(canvas.diagram.activateNode("a"))
+                    assertEquals(listOf("a", "a"), entered)
+                    canvas.diagram.selectUnderstandingNode("b", notify = true)
+                    assertFalse(canvas.explain.isVisible)
+                    assertFalse(canvas.diagram.activateNode("b"))
+                } finally { canvas.close() }
+            } }
+        }
+    }
     @Test
     fun `graph references one editable tutorial and rejects missing tutorial references`() {
         TutorialMcpFixture("ExplanationMcp").use { fixture ->
@@ -47,7 +80,7 @@ class NodeExplanationTest {
     }
 
     @Test
-    fun `full panel shares canonical document switches arbitrary nodes and keeps tab reading independent`() {
+    fun `full panel shares canonical document and keeps tab reading independent after returning to graph`() {
         TutorialMcpFixture("ExplanationPanel").use { fixture ->
             fixture.source()
             val context = fixture.call("lessplain_context_capture", buildJsonObject { put("question", "细讲") })["contextId"]!!.jsonPrimitive.content
@@ -58,21 +91,17 @@ class NodeExplanationTest {
                 UnderstandingGraph(listOf(GraphNode("a", "第一步", tutorialId = tutorial), GraphNode("b", "另一分支")), emptyList()), 0)
             fixture.onEdt {
                 fixture.tutorials.store.saveReading(tutorial, TutorialReadingState(caret = 1))
-                val selected = mutableListOf<String>()
-                val panel = NodeExplanationPanel(fixture.graphs, record, "a", {}, selected::add)
+                val panel = NodeExplanationPanel(fixture.graphs, record, "a", {})
                 try {
                     assertSame(fixture.tutorials.document(tutorial), panel.view!!.editor.document)
                     panel.view!!.editor.caretModel.moveToOffset(4)
-                    panel.nodes.selectedItem = "b"
-                    assertNull(panel.view)
-                    assertEquals(listOf("b"), selected)
                     assertEquals(1, fixture.tutorials.store.reading(tutorial).caret)
-                    assertEquals(4, fixture.tutorials.store.reading(tutorial, panel = true).caret)
-                    panel.nodes.selectedItem = "a"
-                    assertEquals(4, panel.view!!.editor.caretModel.offset)
                     fixture.tutorials.edit(tutorial, 1, listOf(TutorialEdit("原有正文和上下文。", "整合补问后的解释。")))
                     assertContains(panel.view!!.editor.document.text, "整合补问后的解释。")
                 } finally { panel.close() }
+                assertEquals(4, fixture.tutorials.store.reading(tutorial, panel = true).caret)
+                val reopened = NodeExplanationPanel(fixture.graphs, record, "a", {})
+                try { assertEquals(4, reopened.view!!.editor.caretModel.offset) } finally { reopened.close() }
             }
         }
     }

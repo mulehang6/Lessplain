@@ -13,7 +13,7 @@ import com.lessplain.ide.PanelPage
 internal class OpenUnderstandingInEditorAction(
     private val project: Project,
     private val service: UnderstandingService,
-) : AnAction("在编辑器打开图", null, AllIcons.Actions.OpenNewTab) {
+) : AnAction("在编辑器打开", null, AllIcons.Actions.OpenNewTab) {
     override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
 
     override fun update(event: AnActionEvent) {
@@ -21,6 +21,10 @@ internal class OpenUnderstandingInEditorAction(
     }
 
     override fun actionPerformed(event: AnActionEvent) {
+        service.panelTutorialId?.let { id ->
+            project.getService(com.lessplain.tutorial.TutorialService::class.java).open(id)
+            return
+        }
         val layer = service.panelLayers.lastOrNull()
         val id = layer?.recordId ?: service.panelRecordId ?: return
         val record = service.storage.record(id) ?: return

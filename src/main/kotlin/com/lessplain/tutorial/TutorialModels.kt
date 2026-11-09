@@ -119,10 +119,12 @@ data class TutorialReadingState(
     val previewSource: Int = 0,
     val divider: Double = 0.5,
     val diagrams: Map<String, TutorialViewport> = emptyMap(),
+    val stepId: String? = null,
+    val followSource: Boolean = true,
 )
 
 @Serializable
-enum class TutorialDisplayMode { EDIT, PREVIEW, SPLIT }
+enum class TutorialDisplayMode { EDIT, PREVIEW, SPLIT, STEPS }
 
 @Serializable
 data class TutorialViewport(val zoom: Double, val x: Double, val y: Double)

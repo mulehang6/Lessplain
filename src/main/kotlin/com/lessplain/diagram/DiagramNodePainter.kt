@@ -25,6 +25,10 @@ internal object DiagramNodePainter {
     fun noteBounds(node: Rectangle2D.Double): Rectangle2D.Double =
         Rectangle2D.Double(node.maxX - 20, node.y - 14, 28.0, 28.0)
 
+    /** 左上角常驻书本标识避开标签和右上角批注入口，不参与节点选择命中。 */
+    fun tutorialBounds(node: Rectangle2D): Rectangle2D.Double =
+        Rectangle2D.Double(node.x - 8, node.y - 10, 20.0, 20.0)
+
     fun paint(
         g: Graphics2D,
         layout: UnderstandingGraphLayout,
@@ -87,6 +91,13 @@ internal object DiagramNodePainter {
                 UnderstandingUiStyle.NODE_ARC, UnderstandingUiStyle.NODE_ARC)
             g.color = textColor
             paintLabel(g, placed, id in branchIds)
+            if (placed.node.tutorialId != null) {
+                val badge = tutorialBounds(bounds)
+                g.color = UnderstandingUiStyle.surface
+                g.fillRoundRect(badge.x.toInt() - 2, badge.y.toInt() - 2, 24, 24, 6, 6)
+                com.lessplain.ui.TitleActionIcon(com.lessplain.ui.TitleActionKind.BOOK)
+                    .paintIcon(null, g, badge.x.toInt(), badge.y.toInt())
+            }
             if (id == hovered || id == copiedNodeId) {
                 if (actions.copy) paintAction(g, copyBounds(bounds),
                     if (id == copiedNodeId) GraphControlIconKind.COPIED else GraphControlIconKind.COPY,

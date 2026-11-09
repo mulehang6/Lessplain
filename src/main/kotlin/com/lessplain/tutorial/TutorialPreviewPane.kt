@@ -23,6 +23,8 @@ internal class TutorialPreviewPane(private val editor: Editor, private val servi
     var model = TutorialPreviewModel("")
         private set
     private var markdown: String? = null
+    var sourceRange: IntRange? = null
+    private var renderedRange: IntRange? = null
     private val diagrams = mutableMapOf<String, TutorialDiagramView>()
     private val simulations = mutableMapOf<String, TutorialSimulationView>()
     private val slots = mutableMapOf<String, ResourceSlot>()
@@ -59,7 +61,7 @@ internal class TutorialPreviewPane(private val editor: Editor, private val servi
         val available = (resources.diagrams.map { "diagram/${it.id}" } + resources.simulations.map { "simulation/${it.id}" }).toSet()
         val referenced = model.parts.map { "${it.block.kind}/${it.block.resourceId}" }.toSet()
         val installed = slots.keys.map { it.substringBefore('#') }.toSet()
-        if (next != markdown || key != fontKey || available.intersect(referenced) != installed) {
+        if (next != markdown || key != fontKey || sourceRange != renderedRange || available.intersect(referenced) != installed) {
             rebuilding = true
             try { rebuild(next, key, reading) } finally { rebuilding = false }
         }
@@ -78,7 +80,7 @@ internal class TutorialPreviewPane(private val editor: Editor, private val servi
     private fun rebuild(next: String, key: String, reading: PreviewPosition) {
         val selection = reading.selection
         val oldCaret = reading.caret
-        model = TutorialPreviewModel(next); markdown = next; fontKey = key
+        model = TutorialPreviewModel(next, sourceRange); markdown = next; fontKey = key; renderedRange = sourceRange
         val occurrences = mutableMapOf<String, Int>()
         val resourceKeys = model.parts.filter { it.block.kind in setOf("diagram", "simulation") }.associateWith {
             val id = "${it.block.kind}/${it.block.resourceId}"

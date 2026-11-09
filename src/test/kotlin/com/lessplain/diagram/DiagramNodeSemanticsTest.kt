@@ -16,6 +16,28 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class DiagramNodeSemanticsTest {
+    @Test fun `tutorial badge remains visible without hover and stays away from notes and label`() {
+        val bounds = Rectangle2D.Double(40.0, 40.0, 200.0, 80.0)
+        fun image(tutorial: String?): BufferedImage {
+            val node = GraphNode("node", "相同标签", tutorialId = tutorial)
+            val layout = UnderstandingGraphLayout(mapOf("node" to PlacedNode(node, bounds)), emptyList(), bounds)
+            return BufferedImage(280, 160, BufferedImage.TYPE_INT_ARGB).also { image ->
+                val g = image.createGraphics()
+                try { DiagramNodePainter.paint(g, layout, null, null, emptyMap(), emptyMap(), emptySet(), emptySet()) }
+                finally { g.dispose() }
+            }
+        }
+        val plain = image(null)
+        val explained = image("tut_example")
+        val badge = DiagramNodePainter.tutorialBounds(bounds)
+        assertTrue((badge.x.toInt() until badge.maxX.toInt()).any { x ->
+            (badge.y.toInt() until bounds.y.toInt()).any { y -> plain.getRGB(x, y) != explained.getRGB(x, y) }
+        })
+        assertTrue(!badge.intersects(DiagramNodePainter.noteBounds(bounds)))
+        assertTrue(badge.maxY < bounds.y + 14)
+        assertEquals(plain.getRGB(120, 100), explained.getRGB(120, 100))
+    }
+
     @Test fun `success failure unclassified and dual roles keep semantic colors on hover`() {
         val graph = UnderstandingGraph(listOf(GraphNode("normal", "普通"),
             GraphNode("success", "成功", flowRoles = listOf("end"), endOutcome = "success"),

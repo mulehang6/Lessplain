@@ -264,6 +264,9 @@ class UnderstandingService(internal val project: Project, coroutineScope: Corout
     val activeNodeId: String? get() = selection.activeNodeId
     val sourceLocationMessage: String? get() = selection.sourceLocationMessage ?: storageError
 
+    /** 工具窗口当前正文，供标题栏唯一的编辑器入口使用；不参与图选择与持久化。 */
+    internal var panelTutorialId: String? = null
+
     fun select(
         record: UnderstandingRecord,
         nodeId: String? = null,

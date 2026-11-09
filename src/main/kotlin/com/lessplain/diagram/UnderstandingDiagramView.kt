@@ -53,6 +53,7 @@ internal class UnderstandingDiagram(
     internal var nodePositions = emptyMap<String, GraphNodePosition>()
     private var nodePositionsChanged: ((Map<String, GraphNodePosition>) -> Unit)? = null
     internal val callbacks = mutableSetOf<(String) -> Unit>()
+    internal val activatedCallbacks = mutableSetOf<(String) -> Boolean>()
     internal val questionCallbacks = mutableSetOf<(String) -> Unit>()
     internal val clusterCallbacks = mutableSetOf<(String) -> Unit>()
     internal val copyCallbacks = mutableSetOf<(String) -> Unit>()
@@ -359,7 +360,7 @@ internal class UnderstandingDiagram(
         copyActionAt(event.point)?.let { return "复制" }
         questionActionAt(event.point)?.let { return "查看 ${questionCounts.getValue(it)} 个追问" }
         nodeAt(event.point)?.let { id ->
-            return if (id == hoveredNodeId) layout.nodes[id]?.node?.label else null
+            return if (id == hoveredNodeId) layout.nodes[id]?.node?.let { it.label + if (it.tutorialId != null) " · 有细讲（双击或 Enter）" else "" } else null
         }
         return edgeTooltipAt(event.point)
     }
@@ -476,7 +477,7 @@ internal class UnderstandingDiagram(
         viewportChanged = null
         nodePositionsChanged = null
         preferenceChanged = null
-        callbacks.clear()
+        callbacks.clear(); activatedCallbacks.clear()
         questionCallbacks.clear()
         clusterCallbacks.clear()
         copyCallbacks.clear()

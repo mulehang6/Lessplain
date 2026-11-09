@@ -94,7 +94,7 @@ class TutorialMcpTest {
                 val animation = com.lessplain.ide.SourceScrollAnimation()
                 try {
                     com.lessplain.ide.navigateToSource(project, focusedAnchor, animation)
-                    assertEquals("Flow<Event>", FileEditorManager.getInstance(project).selectedTextEditor!!.selectionModel.selectedText)
+                    assertNull(FileEditorManager.getInstance(project).selectedTextEditor!!.selectionModel.selectedText)
                 } finally { animation.dispose() }
             } }
             call("lessplain_graph_revise", """{"id":"$graphId","expectedRevision":1,"graph":{"nodes":[{"id":"flow","label":"准备事件流","sourceId":"$sourceId"}],"edges":[]}}""")

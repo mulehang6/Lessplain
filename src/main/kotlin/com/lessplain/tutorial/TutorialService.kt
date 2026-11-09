@@ -78,7 +78,7 @@ class TutorialService(internal val project: Project) : Disposable {
 
     fun create(contextId: String, title: String, markdown: String, resources: TutorialResourceState, receiptKey: String? = null): TutorialRecord {
         if (store.creation(contextId, title, markdown, resources) == null) {
-            Regex("lessplain://source/([^\\s)]+)").findAll(markdown).forEach { store.source(it.groupValues[1]) }
+            tutorialSourceIds(markdown).forEach(store::source)
             (resources.diagrams.flatMap { it.graph.sourceIds() } + store.context(contextId).sourceIds).forEach(store::source)
         }
         val record = store.create(contextId, title, markdown, resources, receiptKey)
@@ -94,7 +94,7 @@ class TutorialService(internal val project: Project) : Disposable {
         if (record.revision != expectedRevision) throw TutorialProblem("REVISION_CONFLICT", "expectedRevision", "正文已更新", record.revision)
         val next = editTutorialText(record.markdown, edits)
         validateTutorial(next, store.resource(id))
-        Regex("lessplain://source/([^\\s)]+)").findAll(next).forEach { store.source(it.groupValues[1]) }
+        tutorialSourceIds(next).forEach(store::source)
         // 使用一个命令修改同一份 Document，原生撤销与 RangeMarker 跟踪保持有效。
         store.edit(id, key) {
             WriteCommandAction.runWriteCommandAction(project, "修改教程", null, Runnable {

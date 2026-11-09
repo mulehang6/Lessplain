@@ -14,6 +14,7 @@ internal class TutorialLayoutActions(view: TutorialEditorView) : DefaultActionGr
     LayoutAction(view, TutorialDisplayMode.EDIT, "编辑", AllIcons.General.LayoutEditorOnly),
     LayoutAction(view, TutorialDisplayMode.SPLIT, "编辑和预览", AllIcons.General.LayoutEditorPreview),
     LayoutAction(view, TutorialDisplayMode.PREVIEW, "预览", AllIcons.General.LayoutPreviewOnly),
+    LayoutAction(view, TutorialDisplayMode.STEPS, "逐点讲解", AllIcons.Actions.Forward),
 )
 
 private class LayoutAction(
@@ -23,6 +24,10 @@ private class LayoutAction(
     icon: Icon,
 ) : ToggleAction(title, title, icon), DumbAware {
     override fun getActionUpdateThread() = ActionUpdateThread.EDT
+    override fun update(event: AnActionEvent) {
+        super.update(event)
+        if (mode == TutorialDisplayMode.STEPS) event.presentation.isEnabledAndVisible = view.steps.available
+    }
     override fun isSelected(event: AnActionEvent) = view.mode == mode
     override fun setSelected(event: AnActionEvent, state: Boolean) { if (state) uiRead { view.display(mode) } }
 }

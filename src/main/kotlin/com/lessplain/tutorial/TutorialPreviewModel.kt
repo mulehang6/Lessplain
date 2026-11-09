@@ -1,7 +1,7 @@
 package com.lessplain.tutorial
 
 /** 预览只有一个连续文本坐标系；格式符和资源控件不改变源码坐标。 */
-internal class TutorialPreviewModel(markdown: String) {
+internal class TutorialPreviewModel(markdown: String, range: IntRange? = null) {
     data class Part(val block: MarkdownContent, val from: Int, val to: Int, val mapped: MappedText)
     val parts: List<Part>
     val text: String
@@ -10,7 +10,9 @@ internal class TutorialPreviewModel(markdown: String) {
     init {
         val visible = StringBuilder()
         val source = mutableListOf<Int>()
-        parts = parseMarkdown(markdown).map { block ->
+        parts = parseMarkdown(markdown).filter { block ->
+            block.kind != "step" && (range == null || block.start >= range.first && block.end <= range.last + 1)
+        }.map { block ->
             val mapped = when (block.kind) {
                 "diagram", "simulation" -> MappedText("\uFFFC", listOf(block.start, block.end))
                 "table" -> tableText(block)
@@ -24,7 +26,7 @@ internal class TutorialPreviewModel(markdown: String) {
             source += listOf(block.end, block.end)
             part
         }
-        source += markdown.length
+        source += range?.let { it.last + 1 } ?: markdown.length
         text = visible.toString()
         offsets = source
     }

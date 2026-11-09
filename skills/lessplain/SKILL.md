@@ -35,6 +35,8 @@ ID 与 revision 均从工具返回值取得。插件负责偏移、文件版本�
 
 ## 教程
 
+源码节点细讲按[源码联动的逐点讲解](references/lessons.md#源码联动的逐点讲解)准备稳定讲解点及主锚点。普通定义链接用于主动查阅，文字、插图和模拟仍属于同一份可编辑正文，不另建 PPT 材料。
+
 用户要学习概念、比较情境、修改学习文档时，走[教程工作流](references/lessons.md)。正常组织文字、代码、表格和必要的图，不用图节点代替完整解释。
 
 lessplain_tutorial_create 一次提交 Markdown、插图和模拟。教材可以由用户和 Agent 修改。修改前 lessplain_item_read 获取当前 revision，lessplain_tutorial_edit 使用唯一文本替换。资源单独用 lessplain_diagram_save 或 lessplain_simulation_save 保存，新增 expectedRevision=0。

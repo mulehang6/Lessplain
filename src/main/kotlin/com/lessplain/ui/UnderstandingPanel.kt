@@ -191,10 +191,11 @@ class UnderstandingPanel(private val service: UnderstandingService) : JPanel(Bor
     private fun openExplanation(record: UnderstandingRecord, nodeId: String) {
         if (disposed || record.graph.nodes.none { it.id == nodeId }) return
         closeExplanation()
+        service.panelTutorialId = record.graph.nodes.find { it.id == nodeId }?.tutorialId
         val next = NodeExplanationPanel(service, record, nodeId, back = {
             closeExplanation()
             cards.show(content, "canvas")
-        }, selected = { id -> service.select(record, id) })
+        })
         explanation = next
         content.add(next, "explanation")
         cards.show(content, "explanation")
@@ -203,6 +204,7 @@ class UnderstandingPanel(private val service: UnderstandingService) : JPanel(Bor
     }
 
     private fun closeExplanation() {
+        service.panelTutorialId = null
         explanation?.let { content.remove(it); it.close() }
         explanation = null
     }

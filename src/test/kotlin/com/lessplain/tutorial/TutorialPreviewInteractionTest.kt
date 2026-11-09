@@ -32,8 +32,8 @@ class TutorialPreviewInteractionTest {
                     val current = opened.component as TutorialEditorView
                     view = current
                     val actions = assertNotNull(opened.tabActions).getChildren(null)
-                    assertEquals(listOf(AllIcons.General.LayoutEditorOnly, AllIcons.General.LayoutEditorPreview, AllIcons.General.LayoutPreviewOnly), actions.map { it.templatePresentation.icon })
-                    actions.forEachIndexed { index, action ->
+                    assertEquals(listOf(AllIcons.General.LayoutEditorOnly, AllIcons.General.LayoutEditorPreview, AllIcons.General.LayoutPreviewOnly), actions.take(3).map { it.templatePresentation.icon })
+                    actions.take(3).forEachIndexed { index, action ->
                         val event = AnActionEvent.createEvent(action, DataContext.EMPTY_CONTEXT, null, "LessplainTest", com.intellij.openapi.actionSystem.ActionUiKind.NONE, null)
                         (action as ToggleAction).setSelected(event, true)
                         assertEquals(listOf(TutorialDisplayMode.EDIT, TutorialDisplayMode.SPLIT, TutorialDisplayMode.PREVIEW)[index], current.mode)

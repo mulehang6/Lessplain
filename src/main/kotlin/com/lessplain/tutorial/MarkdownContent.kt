@@ -27,6 +27,8 @@ internal fun parseMarkdown(markdown: String): List<MarkdownContent> {
             markdown.substring(start, image.start).isBlank() && markdown.substring(image.end, end).isBlank()
         }
         when {
+            !code && raw.trimStart().startsWith("<!-- lessplain:step") ->
+                listOf(MarkdownContent(start, end, "step", mappedPlain(raw, start)))
             resource != null -> listOf(MarkdownContent(start, end, resource.kind, mappedPlain(raw, start), resourceId = resource.id))
             code -> listOf(markdownCode(raw, start, end, node.type == MarkdownElementTypes.CODE_FENCE))
             node.type.toString().contains("TABLE") && references.isEmpty() -> listOf(MarkdownContent(start, end, "table", mappedPlain(raw, start)))

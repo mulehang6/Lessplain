@@ -51,19 +51,37 @@ internal class TutorialSources(private val project: Project, private val store: 
     }
 
     fun reveal(id: String) {
+        val located = locate(id)
+        val editor = FileEditorManager.getInstance(project).openTextEditor(OpenFileDescriptor(project, located.first, located.second.first), true)
+            ?: throw TutorialProblem("SOURCE_NOT_FOUND", "id", "无法打开源码编辑器")
+        editor.selectionModel.setSelection(located.second.first, located.second.last + 1)
+        editor.caretModel.moveToOffset(located.second.last + 1)
+        editor.scrollingModel.scrollToCaret(com.intellij.openapi.editor.ScrollType.MAKE_VISIBLE)
+    }
+
+    /** 讲解联动只打开文档并返回准确范围，不改变光标、选区或键盘焦点。 */
+    fun follow(id: String): Pair<com.intellij.openapi.editor.Editor, IntRange> {
+        val located = locate(id)
+        val manager = FileEditorManager.getInstance(project)
+        val selected = manager.selectedTextEditor?.takeIf { FileDocumentManager.getInstance().getFile(it.document) == located.first }
+        val existing = manager.getEditors(located.first).filterIsInstance<com.intellij.openapi.fileEditor.TextEditor>().firstOrNull()?.editor
+        val carets = existing?.caretModel?.caretsAndSelections
+        val editor = selected ?: manager.openFile(located.first, false)
+            .filterIsInstance<com.intellij.openapi.fileEditor.TextEditor>().firstOrNull()?.editor
+            ?: throw TutorialProblem("SOURCE_NOT_FOUND", "id", "无法打开源码编辑器")
+        if (selected == null && carets != null && existing === editor) editor.caretModel.caretsAndSelections = carets
+        return editor to located.second
+    }
+
+    private fun locate(id: String): Pair<com.intellij.openapi.vfs.VirtualFile, IntRange> {
         val source = store.source(id)
-        val located = ApplicationManager.getApplication().runReadAction<Pair<com.intellij.openapi.vfs.VirtualFile, IntRange>?> {
+        return ApplicationManager.getApplication().runReadAction<Pair<com.intellij.openapi.vfs.VirtualFile, IntRange>?> {
             val file = file(source.path) ?: return@runReadAction null
             val document = FileDocumentManager.getInstance().getDocument(file) ?: return@runReadAction null
             val marker = track(source) ?: return@runReadAction null
             if (!marker.isValid || marker.endOffset > document.textLength || document.getText(com.intellij.openapi.util.TextRange(marker.startOffset, marker.endOffset)) != source.focus) return@runReadAction null
             file to (marker.startOffset until marker.endOffset)
         } ?: throw TutorialProblem("SOURCE_STALE", "id", "原关注范围已变化或不唯一；材料和批注仍保留")
-        val editor = FileEditorManager.getInstance(project).openTextEditor(OpenFileDescriptor(project, located.first, located.second.first), true)
-            ?: throw TutorialProblem("SOURCE_NOT_FOUND", "id", "无法打开源码编辑器")
-        editor.selectionModel.setSelection(located.second.first, located.second.last + 1)
-        editor.caretModel.moveToOffset(located.second.last + 1)
-        editor.scrollingModel.scrollToCaret(com.intellij.openapi.editor.ScrollType.MAKE_VISIBLE)
     }
 
     private fun file(path: String): com.intellij.openapi.vfs.VirtualFile? {

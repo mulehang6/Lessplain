@@ -56,6 +56,18 @@ lessplain_graph_revise
 
 ## 教程和资源
 
+节点细讲的逐点边界写在同一份 markdown 中，不增加 MCP 工具或平行文档：
+
+~~~markdown
+<!-- lessplain:step stable_point_id source=src_resolved -->
+
+## 当前讲解点
+
+一小段必要说明，补充声明可用 [类型名](lessplain://source/src_declaration) 跳转。
+~~~
+
+标记独占一行，后接空行；ID 在当前正文内唯一且后续保留。source 为 source_resolve 返回的主锚点 ID，概念点可省略。Agent 新增和修订会校验格式、重复 ID、空讲解点与来源引用。普通文章无标记时保持原有预览。源码联动高亮不改选区；用户主动点击普通源码链接仍走明确跳转。
+
 lessplain_tutorial_create
 ~~~json
 {"contextId":"ctx_flow","title":"Flow 何时开始生产值","markdown":"# Flow 何时开始生产值\n\nFlow 在收集时才开始提供值。\n\n[项目返回类型](lessplain://source/src_return)\n\n![事件传递](lessplain://diagram/delivery)\n\n![情境对比](lessplain://simulation/cold_flow)","diagrams":[{"id":"delivery","graph":{"nodes":[{"id":"producer","label":"生产者"},{"id":"collector","label":"收集者"}],"edges":[{"id":"delivery","from":"producer","to":"collector","label":"交付值"}]}}],"simulations":[{"id":"cold_flow","language":"kotlin","code":"suspend fun demo(collect: Boolean) {\n    val f = flow {\n        println(\"开始生产\")\n        emit(\"你好\")\n    }\n    if (collect) f.collect { println(it) }\n}","scenarios":[{"id":"off","label":"不收集","steps":[{"highlightLines":[2],"caption":"创建 Flow，没有执行生产逻辑。"},{"highlightLines":[6],"caption":"跳过收集，没有输出。"}]},{"id":"on","label":"开始收集","steps":[{"highlightLines":[6],"caption":"开始收集。"},{"highlightLines":[3],"caption":"执行生产逻辑。","stdout":"开始生产\n"},{"highlightLines":[4,6],"caption":"发出值并打印。","stdout":"你好\n"}]}]}]}
